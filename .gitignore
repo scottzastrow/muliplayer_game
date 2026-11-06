@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+var/
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-*
+*.log
+.agents/auth.json
+.agents/history*
+.agents/sessions/
+.agents/log/
+.codex/

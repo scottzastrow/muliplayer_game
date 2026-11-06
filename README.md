@@ -1,6 +1,19 @@
 # Multiplayer Game Engine
 
-Browser-based multiplayer game engine POC targeting AWS Lightsail. Development uses GitHub Spec Kit. This document is the initial requirements brief, not a claim that Spec Kit or the application is already installed.
+Browser-based multiplayer game engine POC targeting AWS Lightsail. Development uses GitHub Spec Kit. The initial requirements brief below is preserved as conversation history; the specification resolves its open questions using explicitly labeled editable assumptions.
+
+## Current development baseline
+
+Spec Kit 1.3.2 is initialized with the Codex integration and Bash scripts. Game implementation has not started.
+
+- [Project constitution](.specify/memory/constitution.md)
+- [Specification and editable POC assumptions](specs/001-multiplayer-engine/spec.md)
+- [Implementation plan](specs/001-multiplayer-engine/plan.md)
+- [Ordered implementation tasks](specs/001-multiplayer-engine/tasks.md)
+- [Theme developer contract](specs/001-multiplayer-engine/contracts/themes.md)
+- [Planned quickstart and validation](specs/001-multiplayer-engine/quickstart.md)
+
+Open this checkout in Codex and use `$speckit-implement` to execute the task list, then `$speckit-converge` to assess remaining work. These are agent chat commands, not terminal commands. See AGENTS.md before edits. The current feature is `specs/001-multiplayer-engine`; if the checkout-local `.specify/feature.json` pointer is absent, the matching branch name allows the scripts to resolve it. Do not rerun init over project changes unnecessarily.
 
 ## Confirmed scope
 
@@ -80,4 +93,4 @@ Keep agent work and validation evidence in the repository. Build sequentially on
 
 ## Current status
 
-Requirements captured on November 6, 2026. No application code, installed Spec Kit integration, runtime tests, or deployment yet.
+Requirements captured and Spec Kit planning completed on November 6, 2026. Constitution v1.0.0, specification, research, data model, HTTP/realtime/theme/settings contracts, validation guide and 44 unchecked implementation tasks are present. No application code, runtime/browser tests, capacity results, or deployment yet.
