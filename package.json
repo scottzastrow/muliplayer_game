@@ -14,13 +14,16 @@
   ],
   "scripts": {
     "build": "npm run build --workspace @multiplayer-game/protocol && npm run build --workspace @multiplayer-game/theme-sdk && npm run build --workspace @multiplayer-game/engine && npm run build --workspace @multiplayer-game/default-theme && npm run build --workspace @multiplayer-game/server && npm run build --workspace @multiplayer-game/client",
-    "check": "npm run build --workspace @multiplayer-game/protocol && npm run check --workspace @multiplayer-game/protocol && npm run check --workspace @multiplayer-game/theme-sdk && npm run build --workspace @multiplayer-game/theme-sdk && npm run check --workspace @multiplayer-game/engine && npm run build --workspace @multiplayer-game/default-theme && npm run check --workspace @multiplayer-game/server && npm run check --workspace @multiplayer-game/client",
+    "check": "npm run build --workspace @multiplayer-game/protocol && npm run check --workspace @multiplayer-game/protocol && npm run check --workspace @multiplayer-game/theme-sdk && npm run build --workspace @multiplayer-game/theme-sdk && npm run check --workspace @multiplayer-game/engine && npm run build --workspace @multiplayer-game/default-theme && npm run check --workspace @multiplayer-game/server && npm run check --workspace @multiplayer-game/client && npm run check:tools",
+    "check:tools": "tsc --project tools/tsconfig.json --noEmit",
     "test": "vitest run",
     "test:browser": "node tests/browser/default-game.mjs",
     "dev": "npm run build --workspace @multiplayer-game/protocol && npm run build --workspace @multiplayer-game/theme-sdk && npm run build --workspace @multiplayer-game/engine && npm run build --workspace @multiplayer-game/default-theme && concurrently --kill-others --names server,client \"npm:dev:server\" \"npm:dev:client\"",
     "dev:server": "node --env-file=.env --import tsx --watch apps/server/src/main.ts",
     "dev:client": "npm run dev --workspace @multiplayer-game/client",
     "db:migrate": "node --env-file=.env --import tsx apps/server/src/storage/migrate.ts",
+    "operator": "node --env-file=.env --import tsx tools/operator.ts",
+    "theme:code": "node --import tsx tools/install-theme-code.ts",
     "start": "node --env-file=.env apps/server/dist/main.js"
   },
   "devDependencies": {

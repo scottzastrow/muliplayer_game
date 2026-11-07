@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "outDir": "../dist/tools",
+    "types": ["node"]
+  },
+  "include": ["./**/*.ts", "../tests/operator-tools.test.ts"]
+}
