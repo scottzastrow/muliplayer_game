@@ -1,0 +1,31 @@
+[Unit]
+Description=Multiplayer Game Engine
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=multiplayer-game
+Group=multiplayer-game
+WorkingDirectory=/opt/multiplayer-game/current
+EnvironmentFile=/etc/multiplayer-game/game.env
+ExecStart=/usr/bin/node apps/server/dist/main.js
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=60
+UMask=0077
+StateDirectory=multiplayer-game
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/multiplayer-game
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=multiplayer-game
+
+[Install]
+WantedBy=multi-user.target
