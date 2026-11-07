@@ -7,10 +7,11 @@ import {
 import { JsonValueSchema, type JsonValue } from "@multiplayer-game/protocol";
 import { z } from "zod";
 import { DefaultPlayerActionSchema, type DefaultPlayerAction } from "./actions.js";
-import type { DefaultEntity } from "./types.js";
+import type { DefaultEntity, DefaultPlayerState } from "./types.js";
 import { DefaultEntitySimulator } from "./entities.js";
 import { DefaultCombatSimulator } from "./combat.js";
 import { generateMap } from "./maps.js";
+import { DefaultRespawnSimulator } from "./respawn.js";
 import {
   DefaultProgression,
   resolveDefaultSettings,
@@ -22,6 +23,7 @@ const DefaultSettingsSchema = z.record(z.string(), JsonValueSchema);
 export interface DefaultModuleState extends Record<string, JsonValue> {
   readonly acceptedInputs: number;
   readonly entities: JsonValue[];
+  readonly players: JsonValue[];
   readonly level: number;
   readonly phase: DefaultLevelPhase;
   readonly intermissionEndsAtTick?: number;
@@ -30,6 +32,7 @@ export interface DefaultModuleState extends Record<string, JsonValue> {
 export interface DefaultModuleSnapshot extends Record<string, JsonValue> {
   readonly acceptedInputs: number;
   readonly entities: JsonValue[];
+  readonly players: JsonValue[];
   readonly viewerAccountId: string;
   readonly viewerRole: "player" | "spectator";
   readonly level: number;
@@ -47,7 +50,7 @@ export interface DefaultModuleResults extends Record<string, JsonValue> {
 export const defaultModuleMetadata = Object.freeze({
   id: "default",
   version: "1.0.0",
-  stateSchemaVersion: 2
+  stateSchemaVersion: 3
 });
 
 export const defaultModuleFactory: GameModuleFactory<
@@ -88,8 +91,15 @@ export const defaultModuleFactory: GameModuleFactory<
     let disposed = false;
     const gameSettings = resolveDefaultSettings(settings, roster.length);
     const simulator = new DefaultEntitySimulator(_context);
-    const combat = new DefaultCombatSimulator(_context);
     const map = generateMap(seed).map;
+    const respawn = new DefaultRespawnSimulator(
+      _context, map, roster, gameSettings.respawnDelaySeconds,
+      (accountId) => {
+        simulator.resetPlayerInput(accountId);
+        combat.resetPlayerInput(accountId);
+      }
+    );
+    const combat = new DefaultCombatSimulator(_context, (accountId) => respawn.awardKill(accountId));
     const progression = new DefaultProgression(
       _context,
       gameSettings,
@@ -109,6 +119,7 @@ export const defaultModuleFactory: GameModuleFactory<
         return Object.freeze({
           acceptedInputs,
           entities: serializeEntities(_context.entities.values()),
+          players: respawn.snapshot(),
           level: progressionState.level,
           phase: progressionState.phase,
           ...(progressionState.intermissionEndsAtTick === undefined
@@ -127,6 +138,7 @@ export const defaultModuleFactory: GameModuleFactory<
         if (!DefaultPlayerActionSchema.safeParse(input).success) {
           throw new TypeError("Input does not match the default theme action schema.");
         }
+        if (respawn.isDefeated(accountId)) return;
         simulator.applyInput(accountId, input);
         if (input.type === "combat") {
           combat.applyInput(accountId, { x: input.aimX, y: input.aimY }, input.fire);
@@ -135,9 +147,14 @@ export const defaultModuleFactory: GameModuleFactory<
       },
       step(dtSeconds: number, tick: number): void {
         assertActive();
+        if (progression.state.phase !== "complete") {
+          respawn.removeDefeated(tick);
+          respawn.respawnEligible(tick);
+        }
         if (progression.state.phase === "active") {
           simulator.step(dtSeconds, tick);
           combat.step(tick);
+          respawn.removeDefeated(tick);
         }
         progression.step(
           tick,
@@ -150,6 +167,7 @@ export const defaultModuleFactory: GameModuleFactory<
       initialize(): void {
         assertActive();
         progression.initialize();
+        respawn.initialize();
       },
       snapshot(viewer): DefaultModuleSnapshot {
         assertActive();
@@ -157,6 +175,7 @@ export const defaultModuleFactory: GameModuleFactory<
         return {
           acceptedInputs,
           entities: serializeEntities(_context.entities.values()),
+          players: respawn.snapshot(),
           viewerAccountId: viewer.accountId,
           viewerRole: viewer.role,
           level: progressionState.level,
@@ -172,12 +191,13 @@ export const defaultModuleFactory: GameModuleFactory<
           acceptedInputs,
           finalLevel: progression.state.level,
           status: progression.state.phase === "complete" ? "finished" : "running",
-          standings: collectStandings(roster, _context.entities.values())
+          standings: collectStandings(roster, respawn.playerStates())
         };
       },
       dispose(): void {
         combat.dispose();
         simulator.dispose();
+        respawn.dispose();
         disposed = true;
       }
     };
@@ -199,6 +219,7 @@ export {
 export type { DefaultContactAttackCapability } from "./entities.js";
 export { DefaultCombatSimulator } from "./combat.js";
 export { DefaultPickupSimulator } from "./pickups.js";
+export { DefaultRespawnSimulator } from "./respawn.js";
 export {
   DefaultProgression,
   LEVEL_INTERMISSION_TICKS,
@@ -219,13 +240,9 @@ function serializeEntities(entities: readonly Readonly<DefaultEntity>[]): JsonVa
 
 function collectStandings(
   roster: readonly RosterMember[],
-  entities: readonly Readonly<DefaultEntity>[]
+  states: readonly DefaultPlayerState[]
 ): JsonValue[] {
-  const players = new Map(
-    entities.flatMap((entity) =>
-      entity.state.kind === "player" ? [[entity.state.accountId, entity.state] as const] : []
-    )
-  );
+  const players = new Map(states.map((state) => [state.accountId, state]));
   const standings = roster.map((member) => {
     const player = players.get(member.accountId);
     return {

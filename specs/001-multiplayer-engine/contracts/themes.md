@@ -54,6 +54,22 @@ contact damage is a typed NPC capability with a one-second per-player cooldown.
 The default module authoritatively fires bounded-lifetime projectiles, damages NPCs
 without friendly fire, serializes single-claim health and weapon pickups, and tracks
 player score, kills, deaths and expiring powerup effects.
+Defeated players leave the active entity store while their standings are retained.
+Their configured respawn deadline defaults to 150 fixed ticks (five seconds);
+fractional delays round up to a whole tick. Returning restores full health at a
+random cell with 64 units of additional obstacle, enemy and projectile clearance.
+Placement tries at most 64 candidates per player per tick; a blocked player remains
+dead, publishes its unchanged deadline and blocked state, increments
+`default.respawn.blocked`, and retries on the next tick. Inputs are cleared on
+defeat/return and ignored while dead. There is no immunity or retained contact
+cooldown after return. Intermissions do not reset death deadlines, and completed
+matches never respawn players. In-flight shots retain their owner's score credit
+even if that owner is defeated.
+
+Default module state schema v3 keeps only active avatars in `entities` and adds a
+`players` array containing roster identity, retained health/score/effect state,
+position and `alive`. Dead entries additionally expose `respawnAtTick` and
+`respawnBlocked`; the renderer compatibility metadata accepts schemas 1, 2 and 3.
 Level population and NPC health use the frozen player roster and configured per-level
 growth formulas; every level is preflighted against runtime ceilings before play.
 Clearing a non-final level requests completion once and starts a five-second

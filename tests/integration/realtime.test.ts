@@ -188,7 +188,7 @@ describe("realtime transport", () => {
       sessionId,
       payload: {
         protocolVersion: 1,
-        moduleStateSchemaVersion: 2,
+        moduleStateSchemaVersion: 3,
         level: 1,
         phase: "active",
         entities: expect.any(Array)

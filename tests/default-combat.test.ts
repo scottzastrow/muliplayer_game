@@ -332,18 +332,16 @@ describe("default combat", () => {
     setHealth(context, "player:player-a", 0);
     module.step(0, 11);
     module.step(0, 12);
-    expect(context.entities.get("player:player-a")?.state).toMatchObject({
-      kind: "player",
-      deaths: 1
-    });
-    setHealth(context, "player:player-a", 1);
-    module.step(0, 13);
+    expect(context.entities.get("player:player-a")).toBeUndefined();
+    expect(module.results().standings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ accountId: "player-a", deaths: 1 })])
+    );
+    module.step(0, 161);
     setHealth(context, "player:player-a", 0);
-    module.step(0, 14);
-    expect(context.entities.get("player:player-a")?.state).toMatchObject({
-      kind: "player",
-      deaths: 2
-    });
+    module.step(0, 162);
+    expect(module.results().standings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ accountId: "player-a", deaths: 2 })])
+    );
     module.dispose();
   });
 });

@@ -9,6 +9,7 @@ export {
 } from "../src/module/index.js";
 export { DefaultCombatSimulator } from "../src/module/combat.js";
 export { DefaultPickupSimulator } from "../src/module/pickups.js";
+export { DefaultRespawnSimulator } from "../src/module/respawn.js";
 export {
   DefaultProgression,
   LEVEL_INTERMISSION_TICKS,

@@ -162,6 +162,12 @@ export class DefaultEntitySimulator {
     }
   }
 
+  resetPlayerInput(accountId: string): void {
+    this.#movementByAccount.set(accountId, EMPTY_MOVEMENT);
+    const playerId = this.#playerIds.get(accountId);
+    if (playerId) this.#lastContactAttackTick.delete(playerId);
+  }
+
   step(dtSeconds: number, tick: number): void {
     this.#assertInitialized();
     if (

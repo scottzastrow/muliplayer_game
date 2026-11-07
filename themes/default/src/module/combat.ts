@@ -25,12 +25,14 @@ const MAX_PROJECTILE_STEP_DISTANCE = PROJECTILE_RADIUS;
 export class DefaultCombatSimulator {
   readonly #lastShotTick = new Map<string, number>();
   readonly #fireInputs = new Map<string, Readonly<{ aim: Point2; fire: boolean }>>();
-  readonly #countedDeaths = new Set<string>();
   readonly #pickups: DefaultPickupSimulator;
   #nextProjectileId = 0;
   #disposed = false;
 
-  constructor(readonly context: ModuleContext<DefaultEntity>) {
+  constructor(
+    readonly context: ModuleContext<DefaultEntity>,
+    readonly awardKill?: (accountId: string) => void
+  ) {
     this.#pickups = new DefaultPickupSimulator(context);
   }
 
@@ -43,7 +45,6 @@ export class DefaultCombatSimulator {
     this.#fire(tick);
     this.#moveProjectiles(tick);
     this.#pickups.claimAvailable(tick);
-    this.#accountDeaths();
   }
 
   applyInput(accountId: string, aim: Point2, fire: boolean): void {
@@ -68,7 +69,6 @@ export class DefaultCombatSimulator {
     }
     this.#lastShotTick.clear();
     this.#fireInputs.clear();
-    this.#countedDeaths.clear();
     this.#disposed = true;
   }
 
@@ -82,6 +82,10 @@ export class DefaultCombatSimulator {
     for (const [accountId, input] of this.#fireInputs) {
       this.#fireInputs.set(accountId, Object.freeze({ aim: input.aim, fire: false }));
     }
+  }
+
+  resetPlayerInput(accountId: string): void {
+    this.#fireInputs.delete(accountId);
   }
 
   #fire(tick: number): void {
@@ -232,6 +236,10 @@ export class DefaultCombatSimulator {
     }
 
     this.context.entities.remove(npc.id);
+    if (this.awardKill) {
+      this.awardKill(projectile.state.ownerAccountId);
+      return;
+    }
     const player = this.#findPlayer(projectile.state.ownerAccountId);
     if (!player) {
       return;
@@ -249,29 +257,6 @@ export class DefaultCombatSimulator {
         }
       };
     });
-  }
-
-  #accountDeaths(): void {
-    for (const player of this.context.entities.values()) {
-      if (player.state.kind !== "player") {
-        continue;
-      }
-      if (player.state.health > 0) {
-        this.#countedDeaths.delete(player.id);
-        continue;
-      }
-      if (this.#countedDeaths.has(player.id)) continue;
-      this.#countedDeaths.add(player.id);
-      this.context.entities.update(player.id, (current) => {
-        if (current.state.kind !== "player") {
-          return current;
-        }
-        return {
-          ...current,
-          state: { ...current.state, deaths: current.state.deaths + 1 }
-        };
-      });
-    }
   }
 
   #findPlayer(accountId: string):

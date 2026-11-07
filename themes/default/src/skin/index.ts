@@ -11,7 +11,7 @@ const metadata: SkinFactoryMetadata = Object.freeze({
   id: "default",
   version: "1.0.0",
   acceptedModuleId: "default",
-  acceptedStateSchemaVersions: Object.freeze([1, 2])
+  acceptedStateSchemaVersions: Object.freeze([1, 2, 3])
 });
 
 export const defaultSkinFactory: SkinFactory = Object.freeze({

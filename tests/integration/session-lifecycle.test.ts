@@ -70,7 +70,7 @@ describe("session simulation lifecycle", () => {
       const firstSnapshot = await nextSnapshot(socket);
       expect(firstSnapshot).toMatchObject({
         protocolVersion: 1,
-        moduleStateSchemaVersion: 2,
+        moduleStateSchemaVersion: 3,
         level: 1,
         phase: "active"
       });

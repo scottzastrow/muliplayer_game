@@ -44,6 +44,7 @@ export {
   normalizeMovement
 } from "./module/index.js";
 export { DefaultPickupSimulator } from "./module/index.js";
+export { DefaultRespawnSimulator } from "./module/index.js";
 export type { DefaultContactAttackCapability } from "./module/index.js";
 export {
   MAX_ATTRACTION_QUERY_CELLS,
@@ -69,6 +70,8 @@ export {
   POWERUP_DURATION_TICKS,
   PROJECTILE_LIFETIME_TICKS,
   PROJECTILE_RADIUS,
+  SAFE_SPAWN_MARGIN,
+  MAX_RESPAWN_ATTEMPTS_PER_PLAYER,
   SPREAD_ANGLE_RADIANS
 } from "./module/tuning.js";
 export type { DefaultEntity } from "./module/types.js";
