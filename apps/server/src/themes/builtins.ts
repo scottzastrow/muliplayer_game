@@ -14,12 +14,20 @@ import {
   defaultThemeDefinition,
   type DefaultEntity
 } from "@multiplayer-game/default-theme";
+import {
+  fixtureModuleFactory,
+  fixtureSkinFactory,
+  fixtureThemeDefinition
+} from "@multiplayer-game/fixture-theme";
 import type { ModuleContext, RosterMember } from "@multiplayer-game/theme-sdk";
+
+type BuiltinModuleFactory = typeof defaultModuleFactory;
+type BuiltinSkinFactory = typeof defaultSkinFactory;
 
 export interface BuiltinThemeRegistration {
   readonly revision: ThemePackageRevision;
-  readonly moduleFactory: typeof defaultModuleFactory;
-  readonly skinFactory: typeof defaultSkinFactory;
+  readonly moduleFactory: BuiltinModuleFactory;
+  readonly skinFactory: BuiltinSkinFactory;
 }
 
 export interface LoadedTheme {
@@ -38,6 +46,17 @@ export const DEFAULT_THEME_REGISTRATION: BuiltinThemeRegistration = Object.freez
   }),
   moduleFactory: defaultModuleFactory,
   skinFactory: defaultSkinFactory
+});
+
+export const FIXTURE_THEME_REGISTRATION: BuiltinThemeRegistration = Object.freeze({
+  revision: Object.freeze({
+    definition: fixtureThemeDefinition,
+    packageDigest: fixtureThemeDefinition.assetsDigest,
+    installedModule: fixtureModuleFactory.metadata,
+    installedRenderer: fixtureSkinFactory.metadata
+  }),
+  moduleFactory: fixtureModuleFactory,
+  skinFactory: fixtureSkinFactory
 });
 
 export class ThemeLoader {
@@ -154,5 +173,5 @@ export class ThemeLoader {
 }
 
 export function createThemeLoader(): ThemeLoader {
-  return new ThemeLoader();
+  return new ThemeLoader([DEFAULT_THEME_REGISTRATION, FIXTURE_THEME_REGISTRATION]);
 }

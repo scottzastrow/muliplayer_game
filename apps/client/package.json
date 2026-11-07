@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@multiplayer-game/default-theme": "0.1.0",
+    "@multiplayer-game/fixture-theme": "0.1.0",
     "@multiplayer-game/protocol": "0.1.0",
     "@multiplayer-game/theme-sdk": "0.1.0"
   },
