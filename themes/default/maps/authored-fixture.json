@@ -1,0 +1,65 @@
+{
+  "formatVersion": 1,
+  "id": "authored-compatibility-fixture",
+  "name": "Authored Compatibility Fixture",
+  "bounds": {
+    "width": 256,
+    "height": 256
+  },
+  "cellSize": 32,
+  "objects": [
+    {
+      "id": "fixture-pillar",
+      "typeId": "terrain.pillar",
+      "position": {
+        "x": 128,
+        "y": 128
+      },
+      "tags": ["obstacle", "fixture"],
+      "properties": {
+        "material": "test-stone",
+        "decorative": true
+      }
+    }
+  ],
+  "collisions": [
+    {
+      "id": "fixture-pillar-collision",
+      "objectId": "fixture-pillar",
+      "shape": {
+        "type": "rect",
+        "width": 32,
+        "height": 32
+      }
+    }
+  ],
+  "spawns": [
+    {
+      "id": "fixture-player-a",
+      "kind": "player",
+      "position": {
+        "x": 48,
+        "y": 48
+      },
+      "radius": 14
+    },
+    {
+      "id": "fixture-player-b",
+      "kind": "player",
+      "position": {
+        "x": 208,
+        "y": 208
+      },
+      "radius": 14
+    },
+    {
+      "id": "fixture-npc",
+      "kind": "npc",
+      "position": {
+        "x": 80,
+        "y": 176
+      },
+      "radius": 8
+    }
+  ]
+}

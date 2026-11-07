@@ -29,6 +29,18 @@ Implement TypeScript interfaces and runtime schemas in `packages/theme-sdk/src/`
 | SkinFactory | metadata including accepted module/state schema; mount(host, assets) returns isolated presenter |
 | SkinInstance | handleSnapshot; handleEvents; render(frameTime, interpolatedState); handleViewport; dispose |
 | SkinHost | Canvas/DOM slots, input dispatch, camera anchor, selected target data, safe navigation callbacks, bounded asset loader/audio services |
+| MapDefinition | validated, versioned map document shared by authored maps and seeded generators; includes stable objects, explicit collision shapes and typed spawn points |
+
+`MapDefinition` v1 is validated by the public SDK before either source is loaded.
+Objects have stable `id` and `typeId`, world `position`, and optional string `tags`
+and JSON `properties`. Collision entries reference an object ID and define a
+rectangle centered on that object's position. Spawn entries have stable IDs, a
+`player`, `npc`, or `pickup` kind, a cell-centered position and a clearance radius.
+Dimensions are multiples of the 32-unit navigation cell and no larger than 2048 by
+2048. The theme's shared loader additionally checks collision bounds, spawn
+walkability and connectivity; authored documents and generated documents must both
+pass through that same loader. Generation is deterministic by seed, has a fixed
+attempt limit, and falls back to a known-valid traversable map.
 
 Realtime input uses a shared versioned envelope with an opaque module-defined JSON
 `action`; the protocol does not require movement, aim, fire, or any other gameplay

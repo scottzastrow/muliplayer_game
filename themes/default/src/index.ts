@@ -14,6 +14,16 @@ export const defaultThemeRevision = validateThemeRevision({
 
 export { defaultModuleFactory, defaultSkinFactory };
 export {
+  DEFAULT_MAP_HEIGHT,
+  DEFAULT_MAP_WIDTH,
+  MAX_MAP_GENERATION_ATTEMPTS,
+  MapValidationError,
+  generateMap,
+  loadMap,
+  type GeneratedMap,
+  type LoadedMap
+} from "./module/maps.js";
+export {
   DefaultPlayerActionSchema,
   type DefaultModuleResults,
   type DefaultModuleSnapshot,

@@ -4,6 +4,22 @@ import {
   RequestIdSchema,
   type JsonValue
 } from "@multiplayer-game/protocol";
+export {
+  MAP_CELL_SIZE,
+  MAX_MAP_COLLISIONS,
+  MAX_MAP_DIMENSION,
+  MAX_MAP_OBJECTS,
+  MAX_MAP_SPAWNS,
+  MapCollisionSchema,
+  MapDefinitionSchema,
+  MapObjectSchema,
+  MapSpawnSchema,
+  validateMapDefinition,
+  type MapCollision,
+  type MapDefinition,
+  type MapObject,
+  type MapSpawn
+} from "./maps.js";
 
 const VersionSchema = z.string().regex(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
 const IdentifierSchema = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/);
