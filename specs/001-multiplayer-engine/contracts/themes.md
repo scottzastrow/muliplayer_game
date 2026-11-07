@@ -30,6 +30,12 @@ Implement TypeScript interfaces and runtime schemas in `packages/theme-sdk/src/`
 | SkinInstance | handleSnapshot; handleEvents; render(frameTime, interpolatedState); handleViewport; dispose |
 | SkinHost | Canvas/DOM slots, input dispatch, camera anchor, selected target data, safe navigation callbacks, bounded asset loader/audio services |
 
+Realtime input uses a shared versioned envelope with an opaque module-defined JSON
+`action`; the protocol does not require movement, aim, fire, or any other gameplay
+fields. Each module validates its own action shape in `validateInput`. For example,
+the default module's `combat` action carries movement, aim, and fire fields, while a
+noncombat `unlock` action can carry only its target identifier.
+
 Core validates completion requests against runner phase and finalizes once. Module
 instances cannot share mutable singleton state. Dispose releases listeners, entities,
 audio and timers. Context supplies deterministic time; modules must not create their

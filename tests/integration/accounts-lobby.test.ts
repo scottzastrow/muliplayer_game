@@ -1,0 +1,381 @@
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
+import { DEFAULT_GAME_SETTINGS, validateMatchCapacity } from "@multiplayer-game/protocol";
+import { createApp } from "../../apps/server/src/app.js";
+import { readConfig } from "../../apps/server/src/config.js";
+import { openDatabase, runMigrations } from "../../apps/server/src/storage/database.js";
+
+const ORIGIN = "https://game.example.test";
+const BASE_HEADERS = { origin: ORIGIN, "content-type": "application/json" };
+
+describe("accounts and lobby integration", () => {
+  let database: ReturnType<typeof openDatabase>;
+  let app: Awaited<ReturnType<typeof createApp>>;
+
+  beforeEach(() => {
+    database = openDatabase(":memory:");
+    runMigrations(database);
+    app = createApp(
+      readConfig({ NODE_ENV: "test", PUBLIC_ORIGIN: ORIGIN }),
+      database,
+      { ready: true }
+    );
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it("requires 9–128 characters at signup and allows a 9-character password to log in", async () => {
+    const tooShort = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/register",
+      headers: BASE_HEADERS,
+      payload: { username: "ShortPass", password: "12345678" }
+    });
+    expect(tooShort.statusCode).toBe(400);
+    expect(tooShort.json().error.message).toBe("Password must be 9–128 characters long.");
+
+    const validRegistration = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/register",
+      headers: BASE_HEADERS,
+      payload: { username: "NineChars", password: "123456789" }
+    });
+    expect(validRegistration.statusCode).toBe(201);
+    expect((await login("NineChars", "123456789")).statusCode).toBe(200);
+
+    const maximumLength = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/register",
+      headers: BASE_HEADERS,
+      payload: { username: "MaxPass128", password: "a".repeat(128) }
+    });
+    expect(maximumLength.statusCode).toBe(201);
+
+    const tooLong = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/register",
+      headers: BASE_HEADERS,
+      payload: { username: "LongPass", password: "a".repeat(129) }
+    });
+    expect(tooLong.statusCode).toBe(400);
+  });
+
+  it("uses generic login failures, normalized unique usernames, non-public credentials, rotation and logout", async () => {
+    const account = await register("Pilot_One");
+    expect(Object.keys(account)).toEqual(["id", "username", "role"]);
+    expect(account).not.toHaveProperty("passwordHash");
+    expect(account).not.toHaveProperty("passwordSalt");
+
+    const duplicate = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/register",
+      headers: BASE_HEADERS,
+      payload: { username: "pilot_one", password: "a secure password 123" }
+    });
+    expect(duplicate.statusCode).toBe(409);
+    expect(duplicate.json().error.code).toBe("USERNAME_TAKEN");
+
+    const forgedRole = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/register",
+      headers: BASE_HEADERS,
+      payload: { username: "PilotTwo", password: "a secure password 123", role: "operator" }
+    });
+    expect(forgedRole.statusCode).toBe(400);
+
+    const wrongPassword = await login("Pilot_One", "wrong password value");
+    const unknownUser = await login("UnknownUser", "wrong password value");
+    expect(wrongPassword.statusCode).toBe(401);
+    expect(unknownUser.statusCode).toBe(401);
+    expect(wrongPassword.json().error.message).toBe(unknownUser.json().error.message);
+
+    const firstLogin = await login("PILOT_ONE", "correct horse battery staple 123");
+    expect(firstLogin.statusCode).toBe(200);
+    const firstCookie = cookieFrom(firstLogin);
+    expect(firstLogin.headers["set-cookie"]).toContain("HttpOnly");
+    expect(firstLogin.headers["set-cookie"]).toContain("SameSite=Lax");
+    expect(firstLogin.headers["set-cookie"]).toContain("Secure");
+    const rawToken = firstCookie.slice(firstCookie.indexOf("=") + 1);
+    const storedDigest = database
+      .prepare("SELECT token_digest FROM auth_sessions WHERE account_id = ?")
+      .get(account.id) as { token_digest: string };
+    expect(storedDigest.token_digest).toBe(
+      createHash("sha256").update(rawToken, "utf8").digest("hex")
+    );
+    expect(storedDigest.token_digest).not.toContain(rawToken);
+
+    const rotated = await login("Pilot_One", "correct horse battery staple 123", firstCookie);
+    const secondCookie = cookieFrom(rotated);
+    expect(
+      (await app.inject({ url: "/api/v1/me", headers: { cookie: firstCookie } })).statusCode
+    ).toBe(401);
+    expect(
+      (await app.inject({ url: "/api/v1/me", headers: { cookie: secondCookie } })).statusCode
+    ).toBe(200);
+
+    const logout = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/logout",
+      headers: { origin: ORIGIN, cookie: secondCookie }
+    });
+    expect(logout.statusCode).toBe(204);
+    expect(logout.headers["set-cookie"]).toContain("Max-Age=0");
+    expect(
+      (await app.inject({ url: "/api/v1/me", headers: { cookie: secondCookie } })).statusCode
+    ).toBe(401);
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url: "/api/v1/auth/login",
+          headers: { "content-type": "application/json" },
+          payload: { username: "Pilot_One", password: "correct horse battery staple 123" }
+        })
+      ).statusCode
+    ).toBe(403);
+  });
+
+  it("enforces creator permissions, player capacity, settings revisions and frozen starts", async () => {
+    const creator = await registerLogin("Creator");
+    const member = await registerLogin("Member");
+    const other = await registerLogin("Other");
+    const created = await createSession(creator.cookie, {
+      ...DEFAULT_GAME_SETTINGS,
+      maxPlayers: 2
+    });
+    const sessionId = created.json().session.id as string;
+    const storedSettings = database
+      .prepare("SELECT settings_json FROM matches WHERE id = ?")
+      .get(sessionId) as { settings_json: string };
+    expect(JSON.parse(storedSettings.settings_json)).toEqual({
+      ...DEFAULT_GAME_SETTINGS,
+      maxPlayers: 2
+    });
+    expect(() => validateMatchCapacity(JSON.parse(storedSettings.settings_json), 2)).not.toThrow();
+
+    const forbiddenSettings = await patchSettings(member.cookie, sessionId, 0, DEFAULT_GAME_SETTINGS);
+    const forbiddenStart = await startSession(member.cookie, sessionId, 0);
+    expect(forbiddenSettings.statusCode).toBe(403);
+    expect(forbiddenStart.statusCode).toBe(403);
+
+    const joinAttempts = await Promise.all([
+      callJoin(member.cookie, sessionId),
+      callJoin(other.cookie, sessionId)
+    ]);
+    expect(joinAttempts.map((response) => [response.statusCode, response.json()])).toEqual(
+      expect.arrayContaining([
+        [200, expect.any(Object)],
+        [409, expect.any(Object)]
+      ])
+    );
+    expect(joinAttempts.filter((response) => response.statusCode === 200)).toHaveLength(1);
+    expect(joinAttempts.filter((response) => response.statusCode === 409)).toHaveLength(1);
+    expect(joinAttempts.find((response) => response.statusCode === 409)?.json().error.code).toBe(
+      "PLAYER_CAPACITY"
+    );
+
+    const invalidSettings = await patchSettings(creator.cookie, sessionId, 0, {
+      ...DEFAULT_GAME_SETTINGS,
+      maxPlayers: 0
+    });
+    expect(invalidSettings.statusCode).toBe(422);
+
+    const updatedSettings = await patchSettings(creator.cookie, sessionId, 0, {
+      ...DEFAULT_GAME_SETTINGS,
+      maxPlayers: 2,
+      maxLevels: 2
+    });
+    expect(updatedSettings.statusCode).toBe(200);
+    expect(updatedSettings.json().session.settingsRevision).toBe(1);
+    expect((await startSession(creator.cookie, sessionId, 0)).statusCode).toBe(409);
+
+    const starts = await Promise.all([
+      startSession(creator.cookie, sessionId, 1),
+      startSession(creator.cookie, sessionId, 1)
+    ]);
+    expect(starts.filter((response) => response.statusCode === 200)).toHaveLength(1);
+    expect(starts.filter((response) => response.statusCode === 409)).toHaveLength(1);
+    expect(
+      (await patchSettings(creator.cookie, sessionId, 1, DEFAULT_GAME_SETTINGS)).statusCode
+    ).toBe(409);
+  });
+
+  it("admits exactly five concurrently-created active sessions and rejects overflow", async () => {
+    const creator = await registerLogin("RoomMaker");
+    const attempts = await Promise.all(
+      Array.from({ length: 9 }, (_, index) =>
+        createSession(creator.cookie, DEFAULT_GAME_SETTINGS, `parallel-create-${index}`)
+      )
+    );
+    expect(attempts.filter((response) => response.statusCode === 201)).toHaveLength(5);
+    expect(
+      attempts
+        .filter((response) => response.statusCode === 409)
+        .every((response) => response.json().error.code === "SESSION_CAPACITY")
+    ).toBe(true);
+
+    const sessions = await app.inject({
+      url: "/api/v1/sessions",
+      headers: { cookie: creator.cookie }
+    });
+    expect(sessions.json().sessions).toHaveLength(5);
+
+    const currentCount = database
+      .prepare("SELECT COUNT(*) AS count FROM matches WHERE state IN ('waiting', 'running')")
+      .get() as { count: number };
+    expect(currentCount.count).toBe(5);
+  });
+
+  it("uses the default theme display name and reports registering/running lobby states", async () => {
+    const creator = await registerLogin("ThemeCreator");
+    const joiner = await registerLogin("ThemeJoiner");
+    const observer = await registerLogin("ThemeObserver");
+    const settings = { ...DEFAULT_GAME_SETTINGS, maxPlayers: 2 };
+    const created = await createSession(creator.cookie, settings);
+    expect(created.statusCode).toBe(201);
+    const sessionId = created.json().session.id as string;
+
+    const registeringList = await app.inject({
+      url: "/api/v1/sessions",
+      headers: { cookie: joiner.cookie }
+    });
+    expect(registeringList.json().sessions[0]).toMatchObject({
+      creator: "ThemeCreator",
+      status: "waiting",
+      themeName: "Dots and Squares",
+      canJoin: true,
+      playerCount: 1,
+      maxPlayers: settings.maxPlayers
+    });
+
+    expect((await callJoin(joiner.cookie, sessionId)).statusCode).toBe(200);
+    const fullList = await app.inject({
+      url: "/api/v1/sessions",
+      headers: { cookie: observer.cookie }
+    });
+    expect(fullList.json().sessions[0]).toMatchObject({
+      status: "waiting",
+      playerCount: settings.maxPlayers,
+      maxPlayers: settings.maxPlayers,
+      canJoin: false
+    });
+
+    expect((await startSession(creator.cookie, sessionId, 0)).statusCode).toBe(200);
+    const runningList = await app.inject({
+      url: "/api/v1/sessions",
+      headers: { cookie: observer.cookie }
+    });
+    expect(runningList.json().sessions[0]).toMatchObject({
+      status: "running",
+      themeName: "Dots and Squares",
+      canJoin: false
+    });
+  });
+
+  it("releases a waiting slot when its only player leaves and validates idempotent creates", async () => {
+    const creator = await registerLogin("SoloCreator");
+    const first = await createSession(creator.cookie, DEFAULT_GAME_SETTINGS, "dedupe-key");
+    const repeated = await createSession(creator.cookie, DEFAULT_GAME_SETTINGS, "dedupe-key");
+    expect(first.statusCode).toBe(201);
+    expect(repeated.statusCode).toBe(200);
+    expect(repeated.json().session.id).toBe(first.json().session.id);
+
+    const sessionId = first.json().session.id as string;
+    const leave = await app.inject({
+      method: "POST",
+      url: `/api/v1/sessions/${sessionId}/leave`,
+      headers: { ...BASE_HEADERS, cookie: creator.cookie },
+      payload: {}
+    });
+    expect(leave.statusCode).toBe(204);
+    expect(
+      (database.prepare("SELECT state FROM matches WHERE id = ?").get(sessionId) as { state: string })
+        .state
+    ).toBe("abandoned");
+    expect((await createSession(creator.cookie, DEFAULT_GAME_SETTINGS, "after-release")).statusCode).toBe(
+      201
+    );
+  });
+
+  async function register(username: string): Promise<Record<string, unknown>> {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/register",
+      headers: BASE_HEADERS,
+      payload: { username, password: "correct horse battery staple 123" }
+    });
+    expect(response.statusCode).toBe(201);
+    return response.json().account as Record<string, unknown>;
+  }
+
+  async function login(username: string, password: string, cookie?: string) {
+    return app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      headers: {
+        ...BASE_HEADERS,
+        ...(cookie ? { cookie } : {})
+      },
+      payload: { username, password }
+    });
+  }
+
+  async function registerLogin(username: string): Promise<{ cookie: string }> {
+    await register(username);
+    const response = await login(username, "correct horse battery staple 123");
+    expect(response.statusCode).toBe(200);
+    return { cookie: cookieFrom(response) };
+  }
+
+  async function createSession(cookie: string, settings: unknown, requestId: string = crypto.randomUUID()) {
+    return app.inject({
+      method: "POST",
+      url: "/api/v1/sessions",
+      headers: { ...BASE_HEADERS, cookie },
+      payload: { settings, requestId }
+    });
+  }
+
+  async function patchSettings(
+    cookie: string,
+    sessionId: string,
+    expectedRevision: number,
+    settings: unknown
+  ) {
+    return app.inject({
+      method: "PATCH",
+      url: `/api/v1/sessions/${sessionId}/settings`,
+      headers: { ...BASE_HEADERS, cookie },
+      payload: { settings, expectedRevision }
+    });
+  }
+
+  async function startSession(cookie: string, sessionId: string, expectedRevision: number) {
+    return app.inject({
+      method: "POST",
+      url: `/api/v1/sessions/${sessionId}/start`,
+      headers: { ...BASE_HEADERS, cookie },
+      payload: { expectedRevision }
+    });
+  }
+
+  async function callJoin(cookie: string, sessionId: string) {
+    return app.inject({
+      method: "POST",
+      url: `/api/v1/sessions/${sessionId}/join`,
+      headers: { ...BASE_HEADERS, cookie },
+      payload: {}
+    });
+  }
+});
+
+function cookieFrom(response: { headers: Record<string, number | string | string[] | undefined> }): string {
+  const setCookie = response.headers["set-cookie"];
+  const first = Array.isArray(setCookie) ? setCookie[0] : setCookie;
+  if (typeof first !== "string") {
+    throw new Error("Login response did not set a session cookie.");
+  }
+  return first.split(";", 1)[0]!;
+}

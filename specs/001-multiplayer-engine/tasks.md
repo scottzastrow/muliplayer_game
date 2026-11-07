@@ -13,17 +13,17 @@ Every task has a checkbox, stable ID, story label where appropriate and exact pa
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 Initialize npm workspaces and lock compatible Node 24/TypeScript/Fastify/ws/Zod/better-sqlite3/Vite/Vitest versions in package.json, package-lock.json, apps/server/package.json, apps/client/package.json and packages/*/package.json; add build/check/test/dev/start scripts that load ignored local .env without Windows system variables, and .env.example per quickstart.md.
-- [ ] T002 Configure shared strict compilation and browser/server builds in tsconfig.base.json, apps/server/tsconfig.json and apps/client/vite.config.ts; ensure one dev origin proxies HTTP and WebSockets.
-- [ ] T003 Configure focused checks and build validation in vitest.config.ts and .github/workflows/ci.yml; exclude runtime data and secrets using .gitignore.
+- [X] T001 Initialize npm workspaces and lock compatible Node 24/TypeScript/Fastify/ws/Zod/better-sqlite3/Vite/Vitest versions in package.json, package-lock.json, apps/server/package.json, apps/client/package.json and packages/*/package.json; add build/check/test/dev/start scripts that load ignored local .env without Windows system variables, and .env.example per quickstart.md.
+- [X] T002 Configure shared strict compilation and browser/server builds in tsconfig.base.json, apps/server/tsconfig.json and apps/client/vite.config.ts; ensure one dev origin proxies HTTP and WebSockets.
+- [X] T003 Configure focused checks and build validation in vitest.config.ts and .github/workflows/ci.yml; exclude runtime data and secrets using .gitignore.
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-- [ ] T004 Define runtime-validated version-1 envelopes, errors, public serializers and settings in packages/protocol/src/index.ts and packages/protocol/src/settings.ts from contracts/; reject unknown/nonfinite fields and exclude secrets.
-- [ ] T005 Define engine/module/skin/capability interfaces in packages/theme-sdk/src/index.ts from contracts/themes.md, including isolated factories, scoped services, state schema compatibility and presentation host slots; publish the versioned SDK/types/runtime schemas from this repo for pinned external consumption, with no private-path imports.
-- [ ] T006 Implement injectable monotonic clock, seeded RNG and bounded SessionRunner in packages/engine/src/runner.ts; fixed 30 Hz steps, maximum three catch-up steps/turn, immutable snapshots, dispose and exception reporting.
-- [ ] T007 Implement SQLite migration runner and tables in apps/server/src/storage/migrations/001-initial.sql and apps/server/src/storage/database.ts; enforce data-model.md UNIQUE/FK constraints, WAL, busy timeout, short transactions and token/hash redaction.
-- [ ] T008 Implement typed configuration, safe error handling, structured request IDs, readiness and graceful startup/shutdown in apps/server/src/config.ts and apps/server/src/main.ts; reconcile stale active matches as Interrupted.
+- [X] T004 Define runtime-validated version-1 envelopes, errors, public serializers and settings in packages/protocol/src/index.ts and packages/protocol/src/settings.ts from contracts/; reject unknown/nonfinite fields and exclude secrets.
+- [X] T005 Define engine/module/skin/capability interfaces in packages/theme-sdk/src/index.ts from contracts/themes.md, including isolated factories, scoped services, state schema compatibility and presentation host slots; publish the versioned SDK/types/runtime schemas from this repo for pinned external consumption, with no private-path imports.
+- [X] T006 Implement injectable monotonic clock, seeded RNG and bounded SessionRunner in packages/engine/src/runner.ts; fixed 30 Hz steps, maximum three catch-up steps/turn, immutable snapshots, dispose and exception reporting.
+- [X] T007 Implement SQLite migration runner and tables in apps/server/src/storage/migrations/001-initial.sql and apps/server/src/storage/database.ts; enforce data-model.md UNIQUE/FK constraints, WAL, busy timeout, short transactions and token/hash redaction.
+- [X] T008 Implement typed configuration, safe error handling, structured request IDs, readiness and graceful startup/shutdown in apps/server/src/config.ts and apps/server/src/main.ts; reconcile stale active matches as Interrupted.
 
 Checkpoint: contracts and runtime infrastructure exist before user-facing behavior.
 
@@ -32,9 +32,9 @@ Checkpoint: contracts and runtime infrastructure exist before user-facing behavi
 **Goal**: Authenticate and create/configure/start sessions within atomic limits.
 **Independent test**: Two accounts join; five sessions succeed, a sixth fails under races.
 
-- [ ] T009 [US1] Implement accounts and async salted scrypt credentials in apps/server/src/auth/accounts.ts; enforce username 3–24 ASCII letters/digits/underscore with lowercased UNIQUE key and password 12–128 characters; never serialize credentials.
+- [ ] T009 [US1] Implement accounts and async salted scrypt credentials in apps/server/src/auth/accounts.ts; enforce username 3–24 ASCII letters/digits/underscore with lowercased UNIQUE key and password 9–128 characters; never serialize credentials.
 - [ ] T010 [US1] Implement hashed opaque login tokens, seven-day expiry, rotation/logout, Secure production HttpOnly SameSite cookies, origin checks and bounded login/register throttles in apps/server/src/auth/sessions.ts and apps/server/src/auth/routes.ts.
-- [ ] T011 [US1] Implement synchronous reserve/rollback/release and idempotent creation in apps/server/src/lobby/registry.ts; waiting/running/reserved total maximum five, creator joins, full settings validation and 60-second request-id deduplication.
+- [ ] T011 [US1] Implement synchronous reserve/rollback/release and idempotent creation in apps/server/src/lobby/registry.ts; waiting/running/reserved total maximum five, creator joins, server-generated theme/creator display names, full settings validation and 60-second request-id deduplication.
 - [ ] T012 [US1] Implement lobby HTTP routes and atomic join/start/settings revisions in apps/server/src/lobby/routes.ts; enforce creator authority, caps, frozen roster/settings/theme, terminal release and waiting owner/empty-room cleanup.
 - [ ] T013 [US1] Implement account forms and session list/create/settings screens in apps/client/src/auth.ts and apps/client/src/lobby.ts; show theme/state/capacities and disabled Join/Spectate/Create with reasons; render server failures accessibly.
 - [ ] T014 [US1] Verify forged roles, generic auth failures, logout, duplicate names, slot races, join/start races and settings validation in tests/integration/accounts-lobby.test.ts; record evidence in docs/verification.md.
@@ -122,4 +122,4 @@ These are examples for future explicitly coordinated work, not concurrent edits 
 First validate US1 account/lobby slice, then complete US2 as the playable MVP. Add
 spectating/reconnect, full developer theme tooling and operational evidence in order.
 Commit logical slices, keep task status accurate, and run convergence after implementation.
-The current change delivers planning and the installed workflow only; all 44 tasks are unchecked.
+T001–T008 establish the project setup and blocking runtime foundation. User-story implementation tasks remain unchecked.

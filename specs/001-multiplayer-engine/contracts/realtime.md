@@ -12,7 +12,7 @@ Server messages add `sessionId`, `tick`, and `serverTimeMs` when applicable.
 | Direction/type | Payload and behavior |
 | --- | --- |
 | Server hello | protocolVersion, tickRate, snapshotRate, role, pinned theme, current state, lastAcceptedInputSeq |
-| Client input | sequence, moveX/moveY (−1..1), aimX/aimY (finite world target), fire boolean, moduleCommand optional; player only |
+| Client input | sequence plus a module-defined JSON `action`; player only. The shared protocol validates the versioned envelope and bounded JSON shape, while the pinned module validates action fields and semantics. |
 | Server snapshot | Current level/phase, entities, obstacles/map revision, pickups, projectiles, player scores/life timers and selected target HUD |
 | Server events | Bounded recent presentation events with event ID/type/tick/position and module-defined validated data |
 | Client spectate.target | targetAccountId; validate membership and followable target |
@@ -24,9 +24,14 @@ Server messages add `sessionId`, `tick`, and `serverTimeMs` when applicable.
 
 Inputs never contain authoritative position, health, hits, pickup grants, scores or
 life state. Sequence is an increasing safe integer for the connection generation;
-ignore duplicates and stale sequence values. Clamp aim to world bounds, normalize
-movement, reject malformed/unknown commands and unauthorized theme actions. Keep
-latest movement intent, not an unbounded FIFO. Fire cadence belongs to the module.
+ignore duplicates and stale sequence values. The shared envelope does not require
+combat fields: a noncombat module action such as `{ "type": "unlock", "targetId":
+"door-1" }` is valid without movement, aim, or fire properties. The module validates
+action-specific fields and semantics and rejects actions it does not support. The
+default theme defines its own `combat` action with moveX/moveY (−1..1), aimX/aimY
+(finite world target) and fire; that module clamps aim to world bounds, normalizes
+movement, and controls fire cadence. Keep the latest accepted movement intent, not
+an unbounded FIFO.
 
 Spectator snapshot visibility is derived from the selected player's authoritative
 camera anchor and life/HUD state. Viewport dimensions may differ; no screenshot

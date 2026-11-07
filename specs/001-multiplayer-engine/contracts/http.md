@@ -13,7 +13,7 @@ HTTPS; local HTTP development is the only Secure-cookie exception.
 | POST /auth/logout | Empty | 204 and cleared cookie | Logged in |
 | GET /me | None | Account id/display name/role | Logged in |
 | GET /sessions | None | Active session summaries | Logged in |
-| POST /sessions | name (1–64 chars), settings | 201 session; creator joins as player | Logged in |
+| POST /sessions | settings, optional requestId | 201 session; creator joins as player | Logged in |
 | PATCH /sessions/:id/settings | Full validated settings, expectedRevision | Updated waiting session | Creator |
 | POST /sessions/:id/join | Empty | Membership and current state | Logged in, waiting only |
 | POST /sessions/:id/start | expectedRevision | Running session and pinned revision | Creator |
@@ -39,9 +39,14 @@ generic message regardless of whether the username exists.
 Session summary: id, name, creator display name, status, level/maxLevels,
 playerCount/maxPlayers, spectatorCount/maxSpectators, theme name/revision, settingsRevision,
 canJoin/canSpectate/canRejoin for this account. Counts and direct actions share one
-authoritative registry. GETs never create membership. Idempotent leave/logout remain
-safe on retries. Retried create is not implicitly idempotent; use requestId as an
-idempotency key scoped to account for 60 seconds to avoid duplicate rooms.
+authoritative registry. The server generates `name` as the selected theme's display
+name, followed by ` — ` and the authenticated creator's username. The display name is
+at most 91 characters (64-character theme name, separator, 24-character username).
+It is not unique; the session UUID `id` is the unique identifier, so one creator may
+have multiple sessions with the same display name. GETs never create membership.
+Idempotent leave/logout remain safe on retries. Retried create is not implicitly
+idempotent; use requestId as an idempotency key scoped to account for 60 seconds to
+avoid duplicate rooms.
 
 Proposed throttles: login 10 attempts/minute per IP and per normalized username,
 register 5/minute per IP, authenticated mutations 60/minute/account. Bound throttle

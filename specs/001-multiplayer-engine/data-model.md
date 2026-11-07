@@ -4,10 +4,10 @@
 
 | Entity | Fields and constraints | Relationships |
 | --- | --- | --- |
-| Account | UUID id; display username 3–24 ASCII letters/digits/underscore; normalized username lowercased UNIQUE; password 12–128 characters at signup; salted scrypt hash/parameters; role player/operator; createdAt | Owns login sessions, game memberships, results |
+| Account | UUID id; display username 3–24 ASCII letters/digits/underscore; normalized username lowercased UNIQUE; password 9–128 characters at signup; salted scrypt hash/parameters; role player/operator; createdAt | Owns login sessions, game memberships, results |
 | AuthSession | token digest UNIQUE; accountId; createdAt; expiresAt; revokedAt nullable; absolute lifetime 7 days | Account FK, delete cascades |
 | ThemeRevision | themeId; version; name 1–64 characters; moduleId/version; rendererId/version; engineApiMajor=1; SHA-256 digest; immutable assetRoot; enabled; createdAt; UNIQUE(themeId,version) | Matches pin exact digest |
-| Match | UUID id; creatorAccountId; state waiting/running/finished/abandoned/interrupted/failed; settings JSON validated on creation; themeDigest; startedAt/endedAt nullable; seed | Results/membership reference match |
+| Match | UUID id; creatorAccountId; generated display name (`<theme display name> — <creator username>`); state waiting/running/finished/abandoned/interrupted/failed; settings JSON validated on creation; themeDigest; startedAt/endedAt nullable; seed | Results/membership reference match |
 | MatchParticipant | matchId/accountId composite UNIQUE; joinedOrder; final points/kills/deaths nonnegative integers; finalRank nullable | Roster reservation and final result identity |
 | MatchResult | matchId UNIQUE; terminal status; final level; immutable standings/settings/theme summary; finalizedAt | One idempotent result per match |
 
