@@ -139,7 +139,7 @@ T029 was not started.
 - [X] T034 [US4] Implement operator-only upload/enable endpoints and UI in apps/server/src/themes/routes.ts and apps/client/src/admin-themes.ts; normal creators select enabled installed themes from lobby settings.
 - [X] T035 [US4] Create alternate enemy capability and replacement HUD fixture in themes/fixture/module/index.ts, themes/fixture/skin/index.ts and themes/fixture/theme.json without modifying core; verify multiple renderer instances dispose cleanly.
 - [X] T036 [US4] Build theme preview with deterministic life/death/combat/pickup/spectator/results fixtures in tools/theme-preview.ts and document build/install/override ownership in docs/theme-development.md, including external themes repository layout, pinned SDK consumption, extension examples and owner handoff; expose root npm theme commands.
-- [ ] T037 [US4] Verify SDK conformance, behavior/HUD replacement, pinned active versions, secret-free snapshots, malformed/incompatible/traversal/oversized/executable uploads and role checks in tests/contract/themes.test.ts and tests/integration/theme-install.test.ts; add an external-consumer build fixture in tests/contract/external-theme/ using only the public pinned SDK.
+- [X] T037 [US4] Verify SDK conformance, behavior/HUD replacement, pinned active versions, secret-free snapshots, malformed/incompatible/traversal/oversized/executable uploads and role checks in tests/contract/themes.test.ts and tests/integration/theme-install.test.ts; add an external-consumer build fixture in tests/contract/external-theme/ using only the public pinned SDK.
 
 T031 local evidence: `npm run check` passed, including workspace type-checks and
 the protocol/theme SDK/default-theme builds. The affected theme SDK, default-theme,
@@ -176,6 +176,17 @@ living, death/respawn, combat, pickup and spectator cases; saved results passed
 the public result schema. The deterministic Vite renderer preview and theme
 development/consumer ownership guide are implemented. The browser preview itself
 was not launched; T037 was not started.
+
+T037 local evidence: the focused six-file contract/install/fixture/package/admin
+selection passed (16 tests), followed by one successful `npm run check`.
+The isolated external consumer packed and installed real public SDK/protocol/Zod
+tarballs offline, compiled against public SDK exports and loaded the compiled
+module. Coverage includes behavior/HUD replacement, isolated instances, active
+revision pins, secret-free snapshots, upload limits/atomicity and role enforcement.
+The Windows subprocess failure was reproduced once: `cmd.exe` quoting reached npm
+as a literal quoted `pack` command (exit 1, empty stderr). The test now invokes
+npm's JavaScript CLI through Node and includes captured subprocess diagnostics on
+failure. No browser, deployment or load test was run; T038 was not started.
 
 ## Phase 7: User Story 5 - Operations and Capacity (Priority: P3)
 

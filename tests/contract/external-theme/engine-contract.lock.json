@@ -1,0 +1,10 @@
+{
+  "repository": "scottzastrow/multiplayer-game-engine",
+  "revision": "ea65708b1ad0ed57cfdb9e5f6c795552b814c1e3",
+  "sdkVersion": "0.1.0",
+  "engineApiMajor": 1,
+  "contracts": [
+    "specs/001-multiplayer-engine/contracts/themes.md",
+    "specs/001-multiplayer-engine/contracts/realtime.md"
+  ]
+}

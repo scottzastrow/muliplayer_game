@@ -87,8 +87,24 @@ The consumer pins an immutable engine commit/release and the published
 engine revision and contract paths used to build; do not track a moving branch as
 the compatibility definition and do not import `apps/`, `packages/` source paths,
 or other private engine internals. Build and test against that pin before proposing
-an upgrade. The engine's external-consumer conformance fixture is the public
-contract check once available.
+an upgrade. The engine's external-consumer conformance fixture lives in
+`tests/contract/external-theme/`, with an exact SDK version and immutable engine
+contract pin. `tests/contract/themes.test.ts` copies it outside the checkout, packs
+the public SDK/protocol and their Zod dependency, installs those artifacts offline,
+then compiles and imports the consumer without workspace aliases or private-path
+imports. The fixture uses only public SDK exports and has its own strict tsconfig;
+the repository's pinned TypeScript compiler runs the isolated build.
+
+Run the extension checks with:
+
+```powershell
+npm test -- tests\contract\themes.test.ts tests\integration\theme-install.test.ts tests\fixture-theme.test.ts tests\integration\fixture-theme.test.ts tests\theme-packages.test.ts tests\integration\theme-admin.test.ts
+```
+
+These exercise module isolation, the
+reference behavior/HUD replacement, package limits and atomicity, operator roles,
+and active revision pins. They are automated contract/API checks, not browser or
+deployment evidence.
 
 ## Review and handoff
 

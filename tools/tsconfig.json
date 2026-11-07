@@ -5,5 +5,11 @@
     "outDir": "../dist/tools",
     "types": ["node"]
   },
-  "include": ["./**/*.ts", "../tests/operator-tools.test.ts", "../tests/theme-packages.test.ts"]
+  "include": [
+    "./**/*.ts",
+    "../tests/operator-tools.test.ts",
+    "../tests/theme-packages.test.ts",
+    "../tests/contract/themes.test.ts",
+    "../tests/integration/theme-install.test.ts"
+  ]
 }

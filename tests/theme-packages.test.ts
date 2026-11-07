@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { deflateRawSync, deflateSync } from "node:zlib";
+import { createThemeZip as createZip, png } from "./helpers/theme-archive.js";
 import {
   defaultModuleFactory,
   defaultSkinFactory,
@@ -24,100 +24,6 @@ afterEach(() => {
     temporaryDirectory = undefined;
   }
 });
-
-function crc32(bytes: Buffer): number {
-  let crc = 0xffffffff;
-  for (const byte of bytes) {
-    crc ^= byte;
-    for (let bit = 0; bit < 8; bit += 1) {
-      crc = (crc & 1) !== 0 ? (crc >>> 1) ^ 0xedb88320 : crc >>> 1;
-    }
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-}
-
-function createZip(
-  entries: readonly { path: string; bytes: Buffer }[],
-  options: { readonly deflate?: boolean; readonly descriptor?: boolean } = {}
-): Buffer {
-  const localRecords: Buffer[] = [];
-  const centralRecords: Buffer[] = [];
-  let offset = 0;
-  for (const entry of entries) {
-    const name = Buffer.from(entry.path, "utf8");
-    const checksum = crc32(entry.bytes);
-    const compressed = options.deflate ? deflateRawSync(entry.bytes) : entry.bytes;
-    const flags = 0x0800 | (options.descriptor ? 0x0008 : 0);
-    const local = Buffer.alloc(30 + name.length);
-    local.writeUInt32LE(0x04034b50, 0);
-    local.writeUInt16LE(20, 4);
-    local.writeUInt16LE(flags, 6);
-    local.writeUInt16LE(options.deflate ? 8 : 0, 8);
-    local.writeUInt32LE(options.descriptor ? 0 : checksum, 14);
-    local.writeUInt32LE(options.descriptor ? 0 : compressed.length, 18);
-    local.writeUInt32LE(options.descriptor ? 0 : entry.bytes.length, 22);
-    local.writeUInt16LE(name.length, 26);
-    name.copy(local, 30);
-    localRecords.push(local, compressed);
-    if (options.descriptor) {
-      const descriptor = Buffer.alloc(16);
-      descriptor.writeUInt32LE(0x08074b50, 0);
-      descriptor.writeUInt32LE(checksum, 4);
-      descriptor.writeUInt32LE(compressed.length, 8);
-      descriptor.writeUInt32LE(entry.bytes.length, 12);
-      localRecords.push(descriptor);
-    }
-
-    const central = Buffer.alloc(46 + name.length);
-    central.writeUInt32LE(0x02014b50, 0);
-    central.writeUInt16LE(0x0314, 4);
-    central.writeUInt16LE(20, 6);
-    central.writeUInt16LE(flags, 8);
-    central.writeUInt16LE(options.deflate ? 8 : 0, 10);
-    central.writeUInt32LE(checksum, 16);
-    central.writeUInt32LE(compressed.length, 20);
-    central.writeUInt32LE(entry.bytes.length, 24);
-    central.writeUInt16LE(name.length, 28);
-    central.writeUInt32LE(0x81a40000, 38);
-    central.writeUInt32LE(offset, 42);
-    name.copy(central, 46);
-    centralRecords.push(central);
-    offset += local.length + compressed.length + (options.descriptor ? 16 : 0);
-  }
-  const directory = Buffer.concat(centralRecords);
-  const end = Buffer.alloc(22);
-  end.writeUInt32LE(0x06054b50, 0);
-  end.writeUInt16LE(entries.length, 8);
-  end.writeUInt16LE(entries.length, 10);
-  end.writeUInt32LE(directory.length, 12);
-  end.writeUInt32LE(offset, 16);
-  return Buffer.concat([...localRecords, directory, end]);
-}
-
-function png(width = 1, height = 1): Buffer {
-  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-  function chunk(type: string, data: Buffer): Buffer {
-    const typeBytes = Buffer.from(type, "ascii");
-    const result = Buffer.alloc(12 + data.length);
-    result.writeUInt32BE(data.length, 0);
-    typeBytes.copy(result, 4);
-    data.copy(result, 8);
-    result.writeUInt32BE(crc32(Buffer.concat([typeBytes, data])), 8 + data.length);
-    return result;
-  }
-  const header = Buffer.alloc(13);
-  header.writeUInt32BE(width, 0);
-  header.writeUInt32BE(height, 4);
-  header[8] = 8;
-  header[9] = 6;
-  const scanlines = Buffer.alloc(height * (width * 4 + 1));
-  return Buffer.concat([
-    signature,
-    chunk("IHDR", header),
-    chunk("IDAT", deflateSync(scanlines)),
-    chunk("IEND", Buffer.alloc(0))
-  ]);
-}
 
 function packageFiles(options: {
   readonly path?: string;
@@ -160,6 +66,7 @@ function fixture() {
   ]);
   return {
     database,
+    registryBefore: database.prepare("SELECT * FROM theme_revisions ORDER BY theme_id, version").all(),
     modules,
     renderers,
     archivePath: join(temporaryDirectory, "theme.zip"),
@@ -228,8 +135,8 @@ describe("theme package validation and installation", () => {
         state.database, state.archivePath, state.assetDirectory, state.modules, state.renderers
       )).rejects.toThrow("Game module unregistered@1.0.0 is not registered");
 
-      expect(state.database.prepare("SELECT COUNT(*) AS count FROM theme_revisions").get())
-        .toEqual({ count: 1 });
+      expect(state.database.prepare("SELECT * FROM theme_revisions ORDER BY theme_id, version").all())
+        .toEqual(state.registryBefore);
       expect(existsSync(state.assetDirectory)).toBe(false);
     } finally {
       state.database.close();
@@ -270,8 +177,8 @@ describe("theme package validation and installation", () => {
         state.database, state.archivePath, state.assetDirectory, state.modules, state.renderers
       )).rejects.toThrow("entry limit");
 
-      expect(state.database.prepare("SELECT COUNT(*) AS count FROM theme_revisions").get())
-        .toEqual({ count: 1 });
+      expect(state.database.prepare("SELECT * FROM theme_revisions ORDER BY theme_id, version").all())
+        .toEqual(state.registryBefore);
     } finally {
       state.database.close();
     }
@@ -292,8 +199,8 @@ describe("theme package validation and installation", () => {
         state.modules,
         state.renderers
       )).rejects.toThrow();
-      expect(state.database.prepare("SELECT COUNT(*) AS count FROM theme_revisions").get())
-        .toEqual({ count: 1 });
+      expect(state.database.prepare("SELECT * FROM theme_revisions ORDER BY theme_id, version").all())
+        .toEqual(state.registryBefore);
       expect(existsSync(state.assetDirectory)).toBe(true);
       expect(
         (await import("node:fs")).readdirSync(state.assetDirectory)
