@@ -41,8 +41,11 @@ npm run dev
 `npm start` for built production assets/server, `npm run theme:preview -- --theme default`,
 `npm run theme:validate -- --package <path>`, and local operator bootstrap via
 `npm run operator:grant -- --username <existing-account>` (never a password argument).
-If files/scripts do not yet exist, complete corresponding tasks instead of treating
-these future commands as passing evidence.
+As implementation progresses, distinguish commands that now exist from future
+interfaces that remain unimplemented; task evidence records what actually ran.
+`npm run theme:validate -- --package <archive.zip>` validates and installs an asset
+package that references code already registered in the server build. It never
+installs executable code from an uploaded archive.
 
 ## Manual acceptance exercise
 

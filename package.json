@@ -24,6 +24,7 @@
     "db:migrate": "node --env-file=.env --import tsx apps/server/src/storage/migrate.ts",
     "operator": "node --env-file=.env --import tsx tools/operator.ts",
     "theme:code": "node --import tsx tools/install-theme-code.ts",
+    "theme:validate": "node --env-file=.env --import tsx tools/validate-theme.ts",
     "start": "node --env-file=.env apps/server/dist/main.js"
   },
   "devDependencies": {

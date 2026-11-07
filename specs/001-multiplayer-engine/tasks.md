@@ -135,7 +135,7 @@ T029 was not started.
 
 - [X] T031 [US4] Implement revision compatibility, digest pinning, enabled flags and referenced-revision retention in apps/server/src/themes/registry.ts and apps/client/src/themes.ts; validate engine/module/state/renderer versions before start.
 - [X] T032 [US4] Implement operator bootstrap CLI in tools/operator.ts and reviewed module/renderer registration in tools/install-theme-code.ts; allow no public role escalation or uploaded executable code.
-- [ ] T033 [US4] Implement streaming ZIP/manifest/asset validation and atomic content-addressed installation in apps/server/src/themes/packages.ts and tools/validate-theme.ts; enforce all byte/entry/pixel/path/type/hash limits from contracts/themes.md.
+- [X] T033 [US4] Implement streaming ZIP/manifest/asset validation and atomic content-addressed installation in apps/server/src/themes/packages.ts and tools/validate-theme.ts; enforce all byte/entry/pixel/path/type/hash limits from contracts/themes.md.
 - [ ] T034 [US4] Implement operator-only upload/enable endpoints and UI in apps/server/src/themes/routes.ts and apps/client/src/admin-themes.ts; normal creators select enabled installed themes from lobby settings.
 - [ ] T035 [US4] Create alternate enemy capability and replacement HUD fixture in themes/fixture/module/index.ts, themes/fixture/skin/index.ts and themes/fixture/theme.json without modifying core; verify multiple renderer instances dispose cleanly.
 - [ ] T036 [US4] Build theme preview with deterministic life/death/combat/pickup/spectator/results fixtures in tools/theme-preview.ts and document build/install/override ownership in docs/theme-development.md, including external themes repository layout, pinned SDK consumption, extension examples and owner handoff; expose root npm theme commands.
@@ -152,6 +152,10 @@ No browser, deployment or load test was run; T032 was not included in that slice
 T032 local evidence: focused operator/theme-code tests passed (1 file, 3 tests),
 and `npm run check` passed, including the tools type-check. No browser,
 deployment or load test was run; T033 was not started.
+
+T033 local evidence: focused theme-package validation tests passed (1 file, 4
+tests), and `npm run check` passed, including the tools type-check. No browser,
+deployment or load test was run; T034 was not started.
 
 ## Phase 7: User Story 5 - Operations and Capacity (Priority: P3)
 

@@ -155,6 +155,19 @@ archives, decompression bombs and unknown files. Validate font/audio formats and
 resource bounds. Extract to a temporary directory outside served assets, verify,
 then atomically register under digest. Clean rejected staging directories.
 
+An upload manifest includes an `assets` object with `required` and `optional`
+maps from stable asset IDs to `{ "path": "...", "sha256": "<64 lowercase hex>" }`.
+Every required mapping must exist; optional mappings may be absent. Every included
+asset must be declared exactly once, and its streamed SHA-256 must match. The
+manifest's `assetsDigest` is SHA-256 of canonical JSON for the complete validated
+manifest with the `assetsDigest` field omitted; canonical JSON recursively sorts
+object keys and preserves array order. The asset declarations bind the content
+hashes into that digest. The root `theme.json` is required and bounded to 256 KiB.
+Image dimensions and aggregate decoded pixel counts are checked before registration.
+Validated assets are extracted to staging outside the content-addressed asset
+directory, then renamed into place before the registry transaction commits; a
+failed database registration removes its newly promoted directory.
+
 Executable module/custom renderer installation uses reviewed server/client build
 artifacts and operator CLI, not public upload. Uploaded manifest may reference only
 already registered code. This still permits deep developer overrides; it does not
