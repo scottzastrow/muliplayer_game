@@ -30,7 +30,7 @@ export const ThemeDefinitionSchema = z
     id: IdentifierSchema,
     name: z.string().min(1).max(64),
     version: VersionSchema,
-    engineApiMajor: z.literal(1),
+    engineApiMajor: PositiveVersionSchema,
     module: z
       .object({
         id: IdentifierSchema,

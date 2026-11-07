@@ -133,13 +133,21 @@ T029 was not started.
 **Goal**: Prove behavioral/presentation overrides and safe package installation.
 **Independent test**: Default and fixture run together; incompatible upload fails atomically.
 
-- [ ] T031 [US4] Implement revision compatibility, digest pinning, enabled flags and referenced-revision retention in apps/server/src/themes/registry.ts and apps/client/src/themes.ts; validate engine/module/state/renderer versions before start.
+- [X] T031 [US4] Implement revision compatibility, digest pinning, enabled flags and referenced-revision retention in apps/server/src/themes/registry.ts and apps/client/src/themes.ts; validate engine/module/state/renderer versions before start.
 - [ ] T032 [US4] Implement operator bootstrap CLI in tools/operator.ts and reviewed module/renderer registration in tools/install-theme-code.ts; allow no public role escalation or uploaded executable code.
 - [ ] T033 [US4] Implement streaming ZIP/manifest/asset validation and atomic content-addressed installation in apps/server/src/themes/packages.ts and tools/validate-theme.ts; enforce all byte/entry/pixel/path/type/hash limits from contracts/themes.md.
 - [ ] T034 [US4] Implement operator-only upload/enable endpoints and UI in apps/server/src/themes/routes.ts and apps/client/src/admin-themes.ts; normal creators select enabled installed themes from lobby settings.
 - [ ] T035 [US4] Create alternate enemy capability and replacement HUD fixture in themes/fixture/module/index.ts, themes/fixture/skin/index.ts and themes/fixture/theme.json without modifying core; verify multiple renderer instances dispose cleanly.
 - [ ] T036 [US4] Build theme preview with deterministic life/death/combat/pickup/spectator/results fixtures in tools/theme-preview.ts and document build/install/override ownership in docs/theme-development.md, including external themes repository layout, pinned SDK consumption, extension examples and owner handoff; expose root npm theme commands.
 - [ ] T037 [US4] Verify SDK conformance, behavior/HUD replacement, pinned active versions, secret-free snapshots, malformed/incompatible/traversal/oversized/executable uploads and role checks in tests/contract/themes.test.ts and tests/integration/theme-install.test.ts; add an external-consumer build fixture in tests/contract/external-theme/ using only the public pinned SDK.
+
+T031 local evidence: `npm run check` passed, including workspace type-checks and
+the protocol/theme SDK/default-theme builds. The affected theme SDK, default-theme,
+client resolver, lobby and realtime tests passed (6 files, 25 tests). Coverage
+includes incompatible engine/module/renderer metadata, client digest mismatch,
+disabled-revision admission rejection, and continued resolution of an active
+match's exact pinned revision after disablement. `git diff --check` passed.
+No browser, deployment or load test was run; T032 was not started.
 
 ## Phase 7: User Story 5 - Operations and Capacity (Priority: P3)
 

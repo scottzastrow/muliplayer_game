@@ -390,3 +390,21 @@ heartbeats and closes after two missing pong responses`, which received
 coverage remains in the existing reconnect, default-respawn, realtime,
 spectators and spectator-view test files rather than duplicating those tests in
 a new integration file.
+
+## T031 - Theme compatibility and revision pinning (2026-11-07)
+
+The server validates registered theme metadata against the engine API, installed
+module and renderer, and package digest. New matches and waiting-session theme
+changes require an enabled revision; start rechecks availability and persists the
+exact revision/digest pin. Runtime loading and WebSocket hello resolution use that
+pin without requiring the revision to remain enabled, so disabling a revision
+prevents new matches while existing matches continue on the retained code. The
+client rejects missing revisions, digest mismatches, incompatible engine APIs,
+and renderer/module-state metadata mismatches before mounting.
+
+`npm run check` passed, including the workspace type-checks and protocol, theme
+SDK and default-theme builds. The affected test selection passed **6 files and
+25 tests**, covering SDK compatibility, client digest validation, disabled
+revision admission, and active-match pinned resolution after disablement.
+`git diff --check` passed. No browser, deployment, load test or full-suite run
+was performed for T031. T032 was not started; changes remain uncommitted.

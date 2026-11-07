@@ -22,6 +22,7 @@ export interface BuiltinThemeRegistration {
 
 export interface LoadedTheme {
   readonly definition: ThemeDefinition;
+  readonly packageDigest: string;
   readonly moduleFactory: typeof defaultModuleFactory;
   readonly skinFactory: typeof defaultSkinFactory;
 }
@@ -75,11 +76,16 @@ export class ThemeLoader {
         key,
         Object.freeze({
           definition,
+          packageDigest: registration.revision.packageDigest,
           moduleFactory: registration.moduleFactory,
           skinFactory: registration.skinFactory
         })
       );
     }
+  }
+
+  get(revision: string): LoadedTheme | undefined {
+    return this.#themes.get(revision);
   }
 
   resolve(revision: string): LoadedTheme {
@@ -90,14 +96,23 @@ export class ThemeLoader {
     return theme;
   }
 
+  resolvePinned(revision: string, packageDigest: string): LoadedTheme {
+    const theme = this.resolve(revision);
+    if (theme.packageDigest !== packageDigest) {
+      throw new Error(`Theme revision ${revision} does not match the pinned package digest.`);
+    }
+    return theme;
+  }
+
   createModuleInstance(
     revision: string,
     context: ModuleContext<DefaultEntity>,
     settings: Readonly<Record<string, JsonValue>>,
     roster: readonly RosterMember[],
-    seed: number
+    seed: number,
+    packageDigest: string
   ) {
-    const theme = this.resolve(revision);
+    const theme = this.resolvePinned(revision, packageDigest);
     if (!theme.moduleFactory.validateSettings(settings)) {
       throw new TypeError(`Settings are invalid for theme revision ${revision}.`);
     }
@@ -107,9 +122,10 @@ export class ThemeLoader {
   createSkinInstance(
     revision: string,
     host: Parameters<typeof defaultSkinFactory.mount>[0],
-    assets: AssetLoader
+    assets: AssetLoader,
+    packageDigest: string
   ) {
-    return this.resolve(revision).skinFactory.mount(host, assets);
+    return this.resolvePinned(revision, packageDigest).skinFactory.mount(host, assets);
   }
 }
 

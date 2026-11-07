@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ThemeDefinitionSchema,
+  isThemeCompatible,
   validateThemeRevision,
   type ThemeDefinition
 } from "../packages/theme-sdk/src/index.js";
@@ -35,6 +36,12 @@ describe("public theme SDK contracts", () => {
         skin: { ...definition.skin, acceptedStateSchemaVersions: [2] }
       }).success
     ).toBe(false);
+  });
+
+  it("parses other positive engine API majors so runtime compatibility can reject them", () => {
+    const newer = ThemeDefinitionSchema.parse({ ...definition, engineApiMajor: 2 });
+    expect(isThemeCompatible(newer, 1)).toBe(false);
+    expect(isThemeCompatible(definition, 1)).toBe(true);
   });
 
   it("requires the installed module and renderer versions to match the pinned definition", () => {

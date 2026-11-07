@@ -311,13 +311,14 @@ export class RealtimeTransport {
       if (!summary || (summary.status !== "waiting" && summary.status !== "running")) {
         throw new HttpError(404, "NOT_FOUND", "Session not found.");
       }
+      const pinnedTheme = this.lobby.getPinnedTheme(sessionId);
       if (summary.status === "running" && this.lobby.hasPlayerMembership(sessionId, account.id) &&
         !this.lobby.reconnect.canUpgrade(sessionId, account.id)) {
         throw new HttpError(403, "FORBIDDEN", "Rejoin admission is required.");
       }
 
       this.#webSockets.handleUpgrade(request, socket, head, (webSocket) => {
-        this.#accept(webSocket, account, sessionId, summary);
+        this.#accept(webSocket, account, sessionId, summary, pinnedTheme);
       });
     } catch (error) {
       const status = error instanceof HttpError ? error.statusCode : 500;
@@ -338,7 +339,8 @@ export class RealtimeTransport {
     webSocket: WebSocket,
     account: AuthenticatedAccount,
     sessionId: string,
-    summary: NonNullable<ReturnType<LobbyRegistry["getSummary"]>>
+    summary: NonNullable<ReturnType<LobbyRegistry["getSummary"]>>,
+    pinnedTheme: ReturnType<LobbyRegistry["getPinnedTheme"]>
   ): void {
     const role = this.lobby.hasPlayerMembership(sessionId, account.id) ? "player" : "spectator";
     const spectatorConnection = role === "spectator"
@@ -413,8 +415,9 @@ export class RealtimeTransport {
         role,
         sessionState: summary.status,
         pinnedTheme: {
-          name: summary.themeName,
-          revision: summary.themeRevision
+          name: pinnedTheme.name,
+          revision: `${pinnedTheme.theme_id}@${pinnedTheme.version}`,
+          digest: pinnedTheme.digest
         },
         lastAcceptedInputSeq: state.lastSequence
       }

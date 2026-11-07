@@ -8,7 +8,12 @@ import {
   type DefaultEntity,
   type DefaultPlayerAction
 } from "@multiplayer-game/default-theme";
-import { createThemeLoader } from "../apps/server/src/themes/builtins.js";
+import {
+  createThemeLoader,
+  DEFAULT_THEME_REGISTRATION,
+  ThemeLoader
+} from "../apps/server/src/themes/builtins.js";
+import { defaultThemeDefinition } from "@multiplayer-game/default-theme";
 
 function createContext(): ModuleContext<DefaultEntity> {
   const entities = new Map<string, DefaultEntity>();
@@ -65,14 +70,16 @@ describe("default theme registration", () => {
       createContext(),
       {},
       roster,
-      1
+      1,
+      defaultThemeDefinition.assetsDigest
     );
     const second = loader.createModuleInstance(
       "default@1.0.0",
       createContext(),
       {},
       roster,
-      2
+      2,
+      defaultThemeDefinition.assetsDigest
     );
     first.initialize();
     second.initialize();
@@ -95,5 +102,40 @@ describe("default theme registration", () => {
     expect(first.state?.acceptedInputs).toBe(1);
     expect(second.state?.acceptedInputs).toBe(0);
     expect(first.snapshot({ accountId: "account-1", role: "player" }).acceptedInputs).toBe(1);
+  });
+
+  it("requires the exact pinned digest and compatible engine, module, and renderer versions", () => {
+    const loader = createThemeLoader();
+    expect(() => loader.resolvePinned("default@1.0.0", "0".repeat(64)))
+      .toThrow(/pinned package digest/);
+
+    const registration = DEFAULT_THEME_REGISTRATION;
+    expect(() => new ThemeLoader([{
+      ...registration,
+      revision: {
+        ...registration.revision,
+        definition: { ...registration.revision.definition, engineApiMajor: 2 }
+      }
+    }])).toThrow(/not compatible/);
+    expect(() => new ThemeLoader([{
+      ...registration,
+      revision: {
+        ...registration.revision,
+        definition: {
+          ...registration.revision.definition,
+          module: {
+            ...registration.revision.definition.module,
+            stateSchemaVersion: registration.revision.definition.module.stateSchemaVersion + 1
+          },
+          skin: {
+            ...registration.revision.definition.skin,
+            acceptedStateSchemaVersions: [
+              ...registration.revision.definition.skin.acceptedStateSchemaVersions,
+              registration.revision.definition.module.stateSchemaVersion + 1
+            ]
+          }
+        }
+      }
+    }])).toThrow(/mismatched module/);
   });
 });

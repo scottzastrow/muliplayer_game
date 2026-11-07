@@ -17,19 +17,13 @@ import {
 } from "../storage/results.js";
 import type { AuthenticatedAccount } from "../auth/accounts.js";
 import type { ThemeLoader } from "../themes/builtins.js";
+import { ThemeRegistry, type ThemeRevisionRecord } from "../themes/registry.js";
 import { SpectatorRegistry, type PlayerFollowState } from "./spectators.js";
 import { ReconnectRegistry } from "./reconnect.js";
 
 const SESSION_LIMIT = 5;
 const IDEMPOTENCY_WINDOW_MS = 60_000;
 const SESSION_NAME_PATTERN = /^[^\u0000-\u001f\u007f]{1,64}$/;
-
-interface ThemeRow {
-  theme_id: string;
-  version: string;
-  name: string;
-  digest: string;
-}
 
 interface SessionRow {
   id: string;
@@ -61,6 +55,7 @@ export class LobbyRegistry {
   readonly #dedupe = new Map<string, DedupeEntry>();
   readonly spectators: SpectatorRegistry;
   readonly reconnect: ReconnectRegistry;
+  readonly #themes: ThemeRegistry;
 
   constructor(
     readonly database: SqliteDatabase,
@@ -70,6 +65,7 @@ export class LobbyRegistry {
   ) {
     this.spectators = new SpectatorRegistry(database, playerStates);
     this.reconnect = new ReconnectRegistry(clock);
+    this.#themes = new ThemeRegistry(database, themeLoader);
   }
 
   create(
@@ -97,7 +93,6 @@ export class LobbyRegistry {
     }
 
     const settings = parseSettings(body.settings, 1);
-    const theme = this.#getEnabledTheme(settings.themeRevision);
     const activeCount = this.#activeSessionCount();
     if (activeCount >= SESSION_LIMIT) {
       throw new HttpError(409, "SESSION_CAPACITY", "The server has reached its session limit.");
@@ -106,6 +101,7 @@ export class LobbyRegistry {
     const sessionId = randomUUID();
     const createdAt = new Date(this.clock()).toISOString();
     this.database.transaction(() => {
+      const theme = this.#themes.getEnabled(settings.themeRevision);
       if (this.#activeSessionCount() >= SESSION_LIMIT) {
         throw new HttpError(409, "SESSION_CAPACITY", "The server has reached its session limit.");
       }
@@ -198,6 +194,15 @@ export class LobbyRegistry {
     return readSettings(this.database, sessionId);
   }
 
+  getPinnedTheme(sessionId: string): ThemeRevisionRecord {
+    const match = this.database.prepare(
+      "SELECT settings_json, theme_digest FROM matches WHERE id = ?"
+    ).get(sessionId) as { settings_json: string; theme_digest: string } | undefined;
+    if (!match) throw new Error("Pinned theme match could not be loaded.");
+    const settings = parseStoredSettings(match.settings_json);
+    return this.#themes.getPinned(settings.themeRevision, match.theme_digest);
+  }
+
   hasPlayerMembership(sessionId: string, accountId: string): boolean {
     const member = Boolean(
       this.database
@@ -268,7 +273,7 @@ export class LobbyRegistry {
         throw new HttpError(409, "REVISION_CONFLICT", "Session settings have changed.");
       }
       const settings = parseSettings(body.settings, row.player_count);
-      const theme = this.#getEnabledTheme(settings.themeRevision);
+      const theme = this.#themes.getEnabled(settings.themeRevision);
       this.database
         .prepare(
           `UPDATE matches SET settings_json = ?, settings_revision = settings_revision + 1,
@@ -298,13 +303,20 @@ export class LobbyRegistry {
         throw new HttpError(409, "REVISION_CONFLICT", "Session settings have changed.");
       }
       const settings = parseSettings(parseStoredSettings(row.settings_json), row.player_count);
+      const theme = this.#themes.getEnabled(settings.themeRevision);
+      if (theme.digest !== row.theme_digest) {
+        throw new HttpError(422, "INCOMPATIBLE_THEME", "The waiting session's pinned theme revision has changed.");
+      }
       const startedAt = new Date(this.clock()).toISOString();
       const result = this.database
         .prepare(
           `UPDATE matches SET state = 'running', started_at = ?
-           WHERE id = ? AND state = 'waiting' AND settings_revision = ?`
+           WHERE id = ? AND state = 'waiting' AND settings_revision = ?
+             AND theme_digest = ?
+             AND EXISTS (SELECT 1 FROM theme_revisions
+                         WHERE digest = matches.theme_digest AND enabled = 1)`
         )
-        .run(startedAt, sessionId, expectedRevision);
+        .run(startedAt, sessionId, expectedRevision, theme.digest);
       if (result.changes !== 1) {
         throw new HttpError(409, "REVISION_CONFLICT", "Session settings have changed.");
       }
@@ -417,34 +429,6 @@ export class LobbyRegistry {
          WHERE m.id = ?`
       )
       .get(accountId, sessionId) as SessionRow | undefined;
-  }
-
-  #getEnabledTheme(revision: string): ThemeRow {
-    const at = revision.lastIndexOf("@");
-    const row = this.database
-      .prepare(
-        `SELECT theme_id, version, name, digest FROM theme_revisions
-         WHERE theme_id = ? AND version = ? AND enabled = 1`
-      )
-      .get(revision.slice(0, at), revision.slice(at + 1)) as ThemeRow | undefined;
-    if (!row) {
-      throw new HttpError(422, "INCOMPATIBLE_THEME", "The selected theme revision is unavailable.");
-    }
-    if (this.themeLoader) {
-      try {
-        const theme = this.themeLoader.resolve(revision);
-        if (theme.definition.name !== row.name) {
-          throw new Error("Registered theme display name does not match the enabled revision.");
-        }
-      } catch {
-        throw new HttpError(
-          422,
-          "INCOMPATIBLE_THEME",
-          "The selected theme revision is not loaded by this server."
-        );
-      }
-    }
-    return row;
   }
 
   #activeSessionCount(): number {

@@ -34,8 +34,7 @@ const MAX_RETAINED_PATH_RESULTS = 256;
 interface MatchRuntimeRow {
   settings_json: string;
   seed: number;
-  theme_id: string;
-  theme_version: string;
+  theme_digest: string;
 }
 
 interface ParticipantRow {
@@ -83,7 +82,7 @@ export class SessionLifecycle {
 
     let module: ActiveSession["module"] | undefined;
     try {
-      const { settings, seed, revision, roster } = this.#readRuntime(sessionId);
+      const { settings, seed, revision, themeDigest, roster } = this.#readRuntime(sessionId);
       const map = generateMap(seed).map;
       const world = new SessionWorld<DefaultEntity>(
         sessionId,
@@ -114,7 +113,8 @@ export class SessionLifecycle {
         context,
         settings,
         roster,
-        seed
+        seed,
+        themeDigest
       );
       await module.initialize();
       if (!module.setPlayerPresence) throw new Error("The pinned module does not support reconnect presence.");
@@ -217,20 +217,25 @@ export class SessionLifecycle {
     readonly settings: GameSettings;
     readonly seed: number;
     readonly revision: string;
+    readonly themeDigest: string;
     readonly roster: readonly RosterMember[];
   } {
     const match = this.database
       .prepare(
-        `SELECT m.settings_json, m.seed, t.theme_id, t.version AS theme_version
+        `SELECT m.settings_json, m.seed, m.theme_digest
          FROM matches m
-         JOIN theme_revisions t ON t.digest = m.theme_digest
          WHERE m.id = ? AND m.state = 'running'`
       )
       .get(sessionId) as MatchRuntimeRow | undefined;
     if (!match) {
       throw new Error("Running session metadata could not be loaded.");
     }
+    const theme = this.lobby.getPinnedTheme(sessionId);
+    const revision = `${theme.theme_id}@${theme.version}`;
     const settings = GameSettingsSchema.parse(JSON.parse(match.settings_json));
+    if (settings.themeRevision !== revision || theme.digest !== match.theme_digest) {
+      throw new Error("Running session theme settings do not match its pinned revision.");
+    }
     const rows = this.database
       .prepare(
         `SELECT p.account_id, a.username, p.joined_order
@@ -255,7 +260,8 @@ export class SessionLifecycle {
     return {
       settings,
       seed: match.seed,
-      revision: `${match.theme_id}@${match.theme_version}`,
+      revision,
+      themeDigest: theme.digest,
       roster
     };
   }

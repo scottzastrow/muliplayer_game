@@ -282,6 +282,46 @@ describe("accounts and lobby integration", () => {
     }
   });
 
+  it("blocks disabled revisions for new sessions and start, but keeps a started match pinned", async () => {
+    const creator = await registerLogin("DisabledTheme");
+    const settings = { ...DEFAULT_GAME_SETTINGS };
+    const created = await createSession(creator.cookie, settings);
+    expect(created.statusCode).toBe(201);
+    const sessionId = created.json().session.id as string;
+    const pin = database.prepare(
+      "SELECT theme_digest FROM matches WHERE id = ?"
+    ).get(sessionId) as { theme_digest: string };
+
+    database.prepare(
+      "UPDATE theme_revisions SET enabled = 0 WHERE theme_id = 'default' AND version = '1.0.0'"
+    ).run();
+    const unavailable = await createSession(creator.cookie, settings);
+    expect(unavailable.statusCode).toBe(422);
+    expect(unavailable.json().error.code).toBe("INCOMPATIBLE_THEME");
+    expect((await patchSettings(creator.cookie, sessionId, 0, settings)).statusCode).toBe(422);
+    const blockedStart = await startSession(creator.cookie, sessionId, 0);
+    expect(blockedStart.statusCode).toBe(422);
+    expect((database.prepare("SELECT state FROM matches WHERE id = ?").get(sessionId) as
+      { state: string }).state).toBe("waiting");
+
+    database.prepare(
+      "UPDATE theme_revisions SET enabled = 1 WHERE theme_id = 'default' AND version = '1.0.0'"
+    ).run();
+    expect((await startSession(creator.cookie, sessionId, 0)).statusCode).toBe(200);
+    database.prepare(
+      "UPDATE theme_revisions SET enabled = 0 WHERE theme_id = 'default' AND version = '1.0.0'"
+    ).run();
+
+    const active = await app.inject({
+      url: `/api/v1/sessions/${sessionId}`,
+      headers: { cookie: creator.cookie }
+    });
+    expect(active.statusCode).toBe(200);
+    expect(active.json().session.status).toBe("running");
+    expect((database.prepare("SELECT theme_digest FROM matches WHERE id = ?").get(sessionId) as
+      { theme_digest: string }).theme_digest).toBe(pin.theme_digest);
+  });
+
   it("releases a waiting slot when its only player leaves and validates idempotent creates", async () => {
     const creator = await registerLogin("SoloCreator");
     const first = await createSession(creator.cookie, DEFAULT_GAME_SETTINGS, "dedupe-key");

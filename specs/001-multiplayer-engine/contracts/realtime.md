@@ -19,6 +19,9 @@ its runner, spectator slots and session slot are released, even with observers.
 
 Every message is a versioned envelope with `v:1`, `type`, `requestId?`, and `payload`.
 Server messages add `sessionId`, `tick`, and `serverTimeMs` when applicable.
+`server.hello` includes the running match's exact pinned theme revision and package
+digest. A disabled flag does not affect an existing match's pin; the client must
+resolve that exact installed revision and digest before rendering the session.
 
 | Direction/type | Payload and behavior |
 | --- | --- |

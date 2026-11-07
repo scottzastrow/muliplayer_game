@@ -161,6 +161,16 @@ already registered code. This still permits deep developer overrides; it does no
 promise safe arbitrary third-party execution. Disabled/new revisions affect future
 sessions only; asset cleanup may remove only unreferenced revisions.
 
+Before a revision can be selected or a match started, Core validates its registered
+engine API major, module ID/version/state schema, renderer ID/version and package
+digest against the installed server code. New matches may use only enabled revisions.
+The match stores both the exact `themeId@version` and package digest; runtime,
+reconnect and client presentation resolve this immutable pair. Disabling a revision
+blocks new matches and waiting-session selection but does not invalidate an active
+match. Revision/code cleanup must retain every pair referenced by a live match.
+The client also requires the exact pinned revision/digest to be installed and checks
+its renderer's accepted module and state schema before mounting.
+
 ## Reference deliverables
 
 - Default theme provides all gameplay described in spec.md using the same SDK.

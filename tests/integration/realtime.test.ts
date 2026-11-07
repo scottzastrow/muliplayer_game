@@ -98,6 +98,27 @@ describe("realtime transport", () => {
     socket.close();
   });
 
+  it("serves the exact pinned revision to running matches after the revision is disabled", async () => {
+    const pin = database.prepare(
+      "SELECT theme_digest FROM matches WHERE id = ?"
+    ).get(sessionId) as { theme_digest: string };
+    database.prepare(
+      "UPDATE theme_revisions SET enabled = 0 WHERE theme_id = 'default' AND version = '1.0.0'"
+    ).run();
+
+    const socket = await connect(creatorCookie);
+    const hello = await nextMessage(socket);
+    expect(hello.payload.pinnedTheme).toMatchObject({
+      revision: "default@1.0.0",
+      digest: pin.theme_digest
+    });
+    expect((await nextMessageOfType(socket, "server.snapshot")).payload).toMatchObject({
+      protocolVersion: 1,
+      moduleStateSchemaVersion: 4
+    });
+    socket.close();
+  });
+
   it("validates the shared envelope while forwarding opaque module-defined actions", async () => {
     const socket = await connect(memberCookie);
     await nextMessage(socket);

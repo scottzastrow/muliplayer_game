@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { defaultSkinFactory, defaultThemeDefinition } from "@multiplayer-game/default-theme";
+import type { SkinFactory } from "@multiplayer-game/theme-sdk";
 import { TerminalLifecycleSchema, type ServerEnvelope } from "@multiplayer-game/protocol";
 import { connectRealtime, type RealtimeClient } from "./connection.js";
 import { mountSkinHost, type MountedSkinHost } from "./skin-host.js";
 import type { ClientAccount } from "./auth.js";
 import { showStatus } from "./ui.js";
+import { resolveClientTheme } from "./themes.js";
 
 export const FollowablePlayersSchema = z.array(z.object({
   accountId: z.string().uuid(), username: z.string().min(1).max(24),
@@ -26,6 +27,7 @@ export function mountSpectate(
   let terminal = false;
   let mounted: MountedSkinHost | undefined;
   let connection: RealtimeClient | undefined;
+  let skinFactory: SkinFactory | undefined;
   let selected: Player | undefined;
   let pending: Player | undefined;
   let players: Player[] = [];
@@ -129,7 +131,8 @@ export function mountSpectate(
   function follow(player: Player): void {
     clearView();
     selected = player;
-    mounted = mountSkinHost(view, defaultSkinFactory, {
+    if (!skinFactory) throw new Error("The pinned Game Theme has not been validated.");
+    mounted = mountSkinHost(view, skinFactory, {
       target: { accountId: player.accountId, username: player.username },
       dispatchInput: () => { throw new Error("Spectators cannot send gameplay input."); },
       navigate: action => {
@@ -157,8 +160,11 @@ export function mountSpectate(
       if (message.sessionId !== sessionId) throw new Error("Received another session's spectator state.");
       if (message.type === "server.hello") {
         const hello = z.object({ role: z.literal("spectator"), protocolVersion: z.literal(1),
-          pinnedTheme: z.object({ revision: z.literal(`${defaultThemeDefinition.id}@${defaultThemeDefinition.version}`) })
+          pinnedTheme: z.object({ revision: z.string().min(1), digest: z.string().regex(/^[a-f0-9]{64}$/) })
         }).parse(message.payload);
+        const theme = resolveClientTheme(hello.pinnedTheme.revision, hello.pinnedTheme.digest);
+        skinFactory = theme.factory;
+        heading.textContent = `Spectating ${theme.definition.name}`;
         ready = hello.role === "spectator";
         showPlayers();
         showStatus(status, "");

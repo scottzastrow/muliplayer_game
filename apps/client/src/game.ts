@@ -1,16 +1,10 @@
-import { defaultSkinFactory, defaultThemeDefinition } from "@multiplayer-game/default-theme";
 import type { JsonValue, ServerEnvelope } from "@multiplayer-game/protocol";
 import { TerminalLifecycleSchema } from "@multiplayer-game/protocol";
 import { connectRealtime, type RealtimeClient } from "./connection.js";
 import type { ClientAccount } from "./auth.js";
 import { mountSkinHost, type MountedSkinHost } from "./skin-host.js";
 import { showStatus } from "./ui.js";
-
-const renderers = new Map([
-  [`${defaultThemeDefinition.id}@${defaultThemeDefinition.version}`, {
-    definition: defaultThemeDefinition, factory: defaultSkinFactory
-  }]
-]);
+import { resolveClientTheme } from "./themes.js";
 
 export function mountGame(
   root: HTMLElement,
@@ -59,10 +53,9 @@ export function mountGame(
         if (
           message.payload.protocolVersion !== 1 || message.payload.role !== "player" ||
           !pinned || typeof pinned !== "object" || Array.isArray(pinned) ||
-          typeof pinned.revision !== "string"
+          typeof pinned.revision !== "string" || typeof pinned.digest !== "string"
         ) throw new Error("Invalid game handshake.");
-        const renderer = renderers.get(pinned.revision);
-        if (!renderer) throw new Error("The pinned Game Theme renderer is not installed in this client.");
+        const renderer = resolveClientTheme(pinned.revision, pinned.digest);
         mounted?.dispose();
         mounted = mountSkinHost(view, renderer.factory, {
           target: { accountId: account.id, username: account.username },
