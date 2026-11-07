@@ -19,7 +19,8 @@ export function registerLobbyRoutes(
   config: AppConfig,
   registry: LobbyRegistry,
   authContext: AuthContext,
-  startSession: (sessionId: string) => Promise<void>
+  startSession: (sessionId: string) => Promise<void>,
+  closeSpectator: (sessionId: string, accountId: string) => void
 ): void {
   app.get<{ Params: { id: string } }>("/api/v1/matches/:id/results", async (request) => {
     authenticateRequest(database, request);
@@ -93,13 +94,33 @@ export function registerLobbyRoutes(
   );
 
   app.post<{ Params: { id: string } }>(
+    "/api/v1/sessions/:id/spectate",
+    async (request) => {
+      requireJson(request);
+      requireSameOrigin(request, config);
+      const account = requireAccount(authContext, request);
+      requireEmptyBody(request.body);
+      const sessionId = parseId(request.params.id);
+      const view = registry.spectators.admit(sessionId, account.id);
+      return { session: registry.getSummary(sessionId, account.id), ...view };
+    }
+  );
+
+  app.get<{ Params: { id: string } }>("/api/v1/sessions/:id/players", async (request) => {
+    const account = authenticateRequest(database, request);
+    return registry.spectators.view(parseId(request.params.id), account.id);
+  });
+
+  app.post<{ Params: { id: string } }>(
     "/api/v1/sessions/:id/leave",
     async (request, reply) => {
       requireJson(request);
       requireSameOrigin(request, config);
       const account = requireAccount(authContext, request);
       requireEmptyBody(request.body);
-      registry.leave(account, parseId(request.params.id));
+      const sessionId = parseId(request.params.id);
+      registry.leave(account, sessionId);
+      closeSpectator(sessionId, account.id);
       reply.code(204);
     }
   );

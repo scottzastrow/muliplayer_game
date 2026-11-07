@@ -310,6 +310,21 @@ describe("realtime transport", () => {
 });
 
 describe("bounded realtime output", () => {
+  it("discards a coalesced old-target snapshot before acknowledging selection loss", () => {
+    const socket = new FakeOutgoingSocket();
+    socket.bufferedAmount = 400;
+    const sender = new BoundedMessageSender(socket, 500);
+    sender.send(snapshot(1));
+    expect(socket.sent).toHaveLength(0);
+    sender.discardSnapshot();
+    socket.bufferedAmount = 0;
+    sender.send({ v: 1, type: "server.spectate.target",
+      payload: { targetAccountId: null, reason: "target-unavailable", players: [] } });
+    sender.flushSnapshot();
+    expect(socket.sent).toHaveLength(1);
+    expect(JSON.parse(socket.sent[0]!).type).toBe("server.spectate.target");
+  });
+
   it("coalesces snapshots and closes on reliable output overflow", () => {
     const socket = new FakeOutgoingSocket();
     socket.bufferedAmount = 400;

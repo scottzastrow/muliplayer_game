@@ -16,6 +16,8 @@ import { authenticateSession, readSessionCookie } from "../auth/sessions.js";
 import type { AuthenticatedAccount } from "../auth/accounts.js";
 import type { SqliteDatabase } from "../storage/database.js";
 import type { LobbyRegistry } from "../lobby/registry.js";
+import type { FollowablePlayer } from "../lobby/spectators.js";
+import { createSpectatorView } from "./spectator-view.js";
 
 export const MAX_INCOMING_MESSAGE_BYTES = 16 * 1024;
 export const MAX_BUFFERED_OUTGOING_BYTES = 1024 * 1024;
@@ -108,6 +110,10 @@ export class BoundedMessageSender {
     this.socket.send(snapshot);
   }
 
+  discardSnapshot(): void {
+    this.#pendingSnapshot = undefined;
+  }
+
   #bufferedBytes(): number {
     return this.socket.bufferedAmount + (this.#pendingSnapshot
       ? outgoingSize(this.#pendingSnapshot)
@@ -126,6 +132,8 @@ interface ConnectionState {
   readonly account: AuthenticatedAccount;
   readonly sessionId: string;
   readonly sender: BoundedMessageSender;
+  readonly role: "player" | "spectator";
+  readonly spectatorConnection?: symbol;
   lastSequence: number;
   invalidMessages: number;
   awaitingPong: boolean;
@@ -171,11 +179,28 @@ export class RealtimeTransport {
     this.server.removeListener("upgrade", this.#onUpgrade);
     for (const [socket, state] of this.#connections) {
       clearInterval(state.heartbeat);
+      if (state.spectatorConnection) {
+        this.lobby.spectators.detach(state.sessionId, state.account.id, state.spectatorConnection);
+      }
       socket.terminate();
     }
     this.#connections.clear();
     this.#currentByMember.clear();
     this.#inputWindows.clear();
+  }
+
+  isPlayerConnected(sessionId: string, accountId: string): boolean {
+    const socket = this.#currentByMember.get(`${sessionId}:${accountId}`);
+    return Boolean(socket?.readyState === WebSocket.OPEN &&
+      this.#connections.get(socket)?.role === "player" &&
+      this.lobby.hasPlayerMembership(sessionId, accountId));
+  }
+
+  closeSpectator(sessionId: string, accountId: string): void {
+    const socket = this.#currentByMember.get(`${sessionId}:${accountId}`);
+    if (socket && this.#connections.get(socket)?.role === "spectator") {
+      socket.close(1000, "Left spectator session.");
+    }
   }
 
   publishSnapshot(
@@ -184,11 +209,35 @@ export class RealtimeTransport {
     moduleStateSchemaVersion: number,
     snapshotForAccount: (accountId: string) => Readonly<Record<string, JsonValue>>
   ): void {
+    let players: readonly FollowablePlayer[] | undefined;
+    const targetSnapshots = new Map<string, Readonly<Record<string, JsonValue>>>();
     for (const [webSocket, state] of this.#connections) {
-      if (state.sessionId !== sessionId || webSocket.readyState !== WebSocket.OPEN) {
+      if (state.sessionId !== sessionId || webSocket.readyState !== WebSocket.OPEN ||
+        this.#currentByMember.get(`${sessionId}:${state.account.id}`) !== webSocket) {
         continue;
       }
 
+      let snapshot: Readonly<Record<string, JsonValue>>;
+      if (state.role === "spectator") {
+        if (!this.lobby.spectators.has(sessionId, state.account.id)) continue;
+        players ??= this.lobby.spectators.players(sessionId, state.account.id);
+        const targetAccountId = this.lobby.spectators.refreshTarget(sessionId, state.account.id, players);
+        if (this.lobby.spectators.takeTargetUnavailable(sessionId, state.account.id)) {
+          state.sender.discardSnapshot();
+          state.sender.send({
+            v: 1, type: "server.spectate.target", sessionId, tick, serverTimeMs: Date.now(),
+            payload: { targetAccountId: null, reason: "target-unavailable",
+              message: "The selected player is no longer available to follow.",
+              players: players.filter(player => player.followable).map(player => ({ ...player })) }
+          });
+        }
+        if (!targetAccountId) continue;
+        const cached = targetSnapshots.get(targetAccountId);
+        snapshot = cached ?? createSpectatorView(targetAccountId, snapshotForAccount(targetAccountId));
+        if (!cached) targetSnapshots.set(targetAccountId, snapshot);
+      } else {
+        snapshot = snapshotForAccount(state.account.id);
+      }
       state.sender.send({
         v: 1,
         type: "server.snapshot",
@@ -198,7 +247,7 @@ export class RealtimeTransport {
         payload: {
           protocolVersion: 1,
           moduleStateSchemaVersion,
-          ...snapshotForAccount(state.account.id)
+          ...snapshot
         }
       });
     }
@@ -230,7 +279,8 @@ export class RealtimeTransport {
         this.database,
         readSessionCookie(request.headers.cookie)
       );
-      if (!this.lobby.hasPlayerMembership(sessionId, account.id)) {
+      if (!this.lobby.hasPlayerMembership(sessionId, account.id) &&
+        !this.lobby.spectators.has(sessionId, account.id)) {
         throw new HttpError(403, "FORBIDDEN", "Session membership is required.");
       }
       const summary = this.lobby.getSummary(sessionId, account.id);
@@ -262,6 +312,9 @@ export class RealtimeTransport {
     sessionId: string,
     summary: NonNullable<ReturnType<LobbyRegistry["getSummary"]>>
   ): void {
+    const role = this.lobby.hasPlayerMembership(sessionId, account.id) ? "player" : "spectator";
+    const spectatorConnection = role === "spectator"
+      ? this.lobby.spectators.attach(sessionId, account.id) : undefined;
     const memberKey = `${sessionId}:${account.id}`;
     const previous = this.#currentByMember.get(memberKey);
     if (previous && previous.readyState === WebSocket.OPEN) {
@@ -276,6 +329,8 @@ export class RealtimeTransport {
       account,
       sessionId,
       sender,
+      role,
+      ...(spectatorConnection ? { spectatorConnection } : {}),
       lastSequence: -1,
       invalidMessages: 0,
       awaitingPong: false,
@@ -318,7 +373,7 @@ export class RealtimeTransport {
         protocolVersion: 1,
         tickRate: 30,
         snapshotRate: 15,
-        role: "player",
+        role,
         sessionState: summary.status,
         pinnedTheme: {
           name: summary.themeName,
@@ -335,6 +390,9 @@ export class RealtimeTransport {
     raw: RawData,
     isBinary: boolean
   ): void {
+    if (this.#currentByMember.get(`${state.sessionId}:${state.account.id}`) !== webSocket) {
+      return;
+    }
     if (isBinary) {
       this.#invalid(webSocket, state, "Binary messages are not supported.");
       return;
@@ -376,25 +434,35 @@ export class RealtimeTransport {
       });
       return;
     }
-    if (message.type !== "client.input") {
-      this.#sendError(
-        state,
-        "NOT_READY",
-        "Spectator targeting is not available yet.",
-        message.requestId,
-        false
-      );
+    if (!this.#consumeInput(state.account.id)) {
+      this.#sendError(state, "RATE_LIMITED", "Input rate limit exceeded.", message.requestId, true);
+      webSocket.close(1008, "Input rate limit exceeded.");
       return;
     }
-    if (!this.#consumeInput(state.account.id)) {
-      this.#sendError(
-        state,
-        "RATE_LIMITED",
-        "Input rate limit exceeded.",
-        message.requestId,
-        true
-      );
-      webSocket.close(1008, "Input rate limit exceeded.");
+    if (message.type === "client.spectate.target") {
+      try {
+        const targetAccountId = this.lobby.spectators.selectTarget(
+          state.sessionId, state.account.id, message.payload.targetAccountId
+        );
+        state.sender.discardSnapshot();
+        state.sender.send({
+          v: 1, type: "server.spectate.target", sessionId: state.sessionId,
+          tick: 0, serverTimeMs: Date.now(),
+          ...(message.requestId ? { requestId: message.requestId } : {}),
+          payload: { targetAccountId }
+        });
+      } catch (error) {
+        if (error instanceof HttpError) {
+          this.#sendError(state, error.code, error.message, message.requestId, false);
+        } else {
+          this.#sendError(state, "INTERNAL_ERROR", "The game could not select this target.", message.requestId, true);
+          webSocket.close(1011, "The game could not select this target.");
+        }
+      }
+      return;
+    }
+    if (state.role !== "player") {
+      this.#sendError(state, "FORBIDDEN", "Spectators cannot control gameplay.", message.requestId, false);
       return;
     }
     if (message.payload.sequence <= state.lastSequence) {
@@ -533,6 +601,9 @@ export class RealtimeTransport {
     }
     clearInterval(state.heartbeat);
     this.#connections.delete(webSocket);
+    if (state.spectatorConnection) {
+      this.lobby.spectators.detach(state.sessionId, state.account.id, state.spectatorConnection);
+    }
     const memberKey = `${state.sessionId}:${state.account.id}`;
     if (this.#currentByMember.get(memberKey) === webSocket) {
       this.#currentByMember.delete(memberKey);

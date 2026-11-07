@@ -78,10 +78,14 @@ export function createApp(
   });
 
   const themes = createThemeLoader();
-  const lobby = new LobbyRegistry(database, Date.now, themes);
-  const auth = registerAuthRoutes(app, database, config);
   let realtime: RealtimeTransport | undefined;
-  const lifecycle = new SessionLifecycle(
+  const lobby: LobbyRegistry = new LobbyRegistry(database, Date.now, themes, (sessionId) =>
+    new Map([...lifecycle.playerLives(sessionId)].map(([accountId, life]) => [
+      accountId, { connected: realtime?.isPlayerConnected(sessionId, accountId) ?? false, life }
+    ]))
+  );
+  const auth = registerAuthRoutes(app, database, config);
+  const lifecycle: SessionLifecycle = new SessionLifecycle(
     database,
     lobby,
     themes,
@@ -94,8 +98,9 @@ export function createApp(
       ),
     (sessionId, tick) => realtime?.publishResult(sessionId, tick, "finished")
   );
-  registerLobbyRoutes(app, database, config, lobby, auth, (sessionId) =>
-    lifecycle.start(sessionId)
+  registerLobbyRoutes(app, database, config, lobby, auth,
+    (sessionId) => lifecycle.start(sessionId),
+    (sessionId, accountId) => realtime?.closeSpectator(sessionId, accountId)
   );
   realtime = new RealtimeTransport(app.server, database, config, lobby, {
     ...realtimeOptions,

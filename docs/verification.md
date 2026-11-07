@@ -180,3 +180,78 @@ No Edge/Firefox check, server-restart persistence exercise, production deploymen
 or throughput benchmark was run. Saved-result persistence across browser
 refreshes used the disposable server's live database; durable on-disk storage
 and exactly-once result behavior remain covered by the full test suite.
+
+## T026 - Spectator admission and target authorization (2026-11-07)
+
+Implemented after milestone commit `b32e92d`. Spectator memberships are live,
+session-scoped and capped separately from player participation. Authenticated
+same-origin admission, member-only player listing and existing WebSocket target
+messages now use the same authority. Target life is read through the public module
+snapshot once per player-list operation; connectivity comes from the current
+authorized player socket. Dead connected targets remain followable.
+
+Affected checks: `npm test -- --run tests\integration\spectators.test.ts
+tests\integration\accounts-lobby.test.ts tests\integration\realtime.test.ts
+tests\integration\session-lifecycle.test.ts tests\integration\gameplay.test.ts`
+passed (5 files, 25 tests). `npm run check` passed across all workspaces.
+
+The seven spectator integration cases verify simultaneous last-slot admission,
+idempotent retries/leave, zero allowance, running-only access, player-role conflict,
+authentication/origin/body validation, public player list/life/connectivity,
+same-room target validation, foreign/disconnected/departed target rejection,
+connected dead target eligibility, forbidden spectator controls, actual unchanged
+player entities/NPC totals and persisted participant count, disconnect release,
+replacement-socket stale-close protection, explicit leave closing the socket and
+terminal cleanup. A failed player-state read also rolls back new admission rather
+than leaking a slot. The normal two-level lifecycle integration additionally admits
+an observer, completes through actual player actions, and verifies terminal
+spectator count returns to zero while final standings retain only the player.
+
+The initial new test run failed because the spectator implementation did not
+exist yet. Type-check then caught circular initializer inference and unguarded
+module JSON life fields; explicit types and JSON guards resolved those failures.
+An early test compared an absent `rosterSize` field; it was replaced with actual
+player-array, NPC-entity and participant-row assertions before final verification.
+
+No browser scenario or deployment was run for T026. The lobby spectator button
+remains unavailable pending T028. T027 target-derived snapshots and proactive
+target-unavailable events were not implemented: admitted spectator sockets
+currently receive hello/target acknowledgments, not ordinary player snapshots.
+No player reconnect/departure policy was expanded into T029.
+
+## T027 - Selected-player spectator snapshots (2026-11-07)
+
+Implemented on top of the uncommitted T026 slice; neither slice was committed or
+pushed during this task. T027 adds the server projection in
+`apps/server/src/transport/spectator-view.ts` and wires it through the existing
+bounded WebSocket sender. It uses the selected player's public module snapshot,
+not a module player view for the observer. Camera position, points, health and
+death/respawn data are derived from the target's authoritative player record.
+Dead players retain the death position and score until safe respawn; countdown
+uses the original deadline and snapshot tick. An additive `spectatorView` field
+does not change the v1 envelope or default module schema version.
+
+Each scheduled publication revalidates same-session followability. Target loss
+clears selection, discards pending old-target snapshots, and sends one
+target-unavailable message with a safe explanation and updated followable players.
+No world snapshots are sent without a selected target. HTTP list reads that clear
+selection do not suppress the socket notification. Spectator input remains
+forbidden and cross-room targeting cannot replace the authorized selection.
+
+Affected tests passed (6 files, 34 tests): `spectator-view`,
+`integration/spectators`, `default-respawn`, `integration/realtime`,
+`integration/session-lifecycle` and `integration/accounts-lobby`.
+`npm run check` and `git diff --check` passed.
+Projection tests check living HUD/anchor, dead deadline/countdown/blocked status,
+missing/malformed target failures and nonmutation of the player's snapshot.
+The real default module test follows a defeated player from tick 10 through tick
+159 and safe respawn at tick 160, preserving score and changing the camera anchor.
+HTTP/WebSocket tests verify selected-player delivery, disconnected/departed target
+notifications, remaining followable players, no-selection snapshot suppression,
+switching, input rejection and foreign-room rejection. A bounded-sender test
+ensures a coalesced old-target snapshot cannot follow the selection-loss event.
+
+The initial tests failed for the absent projection file and missing spectator
+snapshot/unavailable notifications, as expected before implementation.
+No browser spectator view or deployment was executed. T028 browser controls,
+navigation and renderer integration remain unstarted.

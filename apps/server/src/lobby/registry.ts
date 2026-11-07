@@ -17,6 +17,7 @@ import {
 } from "../storage/results.js";
 import type { AuthenticatedAccount } from "../auth/accounts.js";
 import type { ThemeLoader } from "../themes/builtins.js";
+import { SpectatorRegistry, type PlayerFollowState } from "./spectators.js";
 
 const SESSION_LIMIT = 5;
 const IDEMPOTENCY_WINDOW_MS = 60_000;
@@ -41,7 +42,6 @@ interface SessionRow {
   theme_digest: string;
   current_level: number;
   player_count: number;
-  spectator_count: number;
   member: number;
 }
 
@@ -58,12 +58,16 @@ export interface CreatedSession {
 
 export class LobbyRegistry {
   readonly #dedupe = new Map<string, DedupeEntry>();
+  readonly spectators: SpectatorRegistry;
 
   constructor(
     readonly database: SqliteDatabase,
     readonly clock: () => number = Date.now,
-    readonly themeLoader?: ThemeLoader
-  ) {}
+    readonly themeLoader?: ThemeLoader,
+    playerStates?: (sessionId: string) => ReadonlyMap<string, PlayerFollowState>
+  ) {
+    this.spectators = new SpectatorRegistry(database, playerStates);
+  }
 
   create(
     account: AuthenticatedAccount,
@@ -170,7 +174,7 @@ export class LobbyRegistry {
       maxLevels: settings.maxLevels,
       playerCount: row.player_count,
       maxPlayers: settings.maxPlayers,
-      spectatorCount: row.spectator_count,
+      spectatorCount: this.spectators.count(sessionId),
       maxSpectators: settings.maxSpectators,
       themeName: row.theme_name,
       themeRevision: settings.themeRevision,
@@ -179,7 +183,8 @@ export class LobbyRegistry {
       canSpectate:
         row.state === "running" &&
         row.member === 0 &&
-        row.spectator_count < settings.maxSpectators,
+        !this.spectators.has(sessionId, accountId) &&
+        this.spectators.count(sessionId) < settings.maxSpectators,
       canRejoin: false,
       canPlay: row.state === "running" && row.member !== 0
     });
@@ -298,6 +303,7 @@ export class LobbyRegistry {
       if (!row) {
         throw new HttpError(404, "NOT_FOUND", "Session not found.");
       }
+      this.spectators.leave(sessionId, account.id);
       if (!row.member) {
         return;
       }
@@ -342,11 +348,13 @@ export class LobbyRegistry {
     finalLevel: number,
     standings: readonly SubmittedStanding[]
   ): boolean {
-    return finalizeMatchResult(
+    const finalized = finalizeMatchResult(
       this.database,
       { matchId: sessionId, status: "finished", finalLevel, standings },
       new Date(this.clock()).toISOString()
     );
+    if (finalized) this.spectators.releaseSession(sessionId);
+    return finalized;
   }
 
   #markTerminal(
@@ -370,6 +378,7 @@ export class LobbyRegistry {
       { matchId: sessionId, status: resultStatus, finalLevel: row.current_level },
       new Date(this.clock()).toISOString()
     );
+    this.spectators.releaseSession(sessionId);
   }
 
   #readSession(sessionId: string, accountId: string): SessionRow | undefined {
@@ -379,7 +388,6 @@ export class LobbyRegistry {
                 m.settings_json, m.settings_revision, m.display_name, t.name AS theme_name, m.theme_digest,
                 m.current_level,
                 (SELECT COUNT(*) FROM match_participants p WHERE p.match_id = m.id) AS player_count,
-                0 AS spectator_count,
                 EXISTS(SELECT 1 FROM match_participants p
                        WHERE p.match_id = m.id AND p.account_id = ?) AS member
          FROM matches m

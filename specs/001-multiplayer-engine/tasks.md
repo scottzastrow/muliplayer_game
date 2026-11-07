@@ -97,11 +97,27 @@ Checkpoint: US1+US2 is the first playable multiplayer slice, already using defau
 **Goal**: Observe active games and resume reserved identities without reopening the roster.
 **Independent test**: Third account switches targets; reconnecting participant retains state.
 
-- [ ] T026 [US3] Implement spectate admission, selected-target authorization, cap races, player list and leave cleanup in apps/server/src/lobby/spectators.ts; zero allowed spectators disables admission and observers do not change roster/NPC counts.
-- [ ] T027 [US3] Implement target-derived camera/HUD/death snapshots and target-unavailable events in apps/server/src/transport/spectator-view.ts; no spectator control input and no cross-room target access.
+- [X] T026 [US3] Implement spectate admission, selected-target authorization, cap races, player list and leave cleanup in apps/server/src/lobby/spectators.ts; zero allowed spectators disables admission and observers do not change roster/NPC counts.
+- [X] T027 [US3] Implement target-derived camera/HUD/death snapshots and target-unavailable events in apps/server/src/transport/spectator-view.ts; no spectator control input and no cross-room target access.
 - [ ] T028 [US3] Implement target selection, switching, countdown, Back to Players/Back to Lobby and standings navigation in apps/client/src/spectate.ts using SkinHost extension slots.
 - [ ] T029 [US3] Implement account-bound 60-second reservations, latest-connection replacement, stale-close guards, continued death deadlines, explicit leave forfeiture and empty-running-room abandonment in apps/server/src/lobby/reconnect.ts.
 - [ ] T030 [US3] Verify reconnect expiry, preserved points/deadlines, duplicate sockets, spectator counts/targets/death view and empty-room cleanup in tests/integration/spectate-reconnect.test.ts; record three-profile scenario in docs/verification.md.
+
+T026 local evidence: affected checks passed (5 files, 25 tests) and workspace
+type-check passed. Admission races, zero capacity, repeated admission/leave,
+same-session followable targets, departed/disconnected/dead targets, role/origin
+validation, isolated player/NPC counts, socket replacement and slot cleanup are
+covered in tests/integration/spectators.test.ts. The normal match-completion
+integration also verifies terminal spectator cleanup. See docs/verification.md.
+T027 target-derived views/events and T028 browser controls remain unstarted.
+
+T027 local evidence: affected checks passed (6 files, 34 tests), workspace
+type-check passed, and diff validation passed. Selected-player projection includes
+camera, HUD, death countdown/deadline and blocked status; real module tests follow
+death through safe respawn. Socket tests verify target loss, refreshed same-room
+followable lists, switching, no snapshots without a selection, forbidden spectator
+input, cross-room rejection and discarded old-target pending snapshots. Details
+are in docs/verification.md. T028 remains unstarted.
 
 ## Phase 6: User Story 4 - Developer Themes (Priority: P2)
 

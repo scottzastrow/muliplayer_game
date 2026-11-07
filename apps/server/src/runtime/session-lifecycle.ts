@@ -166,6 +166,21 @@ export class SessionLifecycle {
     return true;
   }
 
+  playerLives(sessionId: string): ReadonlyMap<string, "alive" | "dead"> {
+    const active = this.#sessions.get(sessionId);
+    const lives = new Map<string, "alive" | "dead">();
+    if (!active) return lives;
+    const snapshot = active.module.snapshot({ accountId: active.roster[0]!.accountId, role: "player" });
+    for (const player of snapshot.players) {
+      if (typeof player !== "object" || player === null || Array.isArray(player) ||
+        typeof player.accountId !== "string" || typeof player.alive !== "boolean") {
+        throw new TypeError("The active module returned an invalid player life state.");
+      }
+      lives.set(player.accountId, player.alive ? "alive" : "dead");
+    }
+    return lives;
+  }
+
   close(): void {
     for (const active of [...this.#sessions.values()]) {
       try {

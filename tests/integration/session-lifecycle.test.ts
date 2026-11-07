@@ -42,7 +42,7 @@ describe("session simulation lifecycle", () => {
           settings: {
             ...DEFAULT_GAME_SETTINGS,
             maxPlayers: 1,
-            maxSpectators: 0,
+            maxSpectators: 1,
             initialNpcsPerPlayer: 1,
             npcPopulationGrowthPercent: 0,
             baseNpcHealth: 1,
@@ -63,6 +63,15 @@ describe("session simulation lifecycle", () => {
         payload: { expectedRevision: 0 }
       });
       expect(started.statusCode).toBe(200);
+      const observerCookie = await registerLogin("LifecycleObserver");
+      const admitted = await app.inject({
+        method: "POST",
+        url: `/api/v1/sessions/${sessionId}/spectate`,
+        headers: { ...BASE_HEADERS, cookie: observerCookie },
+        payload: {}
+      });
+      expect(admitted.statusCode).toBe(200);
+      expect(admitted.json().session).toMatchObject({ playerCount: 1, spectatorCount: 1 });
       baseUrl = await app.listen({ host: "127.0.0.1", port: 0 });
 
       const socket = await connect(cookie, sessionId);
@@ -121,6 +130,10 @@ describe("session simulation lifecycle", () => {
         url: `/api/v1/matches/${sessionId}/results`, headers: { cookie }
       });
       expect(saved.statusCode).toBe(200);
+      const finishedSummary = await app.inject({
+        url: `/api/v1/sessions/${sessionId}`, headers: { cookie: observerCookie }
+      });
+      expect(finishedSummary.json().session).toMatchObject({ status: "finished", spectatorCount: 0 });
       expect(saved.json().result).toMatchObject({
         matchId: sessionId, status: "finished", finalLevel: 2,
         standings: [{ username: "LifecyclePlayer", rank: 1, points: 200, kills: 2 }]

@@ -61,6 +61,41 @@ Idempotent leave/logout remain safe on retries. Retried create is not implicitly
 idempotent; use requestId as an idempotency key scoped to account for 60 seconds to
 avoid duplicate rooms.
 
+### Spectator admission and player list (T026)
+
+`POST /sessions/:id/spectate` accepts an empty body and returns
+`{session,spectator:{accountId,targetAccountId:null|string},players}`. Admission is
+synchronous, only for running sessions and nonparticipants. Spectator slots are
+live memberships, separate from persisted participants and the frozen module
+roster; they never change NPC budgets. Zero `maxSpectators` disables admission.
+Concurrent requests for the last slot admit one account only; retry by an already
+admitted account returns its existing membership without reserving another slot.
+`canSpectate` is false for participants, already admitted spectators, nonrunning
+sessions and full/disabled spectator capacity.
+
+`GET /sessions/:id/players` requires player or spectator membership in that running
+session and returns `{spectator,players}`; `spectator` is null for a participant.
+Each player contains `accountId`, `username`, `connected`, `life`
+(`alive|dead|unavailable`) and `followable`. The list follows roster order, excludes
+observers and departed participants, and reads life from the active module and
+connectivity from the current authorized socket. Connected alive **or dead**
+participants are followable; disconnected/unavailable players are not. Reading the
+list clears a selected target that is no longer followable without creating any
+membership. T027 sends the corresponding target-unavailable notification and
+updated followable list to the spectator socket on the next snapshot publication.
+
+`POST /sessions/:id/leave` immediately releases a spectator's slot and closes that
+spectator connection. Retries do not change counts. Socket close/error/heartbeat
+failure releases the matching spectator membership; stale close callbacks cannot
+release a newer connection or admission. Terminal session cleanup releases all
+spectator memberships. Admission without a socket still requires explicit leave
+or session termination; GET and WebSocket upgrade never reserve spectator slots.
+Target-derived views are provided by T027; browser spectator controls remain T028
+work.
+
+These are additive v1 responses/endpoints; existing player membership, module input
+envelopes, snapshot schemas and saved results are unchanged.
+
 Proposed throttles: login 10 attempts/minute per IP and per normalized username,
 register 5/minute per IP, authenticated mutations 60/minute/account. Bound throttle
 storage and expire entries. Behind Nginx trust only the configured local proxy, not

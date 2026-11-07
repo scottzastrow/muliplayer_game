@@ -45,6 +45,56 @@ camera anchor and life/HUD state. Viewport dimensions may differ; no screenshot
 streaming. On death provide countdown and last/death camera anchor until respawn.
 On target disconnect/leave return to player list, and on game end show standings.
 
+T026 implements the admission/authorization portion only: an HTTP-admitted
+spectator can upgrade, receives `server.hello` with role `spectator`, and sends
+`client.spectate.target`. The server checks current spectator membership and a
+connected followable participant in the **same session**, then acknowledges with
+`server.spectate.target {targetAccountId}`. An invalid target is rejected without
+overwriting a valid selection; malformed IDs/fields fail envelope validation.
+Players cannot use spectator targeting, and spectators cannot send gameplay input.
+Target selection and input attempts share the bounded 60-command/sec/account
+window. Replacement connections retain membership; close/error/heartbeat failure
+releases only the matching spectator connection generation.
+
+T027 sends snapshots only while an authorized followable target is selected.
+The module is asked for that **target's** player view, never an observer's player
+view. The v1 envelope and module schema version are unchanged; `viewerAccountId`
+is the selected player and `viewerRole` is `spectator`. For Dots and Squares,
+the additive `spectatorView` contains:
+
+```json
+{
+  "targetAccountId": "<selected player UUID>",
+  "cameraAnchor": { "x": 272, "y": 272 },
+  "hud": { "points": 500, "health": 0 },
+  "death": {
+    "alive": false,
+    "respawnAtTick": 210,
+    "respawnBlocked": false,
+    "remainingSeconds": 4
+  }
+}
+```
+
+The anchor is the live player position or retained death position. Points,
+health, alive status, respawn deadline and blocked status come from the module's
+authoritative player record. Remaining seconds is the nonnegative difference
+between deadline and snapshot tick at 30 Hz; living views use zero and omit the
+deadline/blocked fields. Respawn updates the anchor and health without changing
+the selected account. The renderer uses the recipient's own viewport; these
+fields do not convey control authority or stream another player's pixels.
+
+On disconnect, leave or other loss of followability, the next scheduled snapshot
+publication clears the target and sends `server.spectate.target` with
+`{targetAccountId:null,reason:"target-unavailable",message,players}`. `players`
+contains only the currently followable same-session players, including connected
+dead targets. Empty lists are valid. Notification is sent once per selection loss,
+even if an HTTP list read already cleared the selection. Pending snapshots for
+the old target are discarded on switching or selection loss, and no gameplay
+snapshots are sent until another target is selected. Selection/visibility are
+revalidated on each publication; target projections are reused only within that
+session/tick. Browser list/navigation/control integration is T028.
+
 Initial limits: 16 KiB incoming message; 60 input commands/sec/account; at most
 1 MiB buffered outgoing bytes/socket; no per-message compression. Coalesce obsolete
 snapshots before send; close sustained slow consumers with a reconnectable error.
@@ -57,7 +107,8 @@ Module payloads are validated on both boundaries and scoped to the pinned module
 
 On normal match completion, Core commits final standings and terminal state,
 releases the runner, then sends `server.lifecycle` with
-`{status:"finished",resultId:<session UUID>}` to that session's connected players.
+`{status:"finished",resultId:<session UUID>}` to that session's connected players
+and spectators.
 This is a saved-result notification, not client-authoritative scoring. The client
 closes gameplay controls and fetches `/api/v1/matches/:id/results` only after this
 notification; a preceding complete-phase snapshot alone does not imply persistence

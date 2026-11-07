@@ -6,8 +6,37 @@ import {
   generateMap,
   type DefaultEntity
 } from "@multiplayer-game/default-theme";
+import { createSpectatorView } from "../apps/server/src/transport/spectator-view.js";
 
 describe("default player respawn", () => {
+  it("projects a spectator's real module death deadline, retained HUD and safe return anchor", () => {
+    const { module, world } = createSimulation();
+    try {
+      const originalPosition = world.getEntity("player:alice")!.position;
+      defeat(world, 275, 3);
+      module.step(0, 10);
+      const view = () => createSpectatorView("alice", module.snapshot({ accountId: "alice", role: "player" }));
+      expect(view()).toMatchObject({
+        viewerAccountId: "alice", viewerRole: "spectator",
+        spectatorView: { cameraAnchor: originalPosition, hud: { points: 275, health: 0 },
+          death: { alive: false, respawnAtTick: 160, remainingSeconds: 5 } }
+      });
+      module.step(0, 159);
+      expect(view()).toMatchObject({
+        spectatorView: { cameraAnchor: originalPosition, death: { remainingSeconds: 1 / 30 } }
+      });
+      module.step(0, 160);
+      const returned = world.getEntity("player:alice")!;
+      expect(returned.position).not.toEqual(originalPosition);
+      expect(view()).toMatchObject({
+        spectatorView: { cameraAnchor: returned.position, hud: { points: 275, health: 100 },
+          death: { alive: true, remainingSeconds: 0 } }
+      });
+    } finally {
+      module.dispose();
+    }
+  });
+
   it("removes a defeated avatar and retains standings until the five-second deadline", () => {
     const { module, world } = createSimulation();
     defeat(world, 275, 3);
