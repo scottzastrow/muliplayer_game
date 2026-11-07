@@ -75,9 +75,53 @@ Record actual environment, commit, steps, observed results and failures in
 
 ## Capacity experiment (requires separately provisioned target)
 
-The future command `npm run load -- --config <workload.json>` must use real public
-registration/login and socket paths on an operator-authorized test target. Run it
-from another machine. Use synthetic accounts, a known map seed and disposable data.
+The command `npm run load -- --authorized --config <workload.json> --output
+<report.json>` uses real public registration/login and WebSocket paths on an
+operator-authorized disposable test target. Run it from another machine for
+capacity evidence. It never reads the server database or bypasses admissions.
+
+The template is `tools/load/workloads.json`. Copy it into ignored `var/`, set the
+explicit HTTP(S) target origin and workload settings, then run, for example:
+
+```powershell
+npm run load -- --authorized --config var\workload.json --output var\load-report.json
+```
+
+`origin` may be set separately when an authorized local API listener's configured
+public origin differs from its address. No operator credentials are required.
+The harness creates synthetic accounts with random credentials in memory; it does
+not save account names, passwords or cookies. Existing output files are rejected
+before sending load. SIGINT/SIGTERM stops the run and attempts public Leave/logout
+cleanup. Synthetic accounts/results remain on the disposable target; running
+rooms may take the normal 60-second abandonment interval to release capacity.
+
+`playersPerRoom` (1-32), `spectatorsPerRoom` (0-64), and settings are fixed for a
+run because the roster locks at start. `steps` adds independent rooms in strictly
+increasing order, up to five. Each step gets a bounded warm-up before measurement;
+an optional soak follows the last step (up to 1800 seconds). Run separate configs
+to vary players, spectators and enemy settings. The default registration interval
+of 12.5 seconds respects the five/minute IP registration limit; large setup takes
+time and is excluded from phase measurements. Lowering that interval does not
+bypass throttles: HTTP 429 is a failed run, not a retry or success fallback.
+
+Players send bounded 30 Hz intents toward nearby enemies, fire, seek pickups when
+health is low, avoid local obstacles, and send neutral input while dead or between
+levels. Spectators independently follow their room's creator and never send combat
+input. The harness seed reproduces client random decisions given the same snapshots,
+not the complete simulation: the public API currently generates server map seeds
+and does not expose a seed override. Reports include first-map fingerprints and
+pinned revisions/digests rather than claiming a controlled server map seed.
+
+JSON reports include config, client Node/platform/architecture, actual phase
+durations, per-room/role bytes and actions, moving/firing counts, snapshots, control
+queue high-water and bounded application ping/pong RTT histograms. Warm-up samples
+are labeled separately. Percentiles are bucket upper-bound estimates. One latest
+snapshot and one pending ping are retained per client, with 16 KiB control queues
+and 10-second request/message/ping timeouts. Server errors, unexpected closes,
+premature match completion, missing snapshots and cleanup failures mark the report
+failed and produce a nonzero CLI exit. A completed run means the workload executed,
+not that a host met capacity budgets. Collect the operator metrics JSON separately
+for host/runner timing, CPU/RSS and server queue/deadline evidence.
 
 - Test 1, 3 and 5 rooms with 1/2/4 players per room, then raise players intentionally.
 - Vary spectators separately (0/4/8 per room); raise active enemy totals/difficulty.

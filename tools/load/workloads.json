@@ -1,0 +1,25 @@
+{
+  "target": "http://127.0.0.1:3000",
+  "seed": 42,
+  "playersPerRoom": 2,
+  "spectatorsPerRoom": 0,
+  "registrationIntervalMs": 12500,
+  "warmupSeconds": 10,
+  "steps": [
+    { "rooms": 1, "seconds": 30 },
+    { "rooms": 3, "seconds": 30 },
+    { "rooms": 5, "seconds": 30 }
+  ],
+  "soakSeconds": 1800,
+  "settings": {
+    "maxPlayers": 2,
+    "maxSpectators": 0,
+    "initialNpcsPerPlayer": 10,
+    "npcPopulationGrowthPercent": 0,
+    "baseNpcHealth": 100000,
+    "npcHealthGrowthPercent": 0,
+    "respawnDelaySeconds": 5,
+    "maxLevels": 100,
+    "themeRevision": "default@1.0.0"
+  }
+}

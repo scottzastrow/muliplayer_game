@@ -13,6 +13,8 @@
     "../tests/integration/theme-install.test.ts",
     "../tests/runtime-metrics.test.ts",
     "../tests/integration/metrics.test.ts",
-    "../tests/admin-metrics.test.ts"
+    "../tests/admin-metrics.test.ts",
+    "../tests/load-harness.test.ts",
+    "../tests/integration/load-harness.test.ts"
   ]
 }

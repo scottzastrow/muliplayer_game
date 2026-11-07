@@ -194,7 +194,7 @@ failure. No browser, deployment or load test was run; T038 was not started.
 **Independent test**: Controlled external workloads exercise 1/3/5 rooms and produce metrics.
 
 - [X] T038 [US5] Implement bounded host/per-session metrics, timing histograms, event-loop delay, CPU/RSS, bytes/buffers/RTT/counts and operator-only metrics export in apps/server/src/runtime/metrics.ts and apps/client/src/admin-metrics.ts; no high-cardinality username labels.
-- [ ] T039 [US5] Implement synthetic-account external protocol load harness with independent rooms/players/spectators and pursuing/firing behaviors in tools/load/index.ts and tools/load/workloads.json; support seeded runs, warm-up/steps/soak and machine-readable results.
+- [X] T039 [US5] Implement synthetic-account external protocol load harness with independent rooms/players/spectators and pursuing/firing behaviors in tools/load/index.ts and tools/load/workloads.json; support seeded runs, warm-up/steps/soak and machine-readable results.
 - [ ] T040 [US5] Add systemd/Nginx HTTPS-WSS examples, env/data permissions, restart/readiness, safe SQLite backup/restore and co-hosted-service notes in deploy/game.service, deploy/nginx.conf and deploy/README.md; use EnvironmentFile=/etc/multiplayer-game/game.env, preserve existing HTTPS setup recorded in docs/hosting.md, and do not provision or alter live AWS without instruction/access.
 - [ ] T041 [US5] Verify restart reconciliation/account/results durability, failure isolation, slow consumers, queue limits and shutdown behavior in tests/integration/operations.test.ts; run a local load-harness smoke check and record conditions in docs/verification.md.
 - [ ] T042 [US5] On an authorized provisioned target, execute quickstart.md capacity matrix from a separate host and write revision/hardware/settings/metrics/failures/30-minute-soak results in docs/capacity-report.md; leave unchecked until real execution.
@@ -208,6 +208,18 @@ error handling. The initial TS2339 was caused by serializer type narrowing;
 explicit session entity/tick fields preserve the runtime response and assertion
 without casts. No real-browser, deployment or load test was run; T039 was not
 started.
+
+T039 local evidence: the focused workload/unit and external-protocol integration
+selection passed once (2 files, 4 tests), followed by one successful
+`npm run check`. Automated local HTTP/WebSocket checks exercised two independent
+rooms, players and spectators, warm-up/steps/short soak, moving/firing intents,
+snapshot/RTT measurements, logout cleanup and explicit origin-error reporting.
+The harness uses only public HTTP/socket paths, keeps credentials in memory,
+bounds client queues/histograms and emits machine-readable reports. Its seed
+controls client decisions given snapshots; the public API does not permit
+selecting server map seeds, so reports record first-map fingerprints and pins.
+The supplied 1/3/5-room, 30-minute template was not executed. No separate-host
+capacity, deployment or real-browser test was run; T040 was not started.
 
 ## Phase 8: Polish and Cross-Cutting Concerns
 
