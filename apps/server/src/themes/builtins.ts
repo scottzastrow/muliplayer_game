@@ -2,6 +2,8 @@ import {
   isThemeCompatible,
   validateThemeRevision,
   type AssetLoader,
+  type ModuleMetadata,
+  type SkinFactoryMetadata,
   type ThemeDefinition,
   type ThemePackageRevision
 } from "@multiplayer-game/theme-sdk";
@@ -86,6 +88,28 @@ export class ThemeLoader {
 
   get(revision: string): LoadedTheme | undefined {
     return this.#themes.get(revision);
+  }
+
+  registeredModules(): ReadonlyMap<string, ModuleMetadata> {
+    const modules = new Map<string, ModuleMetadata>();
+    for (const { moduleFactory } of this.#themes.values()) {
+      modules.set(
+        `${moduleFactory.metadata.id}@${moduleFactory.metadata.version}`,
+        moduleFactory.metadata
+      );
+    }
+    return modules;
+  }
+
+  registeredRenderers(): ReadonlyMap<string, SkinFactoryMetadata> {
+    const renderers = new Map<string, SkinFactoryMetadata>();
+    for (const { skinFactory } of this.#themes.values()) {
+      renderers.set(
+        `${skinFactory.metadata.id}@${skinFactory.metadata.version}`,
+        skinFactory.metadata
+      );
+    }
+    return renderers;
   }
 
   resolve(revision: string): LoadedTheme {

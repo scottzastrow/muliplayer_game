@@ -8,6 +8,7 @@ import { registerLobbyRoutes } from "./lobby/routes.js";
 import { LobbyRegistry } from "./lobby/registry.js";
 import { RealtimeTransport, type RealtimeOptions } from "./transport/socket.js";
 import { createThemeLoader } from "./themes/builtins.js";
+import { registerThemeRoutes } from "./themes/routes.js";
 import { SessionLifecycle } from "./runtime/session-lifecycle.js";
 
 export interface ReadinessState {
@@ -85,6 +86,12 @@ export function createApp(
     ]))
   );
   const auth = registerAuthRoutes(app, database, config);
+  app.addContentTypeParser(
+    "application/zip",
+    { parseAs: "buffer" },
+    (_request, body, done) => done(null, body)
+  );
+  registerThemeRoutes(app, database, config, auth, themes);
   const lifecycle: SessionLifecycle = new SessionLifecycle(
     database,
     lobby,

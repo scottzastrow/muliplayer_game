@@ -1,5 +1,6 @@
 import type { ClientAccount } from "./auth.js";
 import { showStatus } from "./ui.js";
+import { mountAdminThemes } from "./admin-themes.js";
 
 interface GameSettings {
   maxPlayers: number;
@@ -130,7 +131,15 @@ export function mountLobby(
     }
   });
   refresh.addEventListener("click", () => void refreshSessions());
-  root.replaceChildren(header, createHeading, createForm, listHeading, refresh, list);
+  root.replaceChildren(
+    header,
+    createHeading,
+    createForm,
+    listHeading,
+    refresh,
+    list,
+    ...(account.role === "operator" ? [mountAdminThemes(status)] : [])
+  );
   void refreshSessions();
 
   async function refreshSessions(): Promise<void> {
