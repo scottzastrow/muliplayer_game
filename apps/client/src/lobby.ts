@@ -30,6 +30,7 @@ interface SessionSummary {
   canJoin: boolean;
   canSpectate: boolean;
   canRejoin: boolean;
+  canPlay: boolean;
 }
 
 const DEFAULT_SETTINGS: GameSettings = {
@@ -65,7 +66,8 @@ export function mountLobby(
   root: HTMLElement,
   status: HTMLElement,
   account: ClientAccount,
-  onLogout: () => void
+  onLogout: () => void,
+  onPlay: (sessionId: string) => void
 ): void {
   const header = document.createElement("header");
   const greeting = document.createElement("p");
@@ -131,6 +133,7 @@ export function mountLobby(
   void refreshSessions();
 
   async function refreshSessions(): Promise<void> {
+    refresh.disabled = true;
     try {
       const result = await api<{ sessions: SessionSummary[] }>("/api/v1/sessions");
       rows.replaceChildren();
@@ -152,6 +155,8 @@ export function mountLobby(
       }
     } catch (error) {
       showStatus(status, messageOf(error), true);
+    } finally {
+      refresh.disabled = false;
     }
   }
 
@@ -199,6 +204,13 @@ export function mountLobby(
       ? "Spectating is not available in this implementation yet."
       : "Spectating is available for running sessions with free spectator capacity.";
     statusCell.append(join, spectate);
+    if (session.canPlay) {
+      const play = document.createElement("button");
+      play.type = "button";
+      play.textContent = "Play";
+      play.addEventListener("click", () => onPlay(session.id));
+      statusCell.append(play);
+    }
 
     if (session.creator === account.username && session.status === "waiting") {
       const controls = document.createElement("details");
@@ -255,7 +267,7 @@ export function mountLobby(
             body: JSON.stringify({ expectedRevision: session.settingsRevision })
           });
           showStatus(status, "Session started.");
-          await refreshSessions();
+          onPlay(session.id);
         } catch (error) {
           showStatus(status, messageOf(error), true);
         } finally {

@@ -33,6 +33,13 @@ default theme defines its own `combat` action with moveX/moveY (−1..1), aimX/a
 movement, and controls fire cadence. Keep the latest accepted movement intent, not
 an unbounded FIFO.
 
+The default browser skin sends keyboard/mouse intent at up to 30 scheduled commands
+per second, plus neutral controls when focus/life state changes. It never sends
+position, score or health. The browser connection limits buffered control bytes
+to 16 KiB and closes a stalled connection with an explicit resync reason rather
+than queueing unlimited movement history. This does not change the shared opaque
+action envelope or the server's 60-command/second admission limit.
+
 Spectator snapshot visibility is derived from the selected player's authoritative
 camera anchor and life/HUD state. Viewport dimensions may differ; no screenshot
 streaming. On death provide countdown and last/death camera anchor until respawn.

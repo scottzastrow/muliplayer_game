@@ -1,0 +1,54 @@
+import { describe, expect, it } from "vitest";
+import {
+  DefaultViewSchema, interpolateEntities, worldToScreen, type DefaultView
+} from "../themes/default/src/skin/view.js";
+
+function view(x: number, deaths = 0): DefaultView {
+  return DefaultViewSchema.parse({
+    viewerAccountId: "alice", viewerRole: "player", tick: 2, level: 1, phase: "active",
+    map: { width: 2048, height: 2048, obstacles: [] },
+    players: [{ accountId: "alice", position: { x, y: 100 }, points: 200, health: 90,
+      alive: true, deaths }],
+    entities: [{ id: "player:alice", radius: 14, position: { x, y: 100 },
+      state: { kind: "player", accountId: "alice", deaths } }]
+  });
+}
+
+describe("Dots and Squares presentation", () => {
+  it("interpolates shared entity positions without extrapolating authority", () => {
+    expect(interpolateEntities(view(100), view(160), 0.5)[0]?.position.x).toBe(130);
+    expect(interpolateEntities(view(100), view(160), 2)[0]?.position.x).toBe(160);
+    expect(interpolateEntities(view(100), view(160), -1)[0]?.position.x).toBe(100);
+  });
+
+  it("never interpolates absent avatars, respawns, or level transitions", () => {
+    const current = view(160);
+    current.entities = [];
+    expect(interpolateEntities(view(100), current, 0.5)).toEqual([]);
+    expect(interpolateEntities(view(100), view(900, 1), 0)[0]?.position.x).toBe(900);
+    const nextLevel = view(800);
+    nextLevel.level = 2;
+    expect(interpolateEntities(view(100), nextLevel, 0)[0]?.position.x).toBe(800);
+  });
+
+  it("centers only the selected character and preserves nearby relative positions on resize", () => {
+    const alice = { x: 300, y: 400 };
+    const bob = { x: 500, y: 400 };
+    expect(worldToScreen(alice, alice, 800, 600)).toEqual({ x: 400, y: 300 });
+    expect(worldToScreen(bob, alice, 800, 600)).toEqual({ x: 600, y: 300 });
+    expect(worldToScreen(bob, bob, 1000, 700)).toEqual({ x: 500, y: 350 });
+  });
+
+  it("rejects malformed/nonfinite snapshots and preserves dead HUD state", () => {
+    expect(DefaultViewSchema.safeParse({ ...view(100), map: undefined }).success).toBe(false);
+    const invalid = view(100);
+    invalid.entities[0]!.position.x = Infinity;
+    expect(DefaultViewSchema.safeParse(invalid).success).toBe(false);
+    const dead = view(100);
+    dead.players[0] = { ...dead.players[0]!, alive: false, health: 0,
+      respawnAtTick: 152, respawnBlocked: true };
+    expect(DefaultViewSchema.parse(dead).players[0]).toMatchObject({
+      points: 200, health: 0, alive: false, respawnAtTick: 152, respawnBlocked: true
+    });
+  });
+});

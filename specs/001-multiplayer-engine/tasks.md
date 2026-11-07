@@ -54,7 +54,7 @@ Checkpoint: US1 independently demonstrates account and session lifecycle; it is 
 - [X] T020 [US2] Implement authoritative shots/hits, single-claim health/rapid-fire/spread pickups, timed effects, caps and score/death accounting in themes/default/module/combat.ts and themes/default/module/pickups.ts; use settings.md tuning and no friendly fire.
 - [X] T021 [US2] Implement roster-frozen growth formulas, overflow-safe preflight, five-second intermissions, max-level completion and idempotent finalization in themes/default/module/progression.ts, apps/server/src/runtime/session-lifecycle.ts and apps/server/src/storage/results.ts; verify normal session-start completion in tests/integration/session-lifecycle.test.ts without truncating NPC totals.
 - [X] T022 [US2] Implement configurable five-second death deadline and bounded random-safe respawn in themes/default/module/respawn.ts; retain score, avoid obstacle/projectile/enemy contact plus margin, retry if blocked, and provide no immunity flag or early level-transition respawn.
-- [ ] T023 [US2] Implement skin host, interpolation, centered camera, input bindings and default shapes/HUD in apps/client/src/skin-host.ts and themes/default/skin/index.ts; points largest, health visible, camera independent per player and viewport resize supported.
+- [X] T023 [US2] Implement skin host, interpolation, centered camera, input bindings and default shapes/HUD in apps/client/src/skin-host.ts and themes/default/skin/index.ts; points largest, health visible, camera independent per player and viewport resize supported.
 - [ ] T024 [US2] Implement match-end standings/result reload and back-to-lobby controls in themes/default/skin/results.ts and apps/client/src/results.ts with deterministic tie ordering from spec.md.
 - [ ] T025 [US2] Verify deterministic navigation, local attraction, no pickup duplication, growth, simultaneous last kills, death timing/no immunity, safe-spawn failure and five-session isolation in tests/integration/gameplay.test.ts; run two-browser scenario and record actual evidence in docs/verification.md.
 
@@ -62,7 +62,15 @@ T022 local evidence: the affected gameplay/transport selection passed (6 files,
 29 tests), followed by the full regression suite including the additional
 fractional/zero-delay case (15 files, 72 tests). `npm run check` and
 `git diff --check` passed. No browser or deployment scenario was executed;
-T023 remains unstarted.
+T023 was not included in that slice.
+
+T023 local evidence: `npm run check`, `npm run build` and the full regression
+suite passed (16 files, 76 tests). `npm run test:browser` passed with two real,
+visible Chrome windows and separate authenticated cookie contexts, verifying
+independent controls, centered cameras, nearby visibility, HUD, mouse fire/release
+and resize. Public-host fixtures also checked shape rendering, death HUD,
+compatibility rejection and disposal. See docs/verification.md for conditions
+and harness corrections. T024 remains unstarted.
 
 Checkpoint: US1+US2 is the first playable multiplayer slice, already using default theme interfaces.
 

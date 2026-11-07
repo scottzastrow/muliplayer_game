@@ -151,6 +151,7 @@ describe("protocol v1 validation", () => {
       canJoin: true,
       canSpectate: true,
       canRejoin: false,
+      canPlay: false,
       tokenDigest: "private-token"
     };
     const session = serializePublicSessionSummary(source);

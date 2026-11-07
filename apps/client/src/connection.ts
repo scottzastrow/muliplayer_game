@@ -70,7 +70,12 @@ export function connectRealtime(options: RealtimeClientOptions): RealtimeClient 
       if (!envelope.success) {
         throw new TypeError("Module action must be a bounded JSON value.");
       }
-      socket.send(JSON.stringify(envelope.data));
+      const serialized = JSON.stringify(envelope.data);
+      if (socket.bufferedAmount + new TextEncoder().encode(serialized).byteLength > 16 * 1024) {
+        socket.close(1013, "Outgoing controls stalled; reconnect to resync.");
+        return false;
+      }
+      socket.send(serialized);
       nextSequence += 1;
       return true;
     },

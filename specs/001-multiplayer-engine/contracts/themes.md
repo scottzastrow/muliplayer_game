@@ -69,7 +69,28 @@ even if that owner is defeated.
 Default module state schema v3 keeps only active avatars in `entities` and adds a
 `players` array containing roster identity, retained health/score/effect state,
 position and `alive`. Dead entries additionally expose `respawnAtTick` and
-`respawnBlocked`; the renderer compatibility metadata accepts schemas 1, 2 and 3.
+`respawnBlocked`. Schema v4 retains these fields and adds the authoritative `tick`
+and `map: {width, height, obstacles: [{x, y, width, height}]}` for presentation.
+The implemented default renderer requires schema v4; earlier stub-renderer
+snapshots are explicitly rejected rather than rendered with guessed geometry.
+
+The browser skin host supplies isolated `world`, `hud` and `controls` DOM slots,
+requestAnimationFrame scheduling, resize/DPR notifications, input dispatch and
+navigation callbacks. The public additive `SkinHost.setCameraAnchor(Point2 |
+undefined)` operation publishes each skin's chosen anchor to its own host; it
+cannot alter server positions. The default skin interpolates the previous/current
+entity positions over their snapshot tick interval, without extrapolation or
+interpolation across respawns/level changes. It centers its own interpolated
+avatar, retains the death anchor while absent, and culls off-viewport entities.
+Players are dots, NPCs squares; projectiles, pickups and map obstacles are also
+visible. Points are visually largest, with current health and life/level status.
+WASD and mouse aim/hold-to-fire dispatch only module-defined `combat` intent
+through the shared action envelope, at no more than 30 scheduled sends/second.
+Blur, hidden tabs, death and disposal clear controls; release stops firing.
+The host cancels frames/observers and the skin removes event listeners on disposal.
+Shapes need no assets; undeclared asset requests fail explicitly. Asset package
+loading and results/spectator views remain separate later tasks.
+
 Level population and NPC health use the frozen player roster and configured per-level
 growth formulas; every level is preflighted against runtime ceilings before play.
 Clearing a non-final level requests completion once and starts a five-second

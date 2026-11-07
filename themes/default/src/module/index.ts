@@ -24,6 +24,8 @@ export interface DefaultModuleState extends Record<string, JsonValue> {
   readonly acceptedInputs: number;
   readonly entities: JsonValue[];
   readonly players: JsonValue[];
+  readonly map: JsonValue;
+  readonly tick: number;
   readonly level: number;
   readonly phase: DefaultLevelPhase;
   readonly intermissionEndsAtTick?: number;
@@ -33,6 +35,8 @@ export interface DefaultModuleSnapshot extends Record<string, JsonValue> {
   readonly acceptedInputs: number;
   readonly entities: JsonValue[];
   readonly players: JsonValue[];
+  readonly map: JsonValue;
+  readonly tick: number;
   readonly viewerAccountId: string;
   readonly viewerRole: "player" | "spectator";
   readonly level: number;
@@ -50,7 +54,7 @@ export interface DefaultModuleResults extends Record<string, JsonValue> {
 export const defaultModuleMetadata = Object.freeze({
   id: "default",
   version: "1.0.0",
-  stateSchemaVersion: 3
+  stateSchemaVersion: 4
 });
 
 export const defaultModuleFactory: GameModuleFactory<
@@ -88,10 +92,16 @@ export const defaultModuleFactory: GameModuleFactory<
     }
 
     let acceptedInputs = 0;
+    let currentTick = 0;
     let disposed = false;
     const gameSettings = resolveDefaultSettings(settings, roster.length);
     const simulator = new DefaultEntitySimulator(_context);
     const map = generateMap(seed).map;
+    const presentationMap = {
+      width: map.definition.bounds.width,
+      height: map.definition.bounds.height,
+      obstacles: map.obstacles.map((obstacle) => ({ ...obstacle }))
+    };
     const respawn = new DefaultRespawnSimulator(
       _context, map, roster, gameSettings.respawnDelaySeconds,
       (accountId) => {
@@ -120,6 +130,8 @@ export const defaultModuleFactory: GameModuleFactory<
           acceptedInputs,
           entities: serializeEntities(_context.entities.values()),
           players: respawn.snapshot(),
+          map: structuredClone(presentationMap),
+          tick: currentTick,
           level: progressionState.level,
           phase: progressionState.phase,
           ...(progressionState.intermissionEndsAtTick === undefined
@@ -147,6 +159,7 @@ export const defaultModuleFactory: GameModuleFactory<
       },
       step(dtSeconds: number, tick: number): void {
         assertActive();
+        currentTick = tick;
         if (progression.state.phase !== "complete") {
           respawn.removeDefeated(tick);
           respawn.respawnEligible(tick);
@@ -176,6 +189,8 @@ export const defaultModuleFactory: GameModuleFactory<
           acceptedInputs,
           entities: serializeEntities(_context.entities.values()),
           players: respawn.snapshot(),
+          map: structuredClone(presentationMap),
+          tick: currentTick,
           viewerAccountId: viewer.accountId,
           viewerRole: viewer.role,
           level: progressionState.level,

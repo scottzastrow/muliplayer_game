@@ -38,7 +38,9 @@ generic message regardless of whether the username exists.
 
 Session summary: id, name, creator display name, status, level/maxLevels,
 playerCount/maxPlayers, spectatorCount/maxSpectators, theme name/revision, settingsRevision,
-canJoin/canSpectate/canRejoin for this account. Counts and direct actions share one
+canJoin/canSpectate/canRejoin/canPlay for this account. `canPlay` is true only for
+an existing participant in a running session; it opens the browser view and does
+not perform Join or grant reconnect admission. Counts and direct actions share one
 authoritative registry. The server generates `name` as the selected theme's display
 name, followed by ` — ` and the authenticated creator's username. The display name is
 at most 91 characters (64-character theme name, separator, 24-character username).

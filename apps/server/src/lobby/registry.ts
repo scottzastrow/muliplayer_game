@@ -180,7 +180,8 @@ export class LobbyRegistry {
         row.state === "running" &&
         row.member === 0 &&
         row.spectator_count < settings.maxSpectators,
-      canRejoin: false
+      canRejoin: false,
+      canPlay: row.state === "running" && row.member !== 0
     });
   }
 

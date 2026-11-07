@@ -1,0 +1,16 @@
+body {
+  margin: 0;
+  padding: 1rem;
+  font: 16px system-ui, sans-serif;
+  background: #f5f7fa;
+  color: #182332;
+}
+button, input { font: inherit; padding: 0.35rem; margin: 0.25rem; }
+label { display: inline-block; margin: 0.25rem; }
+fieldset { display: flex; flex-wrap: wrap; align-items: center; max-width: 65rem; }
+th, td { padding: 0.5rem; text-align: left; }
+[role="alert"] { color: #a31919; }
+.game-hud { display: flex; align-items: baseline; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.game-world { height: max(240px, calc(100dvh - 260px)); width: 100%; overflow: hidden; }
+.game-world canvas:focus { outline: 3px solid #1688bf; outline-offset: -3px; }
+.game-controls { font-size: 0.9rem; }

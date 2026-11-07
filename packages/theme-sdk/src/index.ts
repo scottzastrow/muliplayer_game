@@ -232,6 +232,7 @@ export interface SkinHost {
   readonly slots: ReadonlyMap<string, HTMLElement>;
   dispatchInput(input: JsonValue): void;
   readonly cameraAnchor: Readonly<{ x: number; y: number }> | undefined;
+  setCameraAnchor(anchor: Point2 | undefined): void;
   readonly selectedTarget: Readonly<{ accountId: string; username: string }> | undefined;
   navigate(action: "lobby" | "players" | "results"): void;
 }

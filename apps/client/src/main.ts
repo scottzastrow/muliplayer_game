@@ -1,9 +1,12 @@
 import { loadCurrentAccount, mountAuth, type ClientAccount } from "./auth.js";
 import { mountLobby } from "./lobby.js";
 import { showStatus } from "./ui.js";
+import { mountGame } from "./game.js";
+import "./style.css";
 
 const root = document.querySelector<HTMLElement>("#app");
 const status = document.querySelector<HTMLElement>("#status");
+let disposeGame: (() => void) | undefined;
 
 if (root && status) {
   void initialize();
@@ -30,6 +33,8 @@ function showAuth(): void {
   if (!root || !status) {
     return;
   }
+  disposeGame?.();
+  disposeGame = undefined;
   void mountAuth(root, status, showLobby);
 }
 
@@ -37,5 +42,15 @@ function showLobby(account: ClientAccount): void {
   if (!root || !status) {
     return;
   }
-  mountLobby(root, status, account, showAuth);
+  disposeGame?.();
+  disposeGame = undefined;
+  mountLobby(root, status, account, showAuth, (sessionId) => {
+    if (!root || !status) return;
+    disposeGame = mountGame(root, status, account, sessionId, (action) => {
+      if (action === "lobby") showLobby(account);
+      else showStatus(status, "That view is not available yet.", true);
+    });
+  });
 }
+
+window.addEventListener("pagehide", () => disposeGame?.());

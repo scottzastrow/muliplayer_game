@@ -6,13 +6,13 @@
   "module": {
     "id": "default",
     "version": "1.0.0",
-    "stateSchemaVersion": 3
+    "stateSchemaVersion": 4
   },
   "skin": {
     "rendererId": "default",
     "version": "1.0.0",
     "acceptedModuleId": "default",
-    "acceptedStateSchemaVersions": [1, 2, 3]
+    "acceptedStateSchemaVersions": [4]
   },
   "assetsDigest": "d89837b8b8c914986e5c01cf67766811bce504e9250ef2ce8cf862effb747473",
   "settingsSchemaVersion": 1,

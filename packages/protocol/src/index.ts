@@ -78,7 +78,8 @@ export const PublicSessionSummarySchema = z
     settingsRevision: z.number().int().nonnegative(),
     canJoin: z.boolean(),
     canSpectate: z.boolean(),
-    canRejoin: z.boolean()
+    canRejoin: z.boolean(),
+    canPlay: z.boolean()
   })
   .strict()
   .superRefine((summary, context) => {
@@ -126,7 +127,8 @@ export function serializePublicSessionSummary(
     settingsRevision: summary.settingsRevision,
     canJoin: summary.canJoin,
     canSpectate: summary.canSpectate,
-    canRejoin: summary.canRejoin
+    canRejoin: summary.canRejoin,
+    canPlay: summary.canPlay
   });
 }
 

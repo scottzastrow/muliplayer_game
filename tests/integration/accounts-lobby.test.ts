@@ -246,6 +246,7 @@ describe("accounts and lobby integration", () => {
       status: "waiting",
       themeName: "Dots and Squares",
       canJoin: true,
+      canPlay: false,
       playerCount: 1,
       maxPlayers: settings.maxPlayers
     });
@@ -270,8 +271,15 @@ describe("accounts and lobby integration", () => {
     expect(runningList.json().sessions[0]).toMatchObject({
       status: "running",
       themeName: "Dots and Squares",
-      canJoin: false
+      canJoin: false,
+      canPlay: false
     });
+    for (const cookie of [creator.cookie, joiner.cookie]) {
+      const participantList = await app.inject({
+        url: "/api/v1/sessions", headers: { cookie }
+      });
+      expect(participantList.json().sessions[0]).toMatchObject({ canPlay: true, canJoin: false });
+    }
   });
 
   it("releases a waiting slot when its only player leaves and validates idempotent creates", async () => {
