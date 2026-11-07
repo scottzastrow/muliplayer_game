@@ -18,6 +18,7 @@ import type { SqliteDatabase } from "../storage/database.js";
 import type { LobbyRegistry } from "../lobby/registry.js";
 import type { FollowablePlayer } from "../lobby/spectators.js";
 import { createSpectatorView } from "./spectator-view.js";
+import type { RuntimeMetrics, TransportCounts } from "../runtime/metrics.js";
 
 export const MAX_INCOMING_MESSAGE_BYTES = 16 * 1024;
 export const MAX_BUFFERED_OUTGOING_BYTES = 1024 * 1024;
@@ -35,6 +36,7 @@ export interface ModuleInput {
 }
 
 export interface RealtimeOptions {
+  readonly metrics?: RuntimeMetrics;
   readonly heartbeatIntervalMs?: number;
   readonly maxBufferedBytes?: number;
   readonly onPlayerInput?: (input: ModuleInput) => void | boolean;
@@ -54,7 +56,9 @@ export class BoundedMessageSender {
 
   constructor(
     readonly socket: OutgoingSocket,
-    readonly maxBufferedBytes = MAX_BUFFERED_OUTGOING_BYTES
+    readonly maxBufferedBytes = MAX_BUFFERED_OUTGOING_BYTES,
+    readonly observe?: (kind: "bytesOut" | "droppedSnapshots" | "slowConsumers", bytes?: number) => void,
+    readonly observeBuffer?: (bytes: number) => void
   ) {}
 
   send(envelope: ServerEnvelope): boolean {
@@ -71,11 +75,14 @@ export class BoundedMessageSender {
     }
 
     if (parsed.data.type === "server.snapshot") {
+      if (this.#pendingSnapshot) this.observe?.("droppedSnapshots");
       this.#pendingSnapshot = serialized;
       if (this.socket.bufferedAmount + size > this.maxBufferedBytes) {
         this.#pendingSnapshot = undefined;
+        this.observe?.("droppedSnapshots");
         return false;
       }
+      this.observeBuffer?.(this.#bufferedBytes());
       this.flushSnapshot();
       return true;
     }
@@ -87,12 +94,13 @@ export class BoundedMessageSender {
         this.maxBufferedBytes
     ) {
       this.#pendingSnapshot = undefined;
+      this.observe?.("droppedSnapshots");
     }
     if (this.#bufferedBytes() + size > this.maxBufferedBytes) {
       this.#closeSlowConsumer();
       return false;
     }
-    this.socket.send(serialized);
+    this.#send(serialized);
     return true;
   }
 
@@ -109,11 +117,19 @@ export class BoundedMessageSender {
     }
     const snapshot = this.#pendingSnapshot;
     this.#pendingSnapshot = undefined;
-    this.socket.send(snapshot);
+    this.#send(snapshot);
   }
 
   discardSnapshot(): void {
     this.#pendingSnapshot = undefined;
+  }
+
+  get bufferedBytes(): number { return this.#bufferedBytes(); }
+
+  #send(serialized: string): void {
+    this.socket.send(serialized);
+    this.observe?.("bytesOut", Buffer.byteLength(serialized));
+    this.observeBuffer?.(this.#bufferedBytes());
   }
 
   #bufferedBytes(): number {
@@ -123,6 +139,7 @@ export class BoundedMessageSender {
   }
 
   #closeSlowConsumer(): void {
+    this.observe?.("slowConsumers");
     this.#pendingSnapshot = undefined;
     if (this.socket.readyState === WebSocket.OPEN) {
       this.socket.close(1013, "Slow consumer; reconnect to resync.");
@@ -141,6 +158,7 @@ interface ConnectionState {
   invalidMessages: number;
   awaitingPong: boolean;
   missedPongs: number;
+  pingStartedAt?: number;
   heartbeat: NodeJS.Timeout;
 }
 
@@ -197,6 +215,19 @@ export class RealtimeTransport {
     return Boolean(socket?.readyState === WebSocket.OPEN &&
       this.#connections.get(socket)?.role === "player" &&
       this.lobby.hasPlayerMembership(sessionId, accountId));
+  }
+
+  metricsCounts(sessionId?: string): TransportCounts {
+    const counts: TransportCounts = { connections: 0, players: 0, spectators: 0, bufferedBytes: 0 };
+    for (const [socket, state] of this.#connections) {
+      if (socket.readyState !== WebSocket.OPEN || (sessionId && state.sessionId !== sessionId)) continue;
+      counts.connections += 1;
+      if (state.role === "player") counts.players += 1;
+      else counts.spectators += 1;
+      counts.bufferedBytes += state.sender.bufferedBytes;
+      this.options.metrics?.buffer(state.sessionId, state.sender.bufferedBytes);
+    }
+    return counts;
   }
 
   closeSpectator(sessionId: string, accountId: string): void {
@@ -355,7 +386,9 @@ export class RealtimeTransport {
 
     const sender = new BoundedMessageSender(
       webSocket,
-      this.options.maxBufferedBytes ?? MAX_BUFFERED_OUTGOING_BYTES
+      this.options.maxBufferedBytes ?? MAX_BUFFERED_OUTGOING_BYTES,
+      (kind, amount = 1) => this.options.metrics?.event(sessionId, kind, amount),
+      (bytes) => this.options.metrics?.buffer(sessionId, bytes)
     );
     const state: ConnectionState = {
       account,
@@ -393,6 +426,10 @@ export class RealtimeTransport {
     }
 
     webSocket.on("pong", () => {
+      if (state.pingStartedAt !== undefined) {
+        this.options.metrics?.timing(sessionId, "rtt", performance.now() - state.pingStartedAt);
+        delete state.pingStartedAt;
+      }
       state.awaitingPong = false;
       state.missedPongs = 0;
     });
@@ -438,6 +475,7 @@ export class RealtimeTransport {
       return;
     }
     const bytes = rawToBuffer(raw);
+    this.options.metrics?.event(state.sessionId, "bytesIn", bytes.byteLength);
     if (bytes.byteLength > MAX_INCOMING_MESSAGE_BYTES) {
       this.#invalid(webSocket, state, "Message exceeds the 16 KiB limit.");
       return;
@@ -581,6 +619,7 @@ export class RealtimeTransport {
     requestId: string | undefined,
     fatal: boolean
   ): void {
+    this.options.metrics?.event(state.sessionId, "errors");
     state.sender.send({
       v: 1,
       type: "server.error",
@@ -618,6 +657,7 @@ export class RealtimeTransport {
       }
     }
     state.awaitingPong = true;
+    if (state.pingStartedAt === undefined) state.pingStartedAt = performance.now();
     webSocket.ping();
   }
 
@@ -640,6 +680,7 @@ export class RealtimeTransport {
       return;
     }
     clearInterval(state.heartbeat);
+    this.options.metrics?.event(state.sessionId, "disconnects");
     this.#connections.delete(webSocket);
     if (state.spectatorConnection) {
       this.lobby.spectators.detach(state.sessionId, state.account.id, state.spectatorConnection);

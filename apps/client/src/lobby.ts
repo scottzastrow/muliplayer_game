@@ -1,6 +1,7 @@
 import type { ClientAccount } from "./auth.js";
 import { showStatus } from "./ui.js";
 import { mountAdminThemes } from "./admin-themes.js";
+import { mountAdminMetrics } from "./admin-metrics.js";
 
 interface GameSettings {
   maxPlayers: number;
@@ -138,7 +139,7 @@ export function mountLobby(
     listHeading,
     refresh,
     list,
-    ...(account.role === "operator" ? [mountAdminThemes(status)] : [])
+    ...(account.role === "operator" ? [mountAdminThemes(status), mountAdminMetrics(status)] : [])
   );
   void refreshSessions();
 

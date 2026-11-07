@@ -10,6 +10,7 @@ import { RealtimeTransport, type RealtimeOptions } from "./transport/socket.js";
 import { createThemeLoader } from "./themes/builtins.js";
 import { registerThemeRoutes } from "./themes/routes.js";
 import { SessionLifecycle } from "./runtime/session-lifecycle.js";
+import { registerMetricsRoute, RuntimeMetrics } from "./runtime/metrics.js";
 
 export interface ReadinessState {
   ready: boolean;
@@ -79,6 +80,7 @@ export function createApp(
   });
 
   const themes = createThemeLoader();
+  const metrics = new RuntimeMetrics();
   let realtime: RealtimeTransport | undefined;
   const lobby: LobbyRegistry = new LobbyRegistry(database, Date.now, themes, (sessionId) =>
     new Map([...lifecycle.playerLives(sessionId)].map(([accountId, life]) => [
@@ -86,6 +88,7 @@ export function createApp(
     ]))
   );
   const auth = registerAuthRoutes(app, database, config);
+  registerMetricsRoute(app, auth, metrics);
   app.addContentTypeParser(
     "application/zip",
     { parseAs: "buffer" },
@@ -103,7 +106,8 @@ export function createApp(
         { errorType: error instanceof Error ? error.name : "UnknownError" },
         "Session lifecycle failed"
       ),
-    (sessionId, tick) => realtime?.publishResult(sessionId, tick, "finished")
+    (sessionId, tick) => realtime?.publishResult(sessionId, tick, "finished"),
+    metrics
   );
   registerLobbyRoutes(app, database, config, lobby, auth,
     async (sessionId) => {
@@ -114,6 +118,7 @@ export function createApp(
   );
   realtime = new RealtimeTransport(app.server, database, config, lobby, {
     ...realtimeOptions,
+    metrics,
     onPlayerPresence: (sessionId, accountId, presence) =>
       lifecycle.setPlayerPresence(sessionId, accountId, presence),
     onPlayerInput: (input) => {
@@ -124,9 +129,17 @@ export function createApp(
       return true;
     }
   });
+  metrics.setTransport((sessionId) => realtime!.metricsCounts(sessionId));
   app.addHook("preClose", async () => {
-    lifecycle.close();
-    realtime?.close();
+    try {
+      lifecycle.close();
+    } finally {
+      try {
+        realtime?.close();
+      } finally {
+        metrics.close();
+      }
+    }
   });
   app.addHook("onClose", async () => {
     readiness.ready = false;

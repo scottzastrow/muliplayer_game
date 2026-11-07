@@ -10,6 +10,9 @@
     "../tests/operator-tools.test.ts",
     "../tests/theme-packages.test.ts",
     "../tests/contract/themes.test.ts",
-    "../tests/integration/theme-install.test.ts"
+    "../tests/integration/theme-install.test.ts",
+    "../tests/runtime-metrics.test.ts",
+    "../tests/integration/metrics.test.ts",
+    "../tests/admin-metrics.test.ts"
   ]
 }

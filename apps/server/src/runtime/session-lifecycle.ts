@@ -14,6 +14,7 @@ import {
 import type {
   EntityStore,
   ModuleContext,
+  ModuleMetrics,
   NavigationPathResult,
   RosterMember
 } from "@multiplayer-game/theme-sdk";
@@ -26,6 +27,7 @@ import type { SqliteDatabase } from "../storage/database.js";
 import type { LobbyRegistry } from "../lobby/registry.js";
 import type { ThemeLoader } from "../themes/builtins.js";
 import type { ModuleInput } from "../transport/socket.js";
+import type { RuntimeMetrics } from "./metrics.js";
 
 const SNAPSHOT_INTERVAL_TICKS = 2;
 const MAX_COMPLETION_REQUESTS_PER_STEP = 8;
@@ -44,6 +46,7 @@ interface ParticipantRow {
 }
 
 interface ActiveSession {
+  readonly world: SessionWorld<DefaultEntity>;
   readonly id: string;
   readonly settings: GameSettings;
   readonly roster: readonly RosterMember[];
@@ -72,7 +75,8 @@ export class SessionLifecycle {
     readonly themes: ThemeLoader,
     readonly publishSnapshot: SnapshotPublisher,
     readonly reportError: (error: unknown) => void = () => {},
-    readonly publishResult?: (sessionId: string, tick: number) => void
+    readonly publishResult?: (sessionId: string, tick: number) => void,
+    readonly metrics?: RuntimeMetrics
   ) {}
 
   async start(sessionId: string): Promise<void> {
@@ -96,6 +100,7 @@ export class SessionLifecycle {
       });
       const pathResults = new Map<string, NavigationPathResult>();
       const completionRequests: ActiveSession["completionRequests"] = [];
+      this.metrics?.startSession(sessionId);
       const context = createModuleContext(
         world,
         navigation,
@@ -106,7 +111,8 @@ export class SessionLifecycle {
             throw new RangeError("The module exceeded its completion-request limit.");
           }
           completionRequests.push(request);
-        }
+        },
+        this.metrics?.moduleMetrics(sessionId)
       );
       module = this.themes.createModuleInstance(
         revision,
@@ -120,6 +126,7 @@ export class SessionLifecycle {
       if (!module.setPlayerPresence) throw new Error("The pinned module does not support reconnect presence.");
       for (const member of roster) module.setPlayerPresence(member.accountId, "disconnected");
       const active: ActiveSession = {
+        world,
         id: sessionId,
         settings,
         roster,
@@ -131,7 +138,14 @@ export class SessionLifecycle {
       };
       active.runner = new SessionRunner<JsonValue>({
         callbacks: {
-          step: (dtSeconds, tick) => this.#step(active, dtSeconds, tick),
+          step: (dtSeconds, tick) => {
+            const startedAt = performance.now();
+            try {
+              this.#step(active, dtSeconds, tick);
+            } finally {
+              this.metrics?.timing(active.id, "simulation", performance.now() - startedAt);
+            }
+          },
           snapshot: () => active.module.state ?? {},
           onError: (error) => this.#fail(active, error),
           dispose: () => active.module.dispose()
@@ -159,6 +173,7 @@ export class SessionLifecycle {
         }
       }
       this.lobby.markTerminal(sessionId, "failed");
+      this.metrics?.releaseSession(sessionId);
       this.reportError(error);
       throw error;
     }
@@ -271,7 +286,9 @@ export class SessionLifecycle {
       return;
     }
     try {
-      active.runner.advance();
+      const result = active.runner.advance();
+      this.metrics?.runner(active.id, active.world.entityCount,
+        result.tick, result.missedDeadlines, result.droppedTimeMs);
     } catch (error) {
       this.#fail(active, error);
     }
@@ -290,7 +307,12 @@ export class SessionLifecycle {
     active.navigation.processTick();
     active.module.step(dtSeconds, tick);
     if (tick % SNAPSHOT_INTERVAL_TICKS === 0) {
-      this.#publish(active, tick);
+      const startedAt = performance.now();
+      try {
+        this.#publish(active, tick);
+      } finally {
+        this.metrics?.timing(active.id, "snapshot", performance.now() - startedAt);
+      }
     }
 
     const requests = active.completionRequests.splice(0);
@@ -348,6 +370,7 @@ export class SessionLifecycle {
     if (this.#sessions.get(active.id) !== active) {
       return;
     }
+    this.metrics?.event(active.id, "errors");
     try {
       this.lobby.markTerminal(active.id, "failed");
     } catch (finalizationError) {
@@ -366,6 +389,7 @@ export class SessionLifecycle {
     this.#sessions.delete(active.id);
     active.runner?.dispose();
     active.pathResults.clear();
+    this.metrics?.releaseSession(active.id);
   }
 }
 
@@ -374,7 +398,8 @@ function createModuleContext(
   navigation: BoundedNavigation,
   pathResults: Map<string, NavigationPathResult>,
   seed: number,
-  requestCompletion: ModuleContext<DefaultEntity>["requestCompletion"]
+  requestCompletion: ModuleContext<DefaultEntity>["requestCompletion"],
+  metrics: ModuleMetrics = { increment: () => {}, gauge: () => {} }
 ): ModuleContext<DefaultEntity> {
   const entities: EntityStore<DefaultEntity> = {
     get: (id) => world.getEntity(id),
@@ -431,10 +456,7 @@ function createModuleContext(
     navigation: contextNavigation,
     emit: () => {},
     requestCompletion,
-    metrics: {
-      increment: () => {},
-      gauge: () => {}
-    }
+    metrics
   };
 }
 

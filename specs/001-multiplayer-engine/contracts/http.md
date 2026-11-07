@@ -29,6 +29,27 @@ HTTPS; local HTTP development is the only Secure-cookie exception.
 | GET /health/live | None | 200 or 503 | Public |
 | GET /health/ready | None | 200 or 503 | Public |
 
+`GET /api/v1/admin/metrics` returns a no-store JSON sample containing `sampledAt`,
+`limits`, `host`, and at most five active `sessions`. Host metrics include process
+uptime, cumulative user/system CPU milliseconds, RSS bytes, event-loop delay
+mean/max/p50/p95/p99 milliseconds, and aggregate transport counters. Each active
+session has its match ID (no account/username labels), entity/tick counts,
+missed deadlines/dropped time, connection role counts, queued bytes/high-water,
+JSON payload bytes sent/received, errors, disconnects, dropped/coalesced snapshots,
+slow-consumer closures, and simulation/snapshot/RTT histograms. Session series are
+removed on terminal release; host counters remain cumulative for the process.
+Module counters/gauges are limited to 32 bounded identifier names per room.
+
+Histograms use fixed upper-bound buckets in milliseconds (1, 2, 5, 10, 20, 33.3,
+50, 100, 250, 1000, then overflow). Percentiles are bucket upper-bound estimates;
+overflow uses the observed maximum and empty histograms return null percentiles.
+Simulation duration includes the entire authoritative step, including snapshot
+publication when scheduled; snapshot timing measures that publication separately.
+RTT is server-observed transport ping/pong latency, not application or WAN-only
+latency. Byte counters measure JSON payload bytes, not TLS/WebSocket framing.
+The operator lobby provides manual refresh and a JSON download; no capacity
+claim or load-harness execution is implied.
+
 Error body: `{error:{code,message,requestId,details?}}`; no stack traces or secrets.
 400 malformed/schema, 401 unauthenticated, 403 forbidden/origin, 404 unknown,
 409 SESSION_CAPACITY/PLAYER_CAPACITY/SPECTATOR_CAPACITY/ALREADY_STARTED/
