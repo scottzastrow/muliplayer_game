@@ -56,7 +56,7 @@ Checkpoint: US1 independently demonstrates account and session lifecycle; it is 
 - [X] T022 [US2] Implement configurable five-second death deadline and bounded random-safe respawn in themes/default/module/respawn.ts; retain score, avoid obstacle/projectile/enemy contact plus margin, retry if blocked, and provide no immunity flag or early level-transition respawn.
 - [X] T023 [US2] Implement skin host, interpolation, centered camera, input bindings and default shapes/HUD in apps/client/src/skin-host.ts and themes/default/skin/index.ts; points largest, health visible, camera independent per player and viewport resize supported.
 - [X] T024 [US2] Implement match-end standings/result reload and back-to-lobby controls in themes/default/skin/results.ts and apps/client/src/results.ts with deterministic tie ordering from spec.md.
-- [ ] T025 [US2] Verify deterministic navigation, local attraction, no pickup duplication, growth, simultaneous last kills, death timing/no immunity, safe-spawn failure and five-session isolation in tests/integration/gameplay.test.ts; run two-browser scenario and record actual evidence in docs/verification.md.
+- [X] T025 [US2] Verify deterministic navigation, local attraction, no pickup duplication, growth, simultaneous last kills, death timing/no immunity, safe-spawn failure and five-session isolation in tests/integration/gameplay.test.ts; run two-browser scenario and record actual evidence in docs/verification.md.
 
 T022 local evidence: the affected gameplay/transport selection passed (6 files,
 29 tests), followed by the full regression suite including the additional
@@ -77,8 +77,18 @@ T024 local evidence: workspace check/build passed; affected tests passed (7 file
 notification, terminal-result labeling and deterministic tie ordering. The Chrome
 browser scenario passed through a normal one-level completion, final table,
 saved-result reload, full page refresh, missing-result retry and lobby navigation.
-Details and harness failures are recorded in docs/verification.md. T025 remains
-unstarted.
+Details and harness failures are recorded in docs/verification.md.
+
+T025 local evidence: full test suite passed (18 files, 85 tests), workspace
+type-check/build passed, and the two-window Chrome scenario completed a shared
+two-level match through normal lobby/start/Play and mouse controls. Both players
+received identical standings and retained them after full page refreshes. At five
+active sessions, creation failed with SESSION_CAPACITY; completion removed the
+finished session and allowed a replacement. Integrated tests also verify bounded
+deterministic navigation, local attraction, single-claim pickups, roster growth,
+simultaneous final hits, five-second safe respawn/no immunity and five isolated
+module worlds. Actual conditions and fixture corrections are in
+docs/verification.md. T026 was not started.
 
 Checkpoint: US1+US2 is the first playable multiplayer slice, already using default theme interfaces.
 

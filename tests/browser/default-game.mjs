@@ -68,8 +68,10 @@ async function click(page, label) {
   }
 }
 async function clickSessionButton(page, creator, label) {
-  const selector = `[...document.querySelectorAll('tbody tr')].find(row =>
-    row.children[1]?.textContent === ${JSON.stringify(creator)})`;
+  const selector = `[...document.querySelectorAll('tbody tr')].filter(row =>
+    row.children[1]?.textContent === ${JSON.stringify(creator)} &&
+    [...row.querySelectorAll('button')].some(button =>
+      button.textContent === ${JSON.stringify(label)} && !button.disabled)).at(-1)`;
   await waitFor(page, `${selector} !== undefined`);
   await evaluate(page, `[...(${selector}).querySelectorAll('button')].find(button =>
     button.textContent === ${JSON.stringify(label)} && !button.disabled).click()`);
@@ -171,6 +173,47 @@ async function move(page, code, ms) {
   await delay(ms);
   await cdp("Input.dispatchKeyEvent", { type: "keyUp", key, code }, page.session);
   await delay(200);
+}
+
+async function shootUntil(page, level, remaining) {
+  await cdp("Page.bringToFront", {}, page.session);
+  await evaluate(page, "document.querySelector('canvas').focus()");
+  let pressed = false;
+  let target;
+  try {
+    for (let attempt = 0; attempt < 120; attempt++) {
+      const aim = await evaluate(page, `(() => {
+        const snapshot = window.__probe.snapshot;
+        const npcs = snapshot.entities.filter(item => item.state.kind === 'npc');
+        if (snapshot.level === ${level} && (npcs.length <= ${remaining} || snapshot.phase !== 'active')) {
+          return { complete: true };
+        }
+        const player = snapshot.players.find(item => item.accountId === snapshot.viewerAccountId);
+        const npc = npcs.sort((a,b) =>
+          Math.hypot(a.position.x-player.position.x,a.position.y-player.position.y) -
+          Math.hypot(b.position.x-player.position.x,b.position.y-player.position.y))[0];
+        const bounds = document.querySelector('canvas').getBoundingClientRect();
+        const dx = npc.position.x - player.position.x;
+        const dy = npc.position.y - player.position.y;
+        const scale = Math.min(1, (bounds.width/2-20)/Math.max(1,Math.abs(dx)),
+          (bounds.height/2-20)/Math.max(1,Math.abs(dy)));
+        return { x: bounds.left+bounds.width/2+dx*scale, y: bounds.top+bounds.height/2+dy*scale };
+      })()`);
+      if (aim.complete) return;
+      target = aim;
+      await cdp("Input.dispatchMouseEvent", {
+        type: pressed ? "mouseMoved" : "mousePressed", button: "left",
+        buttons: 1, clickCount: 1, ...target
+      }, page.session);
+      pressed = true;
+      await delay(100);
+    }
+    throw new Error(`Timed out firing in level ${level} toward ${remaining} remaining NPCs.`);
+  } finally {
+    if (pressed) await cdp("Input.dispatchMouseEvent", {
+      type: "mouseReleased", button: "left", buttons: 0, clickCount: 1, ...target
+    }, page.session);
+  }
 }
 
 try {
@@ -344,42 +387,65 @@ try {
   assert.equal(boundedControls.stalled, false);
   assert.equal(boundedControls.closed.code, 1013);
   await click(alice, "Back to lobby");
+  await click(bob, "Back to lobby");
   await waitFor(alice, "document.querySelector('[aria-label=\"Active sessions\"]') !== null");
   await evaluate(alice, `document.querySelector('[name=setting-initialNpcsPerPlayer]').value = '1';
     document.querySelector('[name=setting-baseNpcHealth]').value = '1';
-    document.querySelector('[name=setting-maxLevels]').value = '1';
+    document.querySelector('[name=setting-maxLevels]').value = '2';
+    document.querySelector('[name=setting-npcPopulationGrowthPercent]').value = '0';
+    document.querySelector('[name=setting-npcHealthGrowthPercent]').value = '0';
     window.__probe.snapshot = null`);
   await click(alice, "Create session");
   await waitFor(alice, "document.querySelector('tbody details') !== null");
+  const matchId = await evaluate(alice, `(async () => {
+    const {sessions} = await (await fetch('/api/v1/sessions')).json();
+    return sessions.find(session => session.creator === ${JSON.stringify(creator)} && session.status === 'waiting').id;
+  })()`);
+  await click(bob, "Refresh sessions");
+  await clickSessionButton(bob, creator, "Join");
+  await waitFor(bob, "document.querySelector('#status').textContent.startsWith('Joined')");
   await evaluate(alice, "document.querySelector('tbody details').open = true");
   await click(alice, "Start session");
   await waitFor(alice, "window.__probe.snapshot !== null");
-  await cdp("Page.bringToFront", {}, alice.session);
-  await evaluate(alice, "document.querySelector('canvas').focus()");
-  const finalTarget = await evaluate(alice, `(() => {
-    const snapshot = window.__probe.snapshot;
-    const player = snapshot.players.find(item => item.accountId === snapshot.viewerAccountId);
-    const npc = snapshot.entities.find(item => item.state.kind === 'npc');
-    const canvas = document.querySelector('canvas').getBoundingClientRect();
-    const dx = npc.position.x - player.position.x;
-    const dy = npc.position.y - player.position.y;
-    const scale = Math.min(1, (canvas.width / 2 - 20) / Math.max(1, Math.abs(dx)),
-      (canvas.height / 2 - 20) / Math.max(1, Math.abs(dy)));
-    return { x: canvas.left + canvas.width / 2 + dx * scale,
-      y: canvas.top + canvas.height / 2 + dy * scale };
+  await evaluate(bob, "window.__probe.snapshot = null");
+  await click(bob, "Refresh sessions");
+  await clickSessionButton(bob, creator, "Play");
+  await waitFor(bob, "window.__probe.snapshot !== null");
+  const capacityBefore = await evaluate(alice, `(async () => {
+    const {settings} = await (await fetch('/api/v1/sessions/' + ${JSON.stringify(matchId)})).json();
+    for (let i=0;i<3;i++) {
+      const response = await fetch('/api/v1/sessions', {method:'POST',
+        headers:{'content-type':'application/json'}, body:JSON.stringify({settings,requestId:crypto.randomUUID()})});
+      if (!response.ok) throw new Error('Unable to reserve test capacity: '+response.status);
+    }
+    const sessions = (await (await fetch('/api/v1/sessions')).json()).sessions;
+    const overflow = await fetch('/api/v1/sessions',{method:'POST',
+      headers:{'content-type':'application/json'},body:JSON.stringify({settings})});
+    return {count:sessions.length,overflow:overflow.status,code:(await overflow.json()).error.code};
   })()`);
-  await cdp("Input.dispatchMouseEvent", { type: "mousePressed", button: "left", clickCount: 1,
-    ...finalTarget }, alice.session);
+  assert.deepEqual(capacityBefore, { count: 5, overflow: 409, code: "SESSION_CAPACITY" });
+  await shootUntil(alice, 1, 1);
+  await shootUntil(bob, 1, 0);
+  await waitFor(alice, "window.__probe.snapshot.level === 2 && window.__probe.snapshot.phase === 'active'");
+  await shootUntil(alice, 2, 0);
   await waitFor(alice, "document.querySelector('[aria-label=\"Final standings\"]') !== null");
-  await cdp("Input.dispatchMouseEvent", { type: "mouseReleased", button: "left", clickCount: 1,
-    ...finalTarget }, alice.session);
+  await waitFor(bob, "document.querySelector('[aria-label=\"Final standings\"]') !== null");
   const resultHash = await evaluate(alice, "location.hash");
   assert.match(resultHash, /^#results\/[0-9a-f-]{36}$/);
   const standings = await evaluate(alice, "document.querySelector('[aria-label=\"Final standings\"]').textContent");
-  assert.ok(standings.includes("100") && standings.includes(creator));
+  const tableRows = await evaluate(alice, "[...document.querySelectorAll('[aria-label=\"Final standings\"] tbody tr')].map(row => [...row.children].map(cell => cell.textContent))");
+  assert.equal(tableRows.length, 2);
+  assert.equal(tableRows.reduce((sum,row) => sum+Number(row[2]),0),400);
+  assert.equal(tableRows.reduce((sum,row) => sum+Number(row[3]),0),4);
+  assert.ok(tableRows.every(row => Number(row[2]) > 0), "both players earned points");
+  assert.equal(await evaluate(bob, "document.querySelector('[aria-label=\"Final standings\"]').textContent"), standings);
+  assert.equal(await evaluate(bob, "location.hash"), resultHash);
   await click(alice, "Reload saved result");
   await waitFor(alice, "document.querySelector('[aria-label=\"Final standings\"]') !== null");
   assert.equal(await evaluate(alice, "document.querySelector('[aria-label=\"Final standings\"]').textContent"), standings);
+  await cdp("Page.reload", {}, bob.session);
+  await waitFor(bob, "document.querySelector('[aria-label=\"Final standings\"]') !== null");
+  assert.equal(await evaluate(bob, "document.querySelector('[aria-label=\"Final standings\"]').textContent"), standings);
   await cdp("Page.reload", {}, alice.session);
   await waitFor(alice, "document.querySelector('[aria-label=\"Final standings\"]') !== null");
   assert.equal(await evaluate(alice, "location.hash"), resultHash);
@@ -388,6 +454,18 @@ try {
     const response = await fetch('/api/v1/matches/' + location.hash.split('/')[1] + '/results');
     return (await response.json()).result;
   })()`);
+  assert.equal(savedResult.matchId, matchId);
+  assert.equal(savedResult.finalLevel, 2);
+  const capacityAfter = await evaluate(alice, `(async () => {
+    const sessions = (await (await fetch('/api/v1/sessions')).json()).sessions;
+    const {settings} = await (await fetch('/api/v1/sessions/' + sessions[0].id)).json();
+    const response = await fetch('/api/v1/sessions',{method:'POST',
+      headers:{'content-type':'application/json'},body:JSON.stringify({settings})});
+    const next = (await (await fetch('/api/v1/sessions')).json()).sessions;
+    return {before:sessions.length,absent:!sessions.some(item => item.id === ${JSON.stringify(matchId)}),
+      replacement:response.status,after:next.length};
+  })()`);
+  assert.deepEqual(capacityAfter, {before:4,absent:true,replacement:201,after:5});
   const resultFixtures = await evaluate(alice, `(async () => {
     const { mountSkinHost } = await import('/src/skin-host.ts');
     const { createDefaultResultsSkin } = await import('/@id/@multiplayer-game/default-theme');
@@ -461,7 +539,9 @@ try {
     fixtureShapesAndDeathHud: true, skinDisposalAndCompatibility: true, boundedOutgoingControls: true,
     savedResultHandoff: true, resultReloadAndPageRefresh: true,
     resultTableAndDisposal: true, missingResultRetry: true, backToLobby: true,
-    failedConnectionLobbyNavigation: true
+    failedConnectionLobbyNavigation: true,
+    twoPlayerTwoLevelCompletion: true, sharedStandingsAfterBothRefreshes: true,
+    fullCapacitySlotRelease: true, matchId, finalStandings: tableRows
   }, null, 2));
 } finally {
   for (const browserContextId of contexts) {

@@ -106,3 +106,77 @@ in-memory test server after all builds completed.
 No production deployment, capacity exercise, human visual review or non-Chrome
 browser check was performed. The result page refresh was real browser execution;
 the results table fixture was synthetic and did not fabricate server standings.
+
+## T025 - Integrated gameplay and shared completion (2026-11-07)
+
+T024 was committed as `7f963ef` (`feat: show saved match standings in the
+browser`) before this slice. T025 adds verification only; application behavior
+and public contracts are unchanged. T026 was not started.
+
+`npm test` passed: 18 files, 85 tests. `npm run check` and `npm run build`
+passed. The build retained the existing nonfatal Zod/Rollup annotation warnings.
+The new `tests/integration/gameplay.test.ts` passed all four scenarios:
+
+- Five simultaneous isolated module/world instances use identical player/entity
+  IDs but retain independent inputs, scores, death clocks and progression;
+  disposal of one instance does not change another.
+- Two seeded runs produce identical NPC obstacle-navigation positions over 240
+  ticks. Positions remain walkable, the pursuing NPC goes around the obstacle,
+  and a distant NPC remains stationary. Each tick starts at most eight searches
+  and processes at most 2,048 navigation nodes.
+- Two overlapping players claim one health pack exactly once. The frozen
+  two-player roster grows the second wave from two 25-HP NPCs to four 50-HP NPCs.
+  Same-tick final projectile hits issue one completion request despite another
+  step, retaining both players' scores and final level.
+- A defeated player remains absent until five seconds elapse, retains score
+  through blocked placement, attempts at most 64 clearance checks per retry,
+  and reports the blocked metric. A later safe return clears obstacles and
+  threats by the required margin and immediately permits contact damage.
+
+`npm run test:browser` passed with two actual visible Chrome 156.0.8078.80
+windows and separate authenticated browser contexts on Windows. The disposable
+in-memory server used `127.0.0.1:8083`, client `127.0.0.1:5174`, and a separate
+Chrome profile with loopback debugging on port 9223. All three services returned
+HTTP 200 before execution; builds completed before browser gameplay.
+
+After the independent-movement/camera/HUD/controls checks, both players returned
+to the lobby. The creator made a two-level match with one NPC per player, 1-HP
+NPCs, zero population/health growth and the normal five-second intermission.
+The second player joined before start and opened Play through the normal lobby.
+Real mouse controls killed the first wave with one kill per player; the creator
+cleared the second wave. No server-world mutation or fabricated completion was
+used. Match `e6436789-4166-482b-90fc-9b19f3f19157` produced identical saved
+standings and result URLs in both windows:
+
+| Rank | Player | Points | Kills | Deaths |
+|------|--------|--------|-------|--------|
+| 1 | ViewA_mw5zzm6o | 300 | 3 | 0 |
+| 2 | ViewB_mw5zzm6o | 100 | 1 | 0 |
+
+Reload saved result in the creator window and full page refreshes in **both**
+windows preserved the same table. Authenticated retrieval confirmed the saved
+match ID and final level 2. Existing missing-result retry, results-skin disposal
+and Back to lobby checks also passed.
+
+For slot-release verification, three additional waiting sessions were created
+through authenticated HTTP requests from the browser, alongside the original
+movement match and the completion match. At five active sessions, another
+creation returned HTTP 409 / `SESSION_CAPACITY`. After completion, the finished
+match was absent, active count was four, and a replacement creation returned
+HTTP 201 and restored count five. This tests admission/slot release, not load
+capacity or production throughput.
+
+Initial integration fixtures failed because zero-velocity projectiles did not
+traverse a collision segment, an artificial navigation position intersected the
+generated map's existing wall, and the respawn counter included unrelated NPC
+geometry work. Fixtures now use moving projectiles, a separate legal obstacle
+location, and count respawn-clearance checks only. No gameplay implementation
+was changed to satisfy those fixtures. The first readiness probe used `/health`
+and returned 404; `/health/ready` was then verified successfully before the
+browser scenario. No failed attempt is counted as a pass.
+
+These are automated CDP-driven browser observations, not human visual approval.
+No Edge/Firefox check, server-restart persistence exercise, production deployment
+or throughput benchmark was run. Saved-result persistence across browser
+refreshes used the disposable server's live database; durable on-disk storage
+and exactly-once result behavior remain covered by the full test suite.
