@@ -31,6 +31,13 @@ export {
   type DefaultPlayerAction
 } from "./module/index.js";
 export {
+  DefaultProgression,
+  LEVEL_INTERMISSION_TICKS,
+  resolveDefaultSettings,
+  type DefaultLevelPhase,
+  type DefaultProgressionState
+} from "./module/index.js";
+export {
   DefaultEntitySimulator,
   DefaultCombatSimulator,
   defaultContactAttackCapability,

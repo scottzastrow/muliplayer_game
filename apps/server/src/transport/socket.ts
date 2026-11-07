@@ -34,7 +34,7 @@ export interface ModuleInput {
 export interface RealtimeOptions {
   readonly heartbeatIntervalMs?: number;
   readonly maxBufferedBytes?: number;
-  readonly onPlayerInput?: (input: ModuleInput) => void;
+  readonly onPlayerInput?: (input: ModuleInput) => void | boolean;
 }
 
 interface OutgoingSocket {
@@ -175,6 +175,31 @@ export class RealtimeTransport {
     this.#connections.clear();
     this.#currentByMember.clear();
     this.#inputWindows.clear();
+  }
+
+  publishSnapshot(
+    sessionId: string,
+    tick: number,
+    moduleStateSchemaVersion: number,
+    snapshotForAccount: (accountId: string) => Readonly<Record<string, JsonValue>>
+  ): void {
+    for (const [webSocket, state] of this.#connections) {
+      if (state.sessionId !== sessionId || webSocket.readyState !== WebSocket.OPEN) {
+        continue;
+      }
+      state.sender.send({
+        v: 1,
+        type: "server.snapshot",
+        sessionId,
+        tick,
+        serverTimeMs: Date.now(),
+        payload: {
+          protocolVersion: 1,
+          moduleStateSchemaVersion,
+          ...snapshotForAccount(state.account.id)
+        }
+      });
+    }
   }
 
   #upgrade(request: IncomingMessage, socket: Socket, head: Buffer): void {
@@ -386,12 +411,22 @@ export class RealtimeTransport {
     }
 
     try {
-      this.options.onPlayerInput({
+      const accepted = this.options.onPlayerInput({
         accountId: state.account.id,
         sessionId: state.sessionId,
         sequence: message.payload.sequence,
         action: message.payload.action
       });
+      if (accepted === false) {
+        this.#sendError(
+          state,
+          "BAD_REQUEST",
+          "The active game module rejected this action.",
+          message.requestId,
+          false
+        );
+        return;
+      }
       state.lastSequence = message.payload.sequence;
     } catch {
       this.#sendError(

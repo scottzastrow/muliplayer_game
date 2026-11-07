@@ -10,6 +10,11 @@ import {
 import { ZodError } from "zod";
 import { HttpError } from "../errors.js";
 import type { SqliteDatabase } from "../storage/database.js";
+import {
+  advanceMatchLevel,
+  finalizeMatchResult,
+  type SubmittedStanding
+} from "../storage/results.js";
 import type { AuthenticatedAccount } from "../auth/accounts.js";
 import type { ThemeLoader } from "../themes/builtins.js";
 
@@ -322,15 +327,31 @@ export class LobbyRegistry {
 
   markTerminal(
     sessionId: string,
-    state: "finished" | "abandoned" | "failed" | "interrupted"
+    state: "abandoned" | "failed" | "interrupted"
   ): void {
     this.database.transaction(() => this.#markTerminal(sessionId, state, state))();
   }
 
+  advanceLevel(sessionId: string, expectedLevel: number, nextLevel: number): boolean {
+    return advanceMatchLevel(this.database, sessionId, expectedLevel, nextLevel);
+  }
+
+  finalizeFinishedMatch(
+    sessionId: string,
+    finalLevel: number,
+    standings: readonly SubmittedStanding[]
+  ): boolean {
+    return finalizeMatchResult(
+      this.database,
+      { matchId: sessionId, status: "finished", finalLevel, standings },
+      new Date(this.clock()).toISOString()
+    );
+  }
+
   #markTerminal(
     sessionId: string,
-    state: "finished" | "abandoned" | "failed" | "interrupted",
-    resultStatus: "finished" | "abandoned" | "failed" | "interrupted"
+    state: "abandoned" | "failed" | "interrupted",
+    resultStatus: "abandoned" | "failed" | "interrupted"
   ): void {
     const row = this.database
       .prepare(
@@ -343,20 +364,11 @@ export class LobbyRegistry {
     if (!row) {
       return;
     }
-    const endedAt = new Date(this.clock()).toISOString();
-    this.database
-      .prepare(
-        `INSERT OR IGNORE INTO match_results
-         (match_id, status, final_level, standings_json, settings_summary_json, theme_digest, finalized_at)
-         VALUES (?, ?, ?, '[]', ?, ?, ?)`
-      )
-      .run(sessionId, resultStatus, row.current_level, row.settings_json, row.theme_digest, endedAt);
-    this.database
-      .prepare(
-        `UPDATE matches SET state = ?, ended_at = ?
-         WHERE id = ? AND state IN ('waiting', 'running')`
-      )
-      .run(state, endedAt, sessionId);
+    finalizeMatchResult(
+      this.database,
+      { matchId: sessionId, status: resultStatus, finalLevel: row.current_level },
+      new Date(this.clock()).toISOString()
+    );
   }
 
   #readSession(sessionId: string, accountId: string): SessionRow | undefined {

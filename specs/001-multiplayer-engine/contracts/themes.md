@@ -54,6 +54,13 @@ contact damage is a typed NPC capability with a one-second per-player cooldown.
 The default module authoritatively fires bounded-lifetime projectiles, damages NPCs
 without friendly fire, serializes single-claim health and weapon pickups, and tracks
 player score, kills, deaths and expiring powerup effects.
+Level population and NPC health use the frozen player roster and configured per-level
+growth formulas; every level is preflighted against runtime ceilings before play.
+Clearing a non-final level requests completion once and starts a five-second
+intermission before the next difficulty tier. Clearing the maximum level requests
+match completion once and returns deterministic score/kills/deaths standings. Core
+persists final standings and terminal state together, with compare-and-set level
+updates and one result row per match.
 
 Realtime input uses a shared versioned envelope with an opaque module-defined JSON
 `action`; the protocol does not require movement, aim, fire, or any other gameplay
@@ -61,10 +68,18 @@ fields. Each module validates its own action shape in `validateInput`. For examp
 the default module's `combat` action carries movement, aim, and fire fields, while a
 noncombat `unlock` action can carry only its target identifier.
 
-Core validates completion requests against runner phase and finalizes once. Module
-instances cannot share mutable singleton state. Dispose releases listeners, entities,
-audio and timers. Context supplies deterministic time; modules must not create their
-own tick loops. Each event/state schema version is part of compatibility validation.
+On session start, Core freezes the roster and pinned theme, initializes one isolated
+module with session-scoped services, and owns its fixed-step runner. Core rejects
+actions that fail the active module's validator and publishes viewer-scoped snapshots
+with protocol and module state schema versions. It consumes level requests only from
+the intermission phase and persists level changes with compare-and-set semantics.
+Match requests are accepted only from the complete phase with final-level standings;
+result persistence, terminal state and slot release happen once. Startup failure or
+termination records the corresponding terminal result and disposes the runner/module.
+Module instances cannot share mutable singleton state. Dispose releases listeners,
+entities, audio and timers. Context supplies deterministic time; modules must not
+create their own tick loops. Each event/state schema version is part of compatibility
+validation.
 
 ## Package upload/install
 

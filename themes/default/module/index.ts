@@ -10,6 +10,11 @@ export {
 export { DefaultCombatSimulator } from "../src/module/combat.js";
 export { DefaultPickupSimulator } from "../src/module/pickups.js";
 export {
+  DefaultProgression,
+  LEVEL_INTERMISSION_TICKS,
+  resolveDefaultSettings
+} from "../src/module/progression.js";
+export {
   DefaultEntitySimulator,
   defaultContactAttackCapability,
   normalizeMovement

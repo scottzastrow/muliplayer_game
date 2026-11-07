@@ -89,6 +89,30 @@ describe("bounded session runner", () => {
     expect(runner.advance().state).toBe("failed");
   });
 
+  it("stops a catch-up batch when a step disposes the runner", () => {
+    const clock = new FakeClock();
+    let runner: SessionRunner<{ tick: number }>;
+    let steps = 0;
+    runner = new SessionRunner({
+      clock,
+      callbacks: {
+        step: () => {
+          steps += 1;
+          runner.dispose();
+        },
+        snapshot: () => ({ tick: steps }),
+        onError: (error) => {
+          throw error;
+        }
+      }
+    });
+
+    clock.value = 100;
+    const result = runner.advance();
+    expect(result).toMatchObject({ state: "disposed", stepsRun: 1, tick: 1 });
+    expect(steps).toBe(1);
+  });
+
   it("reports invalid snapshots instead of returning mutable or non-JSON state", () => {
     const failureReports: unknown[] = [];
     let disposed = 0;

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ClientEnvelopeSchema,
   DEFAULT_GAME_SETTINGS,
+  calculateLevelDifficulty,
   ErrorResponseSchema,
   GameSettingsSchema,
   ServerEnvelopeSchema,
@@ -165,6 +166,21 @@ describe("protocol v1 validation", () => {
         4,
         { maxNpcsPerSession: 2_000, maxNpcHealth: 1_000_000 }
       )
+    ).toThrow(CapacityValidationError);
+  });
+
+  it("calculates roster-frozen level difficulty and rejects growth before overflow", () => {
+    const settings = { ...DEFAULT_GAME_SETTINGS, initialNpcsPerPlayer: 3, maxLevels: 3 };
+    expect(calculateLevelDifficulty(settings, 2, 1)).toEqual({
+      npcCount: 6,
+      npcHealth: 100
+    });
+    expect(calculateLevelDifficulty(settings, 2, 3)).toEqual({
+      npcCount: 9,
+      npcHealth: 121
+    });
+    expect(() =>
+      validateMatchCapacity({ ...settings, maxPlayers: 32, maxLevels: 100 }, 32)
     ).toThrow(CapacityValidationError);
   });
 

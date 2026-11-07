@@ -43,7 +43,15 @@ describe("realtime transport", () => {
       method: "POST",
       url: "/api/v1/sessions",
       headers: { ...BASE_HEADERS, cookie: creatorCookie },
-      payload: { settings: DEFAULT_GAME_SETTINGS }
+      payload: {
+        settings: {
+          ...DEFAULT_GAME_SETTINGS,
+          maxPlayers: 2,
+          initialNpcsPerPlayer: 1,
+          baseNpcHealth: 1,
+          maxLevels: 1
+        }
+      }
     });
     expect(created.statusCode).toBe(201);
     sessionId = created.json().session.id as string;
@@ -105,21 +113,21 @@ describe("realtime transport", () => {
     expect(inputs[0]).toMatchObject({
       sessionId,
       sequence: 4,
-      action: { type: "unlock", targetId: "door-1" }
+      action
     });
 
     socket.send(
       JSON.stringify({
         v: 1,
         type: "client.input",
-        payload: { sequence: 3, action: { type: "stale" } }
+        payload: { sequence: 3, action }
       })
     );
     await delay(30);
     expect(inputs).toHaveLength(1);
 
     socket.send(JSON.stringify({ v: 1, type: "client.input", payload: { sequence: 5 } }));
-    const error = await nextMessage(socket);
+    const error = await nextMessageOfType(socket, "server.error");
     expect(error).toMatchObject({
       type: "server.error",
       payload: { code: "BAD_REQUEST", fatal: false }
@@ -142,10 +150,10 @@ describe("realtime transport", () => {
       JSON.stringify({
         v: 1,
         type: "client.input",
-        payload: { sequence: 0, action: { type: "unlock", targetId: "door-1" } }
+        payload: { sequence: 0, action: { type: "unsupported" } }
       })
     );
-    const error = await nextMessage(socket);
+    const error = await nextMessageOfType(socket, "server.error");
     expect(error).toMatchObject({
       type: "server.error",
       payload: { code: "FORBIDDEN", fatal: true }
@@ -170,6 +178,35 @@ describe("realtime transport", () => {
     await nextMessage(silent);
     (silent as WebSocket & { _autoPong: boolean })._autoPong = false;
     expect(await closedWith(silent, 250)).toBe(1013);
+  });
+
+  it("publishes module snapshots and rejects actions the active module does not validate", async () => {
+    const socket = await connect(creatorCookie);
+    await nextMessageOfType(socket, "server.hello");
+    const snapshot = await nextMessageOfType(socket, "server.snapshot");
+    expect(snapshot).toMatchObject({
+      sessionId,
+      payload: {
+        protocolVersion: 1,
+        moduleStateSchemaVersion: 2,
+        level: 1,
+        phase: "active",
+        entities: expect.any(Array)
+      }
+    });
+
+    socket.send(
+      JSON.stringify({
+        v: 1,
+        type: "client.input",
+        payload: { sequence: 0, action: { type: "unsupported" } }
+      })
+    );
+    expect(await nextMessageOfType(socket, "server.error")).toMatchObject({
+      payload: { code: "BAD_REQUEST", fatal: false }
+    });
+    expect(inputs).toHaveLength(0);
+    socket.close();
   });
 
   it("limits each client frame and closes connections that exceed the input rate", async () => {
@@ -379,6 +416,20 @@ async function waitUntil(condition: () => boolean): Promise<void> {
     }
     await delay(5);
   }
+}
+
+async function nextMessageOfType(
+  socket: WebSocket,
+  type: string
+): Promise<Record<string, unknown>> {
+  const deadline = Date.now() + 1_000;
+  while (Date.now() < deadline) {
+    const message = await nextMessage(socket);
+    if (message.type === type) {
+      return message;
+    }
+  }
+  throw new Error(`Timed out waiting for ${type}.`);
 }
 
 function delay(milliseconds: number): Promise<void> {

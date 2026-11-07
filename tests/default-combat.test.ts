@@ -6,6 +6,7 @@ import type {
   RosterMember
 } from "@multiplayer-game/theme-sdk";
 import {
+  DEFAULT_GAME_SETTINGS,
   defaultModuleFactory,
   DefaultEntitySimulator,
   generateMap,
@@ -81,6 +82,7 @@ describe("default combat", () => {
     moveEntity(context, "player:player-b", { x: 272, y: 272 });
     setHealth(context, "player:player-a", 50);
     setHealth(context, "player:player-b", 50);
+    addIdleNpc(context);
     moveEntity(context, "pickup:pickup-health", { x: 272, y: 272 });
 
     module.step(0, 1);
@@ -102,6 +104,7 @@ describe("default combat", () => {
     const { context, module } = simulation;
     removeNpcs(context);
     moveEntity(context, "player:player-b", { x: 1_700, y: 272 });
+    addIdleNpc(context);
     moveEntity(context, "player:player-a", { x: 1_264, y: 1_008 });
     moveEntity(context, "pickup:pickup-rapid-fire", { x: 1_264, y: 1_008 });
     module.step(0, 2);
@@ -137,6 +140,7 @@ describe("default combat", () => {
     const simulation = createSimulation();
     const { context, module } = simulation;
     removeNpcs(context);
+    addIdleNpc(context);
     moveEntity(context, "player:player-b", { x: 1_700, y: 272 });
     moveEntity(context, "player:player-a", { x: 1_264, y: 1_008 });
     moveEntity(context, "pickup:pickup-rapid-fire", { x: 1_264, y: 1_008 });
@@ -168,6 +172,7 @@ describe("default combat", () => {
     const simulation = createSimulation();
     const { context, module } = simulation;
     removeNpcs(context);
+    addIdleNpc(context);
     const playerId = "player:player-a";
     context.entities.update(playerId, (entity) => {
       if (entity.state.kind !== "player") return entity;
@@ -214,12 +219,97 @@ describe("default combat", () => {
     const simulation = createSimulation();
     const { context, module } = simulation;
     removeNpcs(context);
+    addIdleNpc(context);
     module.applyInput("player-a", combatInput(1_500, 272));
     module.step(0, 1);
     expect(countProjectiles(context)).toBe(1);
     module.applyInput("player-a", { ...combatInput(1_500, 272), fire: false });
     module.step(0, 61);
     expect(countProjectiles(context)).toBe(0);
+    module.dispose();
+  });
+
+  it("transitions once after simultaneous final kills and completes the last level once", () => {
+    const simulation = createSimulation([], {
+      ...DEFAULT_GAME_SETTINGS,
+      initialNpcsPerPlayer: 1,
+      npcPopulationGrowthPercent: 0,
+      baseNpcHealth: 10,
+      npcHealthGrowthPercent: 100,
+      maxLevels: 2
+    });
+    const { context, module, completionRequests } = simulation;
+    removeNpcs(context);
+    addNpc(context, "npc:final-a", { x: 1_000, y: 272 }, 10);
+    addNpc(context, "npc:final-b", { x: 1_000, y: 784 }, 10);
+    module.applyInput("player-a", combatInput(1_200, 272));
+    module.applyInput("player-b", combatInput(1_200, 784));
+
+    for (let tick = 1; tick <= 35; tick += 1) {
+      module.step(1 / 30, tick);
+    }
+    expect(context.entities.values().filter((entity) => entity.state.kind === "npc"))
+      .toHaveLength(2);
+    module.step(1 / 30, 36);
+    expect(context.entities.values().filter((entity) => entity.state.kind === "npc"))
+      .toHaveLength(0);
+    for (let tick = 37; tick <= 40; tick += 1) {
+      module.step(1 / 30, tick);
+    }
+
+    expect(module.snapshot({ accountId: "player-a", role: "player" })).toMatchObject({
+      level: 1,
+      phase: "intermission"
+    });
+    expect(completionRequests).toEqual([
+      { kind: "level", reason: "level-1-cleared" }
+    ]);
+
+    const intermissionEndsAtTick = module.snapshot({
+      accountId: "player-a",
+      role: "player"
+    }).intermissionEndsAtTick as number;
+    expect(intermissionEndsAtTick).toBe(186);
+    for (let tick = 41; tick < intermissionEndsAtTick; tick += 1) {
+      module.step(1 / 30, tick);
+    }
+    expect(module.snapshot({ accountId: "player-a", role: "player" })).toMatchObject({
+      level: 1,
+      phase: "intermission"
+    });
+    module.step(1 / 30, intermissionEndsAtTick);
+    expect(module.snapshot({ accountId: "player-a", role: "player" })).toMatchObject({
+      level: 2,
+      phase: "active"
+    });
+    const levelTwoNpcs = context.entities.values().filter((entity) => entity.state.kind === "npc");
+    expect(levelTwoNpcs).toHaveLength(2);
+    expect(levelTwoNpcs.every((entity) => entity.state.kind === "npc" && entity.state.health === 20))
+      .toBe(true);
+
+    removeNpcs(context);
+    addNpc(context, "npc:final-c", { x: 1_000, y: 272 }, 20);
+    addNpc(context, "npc:final-d", { x: 1_000, y: 784 }, 20);
+    module.applyInput("player-a", combatInput(1_200, 272));
+    module.applyInput("player-b", combatInput(1_200, 784));
+    for (
+      let tick = intermissionEndsAtTick + 1;
+      tick <= intermissionEndsAtTick + 40;
+      tick += 1
+    ) {
+      module.step(1 / 30, tick);
+    }
+    module.step(1 / 30, intermissionEndsAtTick + 41);
+
+    expect(module.snapshot({ accountId: "player-a", role: "player" })).toMatchObject({
+      level: 2,
+      phase: "complete"
+    });
+    expect(completionRequests).toEqual([
+      { kind: "level", reason: "level-1-cleared" },
+      { kind: "match", reason: "maximum-level-cleared" }
+    ]);
+    expect(module.results()).toMatchObject({ status: "finished", finalLevel: 2 });
     module.dispose();
   });
 
@@ -258,9 +348,13 @@ describe("default combat", () => {
   });
 });
 
-function createSimulation(obstacles: readonly Rect[] = []) {
+function createSimulation(
+  obstacles: readonly Rect[] = [],
+  settings: Record<string, number | string> = {}
+) {
   const entities = new Map<string, DefaultEntity>();
   const metrics = new Map<string, number>();
+  const completionRequests: Array<{ kind: "level" | "match"; reason: string }> = [];
   const spatialGrid = new SpatialGrid(32);
   const store: EntityStore<DefaultEntity> = {
     get: (id) => entities.get(id),
@@ -299,15 +393,15 @@ function createSimulation(obstacles: readonly Rect[] = []) {
       getPath: () => undefined
     },
     emit: () => {},
-    requestCompletion: () => {},
+    requestCompletion: (request) => completionRequests.push(request),
     metrics: {
       increment: (name, amount = 1) => metrics.set(name, (metrics.get(name) ?? 0) + amount),
       gauge: () => {}
     }
   };
-  const module = defaultModuleFactory.create(context, {}, roster, 42);
+  const module = defaultModuleFactory.create(context, settings, roster, 42);
   module.initialize();
-  return { context, module, metrics };
+  return { context, module, metrics, completionRequests };
 }
 
 function combatInput(aimX: number, aimY: number): DefaultPlayerAction {
@@ -318,6 +412,10 @@ function removeNpcs(context: ModuleContext<DefaultEntity>): void {
   for (const entity of context.entities.values()) {
     if (entity.state.kind === "npc") context.entities.remove(entity.id);
   }
+}
+
+function addIdleNpc(context: ModuleContext<DefaultEntity>): void {
+  addNpc(context, "npc:idle", { x: 1_800, y: 1_800 }, 1_000_000);
 }
 
 function moveEntity(
@@ -342,7 +440,8 @@ function setHealth(
 function addNpc(
   context: ModuleContext<DefaultEntity>,
   id: string,
-  position: Readonly<{ x: number; y: number }>
+  position: Readonly<{ x: number; y: number }>,
+  health = 100
 ): void {
   context.entities.add({
     id,
@@ -351,7 +450,7 @@ function addNpc(
     radius: 8,
     state: {
       kind: "npc",
-      health: 100,
+      health,
       attackCapability: { typeId: "default.contact-attack", damage: 10, cooldownTicks: 30 }
     }
   });

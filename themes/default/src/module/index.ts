@@ -11,12 +11,20 @@ import type { DefaultEntity } from "./types.js";
 import { DefaultEntitySimulator } from "./entities.js";
 import { DefaultCombatSimulator } from "./combat.js";
 import { generateMap } from "./maps.js";
+import {
+  DefaultProgression,
+  resolveDefaultSettings,
+  type DefaultLevelPhase
+} from "./progression.js";
 
 const DefaultSettingsSchema = z.record(z.string(), JsonValueSchema);
 
 export interface DefaultModuleState extends Record<string, JsonValue> {
   readonly acceptedInputs: number;
   readonly entities: JsonValue[];
+  readonly level: number;
+  readonly phase: DefaultLevelPhase;
+  readonly intermissionEndsAtTick?: number;
 }
 
 export interface DefaultModuleSnapshot extends Record<string, JsonValue> {
@@ -24,16 +32,22 @@ export interface DefaultModuleSnapshot extends Record<string, JsonValue> {
   readonly entities: JsonValue[];
   readonly viewerAccountId: string;
   readonly viewerRole: "player" | "spectator";
+  readonly level: number;
+  readonly phase: DefaultLevelPhase;
+  readonly intermissionEndsAtTick?: number;
 }
 
 export interface DefaultModuleResults extends Record<string, JsonValue> {
   readonly acceptedInputs: number;
+  readonly finalLevel: number;
+  readonly status: "running" | "finished";
+  readonly standings: JsonValue[];
 }
 
 export const defaultModuleMetadata = Object.freeze({
   id: "default",
   version: "1.0.0",
-  stateSchemaVersion: 1
+  stateSchemaVersion: 2
 });
 
 export const defaultModuleFactory: GameModuleFactory<
@@ -72,14 +86,34 @@ export const defaultModuleFactory: GameModuleFactory<
 
     let acceptedInputs = 0;
     let disposed = false;
+    const gameSettings = resolveDefaultSettings(settings, roster.length);
     const simulator = new DefaultEntitySimulator(_context);
     const combat = new DefaultCombatSimulator(_context);
+    const map = generateMap(seed).map;
+    const progression = new DefaultProgression(
+      _context,
+      gameSettings,
+      roster.length,
+      (level, difficulty) => {
+        if (level === 1) {
+          simulator.initialize(map, roster, difficulty.npcCount, difficulty.npcHealth);
+        } else {
+          simulator.startLevel(level, difficulty.npcCount, difficulty.npcHealth);
+        }
+      }
+    );
     return {
       stateSchemaVersion: defaultModuleMetadata.stateSchemaVersion,
       get state() {
+        const progressionState = progression.state;
         return Object.freeze({
           acceptedInputs,
-          entities: serializeEntities(_context.entities.values())
+          entities: serializeEntities(_context.entities.values()),
+          level: progressionState.level,
+          phase: progressionState.phase,
+          ...(progressionState.intermissionEndsAtTick === undefined
+            ? {}
+            : { intermissionEndsAtTick: progressionState.intermissionEndsAtTick })
         });
       },
       validateInput(input: unknown): input is DefaultPlayerAction {
@@ -101,25 +135,45 @@ export const defaultModuleFactory: GameModuleFactory<
       },
       step(dtSeconds: number, tick: number): void {
         assertActive();
-        simulator.step(dtSeconds, tick);
-        combat.step(tick);
+        if (progression.state.phase === "active") {
+          simulator.step(dtSeconds, tick);
+          combat.step(tick);
+        }
+        progression.step(
+          tick,
+          _context.entities.values().filter((entity) => entity.state.kind === "npc").length
+        );
+        if (progression.state.phase !== "active") {
+          combat.clearProjectiles();
+        }
       },
       initialize(): void {
         assertActive();
-        simulator.initialize(generateMap(seed).map, roster);
+        progression.initialize();
       },
       snapshot(viewer): DefaultModuleSnapshot {
         assertActive();
+        const progressionState = progression.state;
         return {
           acceptedInputs,
           entities: serializeEntities(_context.entities.values()),
           viewerAccountId: viewer.accountId,
-          viewerRole: viewer.role
+          viewerRole: viewer.role,
+          level: progressionState.level,
+          phase: progressionState.phase,
+          ...(progressionState.intermissionEndsAtTick === undefined
+            ? {}
+            : { intermissionEndsAtTick: progressionState.intermissionEndsAtTick })
         };
       },
       results(): DefaultModuleResults {
         assertActive();
-        return { acceptedInputs };
+        return {
+          acceptedInputs,
+          finalLevel: progression.state.level,
+          status: progression.state.phase === "complete" ? "finished" : "running",
+          standings: collectStandings(roster, _context.entities.values())
+        };
       },
       dispose(): void {
         combat.dispose();
@@ -145,6 +199,13 @@ export {
 export type { DefaultContactAttackCapability } from "./entities.js";
 export { DefaultCombatSimulator } from "./combat.js";
 export { DefaultPickupSimulator } from "./pickups.js";
+export {
+  DefaultProgression,
+  LEVEL_INTERMISSION_TICKS,
+  resolveDefaultSettings,
+  type DefaultLevelPhase,
+  type DefaultProgressionState
+} from "./progression.js";
 
 function serializeEntities(entities: readonly Readonly<DefaultEntity>[]): JsonValue[] {
   return entities.map((entity) => ({
@@ -154,4 +215,37 @@ function serializeEntities(entities: readonly Readonly<DefaultEntity>[]): JsonVa
     radius: entity.radius,
     state: structuredClone(entity.state)
   }));
+}
+
+function collectStandings(
+  roster: readonly RosterMember[],
+  entities: readonly Readonly<DefaultEntity>[]
+): JsonValue[] {
+  const players = new Map(
+    entities.flatMap((entity) =>
+      entity.state.kind === "player" ? [[entity.state.accountId, entity.state] as const] : []
+    )
+  );
+  const standings = roster.map((member) => {
+    const player = players.get(member.accountId);
+    return {
+      accountId: member.accountId,
+      username: member.username,
+      points: player?.points ?? 0,
+      kills: player?.kills ?? 0,
+      deaths: player?.deaths ?? 0
+    };
+  });
+  standings.sort(
+    (left, right) =>
+      right.points - left.points ||
+      right.kills - left.kills ||
+      left.deaths - right.deaths ||
+      compareText(left.username.toLowerCase(), right.username.toLowerCase())
+  );
+  return standings.map((standing, index) => ({ ...standing, rank: index + 1 }));
+}
+
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }

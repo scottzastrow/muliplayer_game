@@ -8,6 +8,7 @@ import { registerLobbyRoutes } from "./lobby/routes.js";
 import { LobbyRegistry } from "./lobby/registry.js";
 import { RealtimeTransport, type RealtimeOptions } from "./transport/socket.js";
 import { createThemeLoader } from "./themes/builtins.js";
+import { SessionLifecycle } from "./runtime/session-lifecycle.js";
 
 export interface ReadinessState {
   ready: boolean;
@@ -79,10 +80,35 @@ export function createApp(
   const themes = createThemeLoader();
   const lobby = new LobbyRegistry(database, Date.now, themes);
   const auth = registerAuthRoutes(app, database, config);
-  registerLobbyRoutes(app, database, config, lobby, auth);
-  const realtime = new RealtimeTransport(app.server, database, config, lobby, realtimeOptions);
+  let realtime: RealtimeTransport | undefined;
+  const lifecycle = new SessionLifecycle(
+    database,
+    lobby,
+    themes,
+    (sessionId, tick, moduleStateSchemaVersion, snapshotForAccount) =>
+      realtime?.publishSnapshot(sessionId, tick, moduleStateSchemaVersion, snapshotForAccount),
+    (error) =>
+      app.log.error(
+        { errorType: error instanceof Error ? error.name : "UnknownError" },
+        "Session lifecycle failed"
+      )
+  );
+  registerLobbyRoutes(app, database, config, lobby, auth, (sessionId) =>
+    lifecycle.start(sessionId)
+  );
+  realtime = new RealtimeTransport(app.server, database, config, lobby, {
+    ...realtimeOptions,
+    onPlayerInput: (input) => {
+      if (!lifecycle.applyInput(input)) {
+        return false;
+      }
+      realtimeOptions.onPlayerInput?.(input);
+      return true;
+    }
+  });
   app.addHook("preClose", async () => {
-    realtime.close();
+    lifecycle.close();
+    realtime?.close();
   });
   app.addHook("onClose", async () => {
     readiness.ready = false;

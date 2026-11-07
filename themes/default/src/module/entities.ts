@@ -1,9 +1,14 @@
 import type {
   ModuleContext,
+  MapSpawn,
   Point2,
   RosterMember
 } from "@multiplayer-game/theme-sdk";
-import type { JsonValue } from "@multiplayer-game/protocol";
+import { MAP_CELL_SIZE } from "@multiplayer-game/theme-sdk";
+import {
+  DEFAULT_RUNTIME_LIMITS,
+  type JsonValue
+} from "@multiplayer-game/protocol";
 import {
   NPC_ATTRACTION_RADIUS,
   NPC_CONTACT_COOLDOWN_TICKS,
@@ -55,12 +60,19 @@ export class DefaultEntitySimulator {
   readonly #lastContactAttackTick = new Map<string, number>();
   readonly #playerIds = new Map<string, string>();
   readonly #pickupIds = new Set<string>();
+  #map: LoadedMap | undefined;
+  #roster: readonly RosterMember[] = [];
   #initialized = false;
   #disposed = false;
 
   constructor(readonly context: ModuleContext<DefaultEntity>) {}
 
-  initialize(map: LoadedMap, roster: readonly RosterMember[]): void {
+  initialize(
+    map: LoadedMap,
+    roster: readonly RosterMember[],
+    initialNpcCount?: number,
+    initialNpcHealth = 100
+  ): void {
     this.#assertActive();
     if (this.#initialized) {
       throw new Error("Default entity simulator is already initialized.");
@@ -92,22 +104,15 @@ export class DefaultEntitySimulator {
       this.#movementByAccount.set(member.accountId, EMPTY_MOVEMENT);
     }
 
-    for (const spawn of map.definition.spawns.filter((candidate) => candidate.kind === "npc")) {
-      const id = `npc:${spawn.id}`;
-      const state: DefaultNpcState = {
-        kind: "npc",
-        health: 100,
-        attackCapability: defaultContactAttackCapability
-      };
-      this.context.entities.add({
-        id,
-        typeId: "npc",
-        position: spawn.position,
-        radius: spawn.radius,
-        state
-      });
-      this.#npcNavigation.set(id, { nextPathPoint: 0, lastRequestTick: -Infinity });
-    }
+    this.#map = map;
+    this.#roster = Object.freeze([...roster]);
+    const npcSpawns = map.definition.spawns.filter((candidate) => candidate.kind === "npc");
+    this.#spawnNpcs(
+      initialNpcCount ?? npcSpawns.length,
+      initialNpcHealth,
+      1,
+      npcSpawns
+    );
     const pickupSpawns = map.definition.spawns.filter((candidate) => candidate.kind === "pickup");
     if (pickupSpawns.length > MAX_PICKUPS_PER_SESSION) {
       this.context.metrics.increment("default.pickup.rejected_cap");
@@ -129,6 +134,22 @@ export class DefaultEntitySimulator {
       this.#pickupIds.add(pickupId);
     }
     this.#initialized = true;
+  }
+
+  startLevel(level: number, npcCount: number, npcHealth: number): void {
+    this.#assertInitialized();
+    if (!Number.isSafeInteger(level) || level < 2) {
+      throw new RangeError("Subsequent level number must be a safe integer of at least two.");
+    }
+    for (const id of this.#npcNavigation.keys()) {
+      this.context.entities.remove(id);
+    }
+    this.#npcNavigation.clear();
+    const map = this.#map;
+    if (!map) {
+      throw new Error("Default entity simulator has no loaded map.");
+    }
+    this.#spawnNpcs(npcCount, npcHealth, level, []);
   }
 
   applyInput(accountId: string, action: Readonly<DefaultPlayerAction>): void {
@@ -173,7 +194,95 @@ export class DefaultEntitySimulator {
     this.#npcNavigation.clear();
     this.#pickupIds.clear();
     this.#lastContactAttackTick.clear();
+    this.#map = undefined;
+    this.#roster = [];
     this.#disposed = true;
+  }
+
+  #spawnNpcs(
+    npcCount: number,
+    npcHealth: number,
+    level: number,
+    preferredSpawns: readonly MapSpawn[]
+  ): void {
+    if (
+      !Number.isSafeInteger(npcCount) ||
+      npcCount < 1 ||
+      npcCount > DEFAULT_RUNTIME_LIMITS.maxNpcsPerSession ||
+      !Number.isSafeInteger(npcHealth) ||
+      npcHealth < 1 ||
+      npcHealth > DEFAULT_RUNTIME_LIMITS.maxNpcHealth
+    ) {
+      throw new RangeError("Level NPC count or health exceeds the supported runtime ceiling.");
+    }
+    const map = this.#map;
+    if (!map) {
+      throw new Error("Default entity simulator has no loaded map.");
+    }
+    const existingPlayerPositions = this.#roster.flatMap((member) => {
+      const player = this.context.entities.get(this.#playerIds.get(member.accountId)!);
+      return player?.state.kind === "player" ? [player.position] : [];
+    });
+    const selected: Array<Readonly<{ x: number; y: number }>> = [];
+    const occupiedCells = new Set<string>();
+    const addPosition = (position: Readonly<{ x: number; y: number }>): boolean => {
+      const key = `${Math.floor(position.x / MAP_CELL_SIZE)},${Math.floor(position.y / MAP_CELL_SIZE)}`;
+      if (
+        occupiedCells.has(key) ||
+        existingPlayerPositions.some((player) => distance(player, position) < PLAYER_RADIUS + 24) ||
+        selected.some((other) => distance(other, position) < 24) ||
+        !map.isWalkable(position, 8) ||
+        !this.context.geometry.isWalkable(position.x, position.y, 8) ||
+        this.context.geometry.intersectsObstacle(position.x, position.y, 8)
+      ) {
+        return false;
+      }
+      occupiedCells.add(key);
+      selected.push(position);
+      return true;
+    };
+
+    for (const spawn of preferredSpawns) {
+      if (selected.length >= npcCount) break;
+      addPosition(spawn.position);
+    }
+    for (
+      let y = MAP_CELL_SIZE / 2;
+      y < map.definition.bounds.height && selected.length < npcCount;
+      y += MAP_CELL_SIZE
+    ) {
+      for (
+        let x = MAP_CELL_SIZE / 2;
+        x < map.definition.bounds.width && selected.length < npcCount;
+        x += MAP_CELL_SIZE
+      ) {
+        addPosition({ x, y });
+      }
+    }
+    if (selected.length !== npcCount) {
+      throw new RangeError(
+        `Map provides only ${selected.length} walkable NPC locations for ${npcCount} enemies.`
+      );
+    }
+    for (const [index, position] of selected.entries()) {
+      const preferredId = preferredSpawns[index]?.id;
+      const id = preferredId && level === 1
+        ? `npc:${preferredId}`
+        : `npc:level-${level}-${String(index + 1).padStart(4, "0")}`;
+      const state: DefaultNpcState = {
+        kind: "npc",
+        health: npcHealth,
+        attackCapability: defaultContactAttackCapability
+      };
+      this.context.entities.add({
+        id,
+        typeId: "npc",
+        position,
+        radius: 8,
+        state
+      });
+      this.#npcNavigation.set(id, { nextPathPoint: 0, lastRequestTick: -Infinity });
+    }
   }
 
   #movePlayers(dtSeconds: number): void {

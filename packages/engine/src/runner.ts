@@ -141,6 +141,9 @@ export class SessionRunner<TSnapshot extends JsonValue> {
         this.#callbacks.step(FIXED_STEP_SECONDS, this.#tick + 1);
         this.#tick += 1;
         stepsRun += 1;
+        if (this.#state !== "running") {
+          break;
+        }
       } catch (error) {
         this.#fail(error);
         break;

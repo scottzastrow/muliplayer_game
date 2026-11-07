@@ -61,27 +61,78 @@ export function validateMatchCapacity(
 ): GameSettings {
   const settings = GameSettingsSchema.parse(input);
   const checkedLimits = RuntimeLimitsSchema.parse(limits);
-
-  if (!Number.isSafeInteger(rosterSize) || rosterSize < 1 || rosterSize > settings.maxPlayers) {
-    throw new RangeError(`Roster size must be an integer from 1 to ${settings.maxPlayers}.`);
-  }
-
-  const populationGrowth = 1 + settings.npcPopulationGrowthPercent / 100;
-  const healthGrowth = 1 + settings.npcHealthGrowthPercent / 100;
-
   for (let level = 1; level <= settings.maxLevels; level += 1) {
-    const npcs = Math.ceil(
-      rosterSize * settings.initialNpcsPerPlayer * populationGrowth ** (level - 1)
-    );
-    if (!Number.isSafeInteger(npcs) || npcs > checkedLimits.maxNpcsPerSession) {
-      throw new CapacityValidationError(level, "npcs", npcs, checkedLimits.maxNpcsPerSession);
-    }
-
-    const health = Math.ceil(settings.baseNpcHealth * healthGrowth ** (level - 1));
-    if (!Number.isSafeInteger(health) || health > checkedLimits.maxNpcHealth) {
-      throw new CapacityValidationError(level, "npcHealth", health, checkedLimits.maxNpcHealth);
-    }
+    calculateLevelDifficulty(settings, rosterSize, level, checkedLimits);
   }
 
   return settings;
+}
+
+export interface LevelDifficulty {
+  readonly npcCount: number;
+  readonly npcHealth: number;
+}
+
+export function calculateLevelDifficulty(
+  settingsInput: unknown,
+  rosterSize: number,
+  level: number,
+  limits: RuntimeLimits = DEFAULT_RUNTIME_LIMITS
+): LevelDifficulty {
+  const settings = GameSettingsSchema.parse(settingsInput);
+  const checkedLimits = RuntimeLimitsSchema.parse(limits);
+  if (!Number.isSafeInteger(rosterSize) || rosterSize < 1 || rosterSize > settings.maxPlayers) {
+    throw new RangeError(`Roster size must be an integer from 1 to ${settings.maxPlayers}.`);
+  }
+  if (!Number.isSafeInteger(level) || level < 1 || level > settings.maxLevels) {
+    throw new RangeError(`Level must be an integer from 1 to ${settings.maxLevels}.`);
+  }
+
+  const exponent = level - 1;
+  const npcBase = rosterSize * settings.initialNpcsPerPlayer;
+  const npcCount = boundedGrowth(
+    npcBase,
+    1 + settings.npcPopulationGrowthPercent / 100,
+    exponent,
+    level,
+    "npcs",
+    checkedLimits.maxNpcsPerSession
+  );
+  const npcHealth = boundedGrowth(
+    settings.baseNpcHealth,
+    1 + settings.npcHealthGrowthPercent / 100,
+    exponent,
+    level,
+    "npcHealth",
+    checkedLimits.maxNpcHealth
+  );
+  return Object.freeze({ npcCount, npcHealth });
+}
+
+function boundedGrowth(
+  base: number,
+  multiplier: number,
+  exponent: number,
+  level: number,
+  resource: CapacityValidationError["resource"],
+  limit: number
+): number {
+  let value = base;
+  for (let step = 0; step < exponent; step += 1) {
+    value *= multiplier;
+    const rounded = ceilWithFloatingPointTolerance(value);
+    if (!Number.isSafeInteger(rounded) || rounded > limit) {
+      throw new CapacityValidationError(level, resource, rounded, limit);
+    }
+  }
+  const desired = ceilWithFloatingPointTolerance(value);
+  if (!Number.isSafeInteger(desired) || desired > limit) {
+    throw new CapacityValidationError(level, resource, desired, limit);
+  }
+
+  function ceilWithFloatingPointTolerance(value: number): number {
+    const tolerance = Number.EPSILON * Math.max(1, Math.abs(value)) * 4;
+    return Math.ceil(value - tolerance);
+  }
+  return desired;
 }

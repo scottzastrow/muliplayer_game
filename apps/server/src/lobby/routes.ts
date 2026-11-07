@@ -16,7 +16,8 @@ export function registerLobbyRoutes(
   database: SqliteDatabase,
   config: AppConfig,
   registry: LobbyRegistry,
-  authContext: AuthContext
+  authContext: AuthContext,
+  startSession: (sessionId: string) => Promise<void>
 ): void {
   app.get("/api/v1/sessions", async (request) => {
     const account = authenticateRequest(database, request);
@@ -75,7 +76,9 @@ export function registerLobbyRoutes(
       requireJson(request);
       requireSameOrigin(request, config);
       const account = requireAccount(authContext, request);
-      const result = registry.start(account, parseId(request.params.id), request.body);
+      const sessionId = parseId(request.params.id);
+      const result = registry.start(account, sessionId, request.body);
+      await startSession(sessionId);
       return { session: result.summary, settings: result.settings };
     }
   );

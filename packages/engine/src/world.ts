@@ -124,10 +124,10 @@ export class WorldGeometry {
   }
 }
 
-export class SpatialGrid {
+export class SpatialGrid<TEntity extends WorldEntity = WorldEntity> {
   readonly #cells = new Map<string, Set<string>>();
   readonly #entityCells = new Map<string, string>();
-  readonly #entities = new Map<string, WorldEntity>();
+  readonly #entities = new Map<string, TEntity>();
 
   constructor(
     readonly cellSize: number,
@@ -143,7 +143,7 @@ export class SpatialGrid {
     return this.#entities.size;
   }
 
-  set(entity: WorldEntity): void {
+  set(entity: TEntity): void {
     assertEntity(entity);
     const copy = cloneEntity(entity);
     const cell = this.#cellKey(copy.position);
@@ -164,7 +164,7 @@ export class SpatialGrid {
     entities.add(copy.id);
   }
 
-  get(entityId: string): WorldEntity | undefined {
+  get(entityId: string): TEntity | undefined {
     const entity = this.#entities.get(entityId);
     return entity ? cloneEntity(entity) : undefined;
   }
@@ -180,7 +180,7 @@ export class SpatialGrid {
     return true;
   }
 
-  queryRadius(center: Vector2, radius: number, maxCells = 4096): readonly WorldEntity[] {
+  queryRadius(center: Vector2, radius: number, maxCells = 4096): readonly TEntity[] {
     assertPoint(center);
     assertNonnegativeFinite(radius, "Query radius");
     if (!Number.isSafeInteger(maxCells) || maxCells < 1) {
@@ -195,7 +195,7 @@ export class SpatialGrid {
       throw new RangeError("Spatial query exceeds its cell-work limit.");
     }
 
-    const found: WorldEntity[] = [];
+    const found: TEntity[] = [];
     for (let cellY = minY; cellY <= maxY; cellY += 1) {
       for (let cellX = minX; cellX <= maxX; cellX += 1) {
         const ids = this.#cells.get(`${cellX},${cellY}`);
@@ -213,7 +213,7 @@ export class SpatialGrid {
     return Object.freeze(found);
   }
 
-  values(): readonly WorldEntity[] {
+  values(): readonly TEntity[] {
     return Object.freeze([...this.#entities.values()].map(cloneEntity));
   }
 
@@ -233,9 +233,9 @@ export class SpatialGrid {
   }
 }
 
-export class SessionWorld {
+export class SessionWorld<TEntity extends WorldEntity = WorldEntity> {
   readonly geometry: WorldGeometry;
-  readonly #entities: SpatialGrid;
+  readonly #entities: SpatialGrid<TEntity>;
 
   constructor(
     readonly sessionId: string,
@@ -247,7 +247,7 @@ export class SessionWorld {
     if (!sessionId.trim()) {
       throw new TypeError("Session ID must not be empty.");
     }
-    this.#entities = new SpatialGrid(cellSize, maxEntities);
+    this.#entities = new SpatialGrid<TEntity>(cellSize, maxEntities);
     this.geometry = new WorldGeometry(bounds, obstacles);
   }
 
@@ -255,22 +255,26 @@ export class SessionWorld {
     return this.#entities.size;
   }
 
-  getEntity(entityId: string): WorldEntity | undefined {
+  getEntity(entityId: string): TEntity | undefined {
     return this.#entities.get(entityId);
   }
 
-  queryEntities(center: Vector2, radius: number, maxCells = 4096): readonly WorldEntity[] {
+  queryEntities(center: Vector2, radius: number, maxCells = 4096): readonly TEntity[] {
     return this.#entities.queryRadius(center, radius, maxCells);
   }
 
-  addEntity(entity: WorldEntity): void {
+  entities(): readonly TEntity[] {
+    return this.#entities.values();
+  }
+
+  addEntity(entity: TEntity): void {
     if (!this.geometry.isCircleWalkable(entity.position, entity.radius)) {
       throw new RangeError("Entity position is outside walkable world geometry.");
     }
     this.#entities.set(entity);
   }
 
-  moveEntity(entityId: string, delta: Vector2): WorldEntity {
+  moveEntity(entityId: string, delta: Vector2): TEntity {
     const entity = this.#entities.get(entityId);
     if (!entity) {
       throw new RangeError("Entity does not exist in this session.");
@@ -302,7 +306,7 @@ function assertEntity(entity: WorldEntity): void {
   validateJsonValue(entity.state, 0);
 }
 
-function cloneEntity(entity: WorldEntity): WorldEntity {
+function cloneEntity<TEntity extends WorldEntity>(entity: TEntity): TEntity {
   const copy = structuredClone(entity);
   deepFreeze(copy);
   return copy;

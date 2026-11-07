@@ -72,6 +72,18 @@ export class DefaultCombatSimulator {
     this.#disposed = true;
   }
 
+  clearProjectiles(): void {
+    this.#assertActive();
+    for (const entity of this.context.entities.values()) {
+      if (entity.state.kind === "projectile") {
+        this.context.entities.remove(entity.id);
+      }
+    }
+    for (const [accountId, input] of this.#fireInputs) {
+      this.#fireInputs.set(accountId, Object.freeze({ aim: input.aim, fire: false }));
+    }
+  }
+
   #fire(tick: number): void {
     for (const [accountId, input] of this.#fireInputs) {
       if (!input.fire) {
