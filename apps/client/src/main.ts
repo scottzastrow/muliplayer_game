@@ -4,6 +4,7 @@ import { showStatus } from "./ui.js";
 import { mountGame } from "./game.js";
 import "./style.css";
 import { mountResults, resultIdFromHash } from "./results.js";
+import { mountSpectate } from "./spectate.js";
 
 const root = document.querySelector<HTMLElement>("#app");
 const status = document.querySelector<HTMLElement>("#status");
@@ -70,6 +71,12 @@ function showLobby(account: ClientAccount): void {
       if (action === "lobby") showLobby(account);
       else if (action === "results") showResults(account, sessionId);
       else showStatus(status, "That view is not available yet.", true);
+    });
+  }, (sessionId) => {
+    if (!root || !status) return;
+    disposeGame = mountSpectate(root, status, account, sessionId, (action) => {
+      if (action === "results") showResults(account, sessionId);
+      else showLobby(account);
     });
   });
 }

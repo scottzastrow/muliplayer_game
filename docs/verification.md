@@ -255,3 +255,53 @@ The initial tests failed for the absent projection file and missing spectator
 snapshot/unavailable notifications, as expected before implementation.
 No browser spectator view or deployment was executed. T028 browser controls,
 navigation and renderer integration remain unstarted.
+
+## T028 - Browser spectator controls (2026-11-07)
+
+Added `apps/client/src/spectate.ts`, lobby admission navigation and bounded target
+selection in the existing connection client. The spectator browser view validates
+the handshake/player list, mounts the default renderer through SkinHost, and uses
+its controls slot for Following/Back to Players. Target loss disposes that skin
+and displays the server's updated followable list and explanation. Back to lobby
+performs explicit leave, and disposal/cancelled admission also releases membership.
+View-local listeners and resize/render handlers are disposed on each switch.
+The default skin now validates and consumes `spectatorView` camera/HUD/death fields;
+spectator keyboard/mouse focus never sends gameplay actions. Completion uses the
+existing persisted-result notification and standings page.
+
+`npm run check`, `npm run build` and affected tests passed: 6 files, 26 tests
+(`default-skin`, `spectator-client`, `spectator-view`, `integration/spectators`,
+`integration/realtime`, `integration/session-lifecycle`). The existing nonfatal
+Zod/Rollup annotation warnings remain. Client tests validate bounded public player
+lists and server spectator projection fields; server tests retain input/foreign
+session rejection, target loss and membership cleanup.
+
+`npm run test:browser` passed twice in three actual visible Chrome 156.0.8078.80
+windows on Windows with isolated authenticated contexts: two players and one
+observer. Builds completed before each run; the final run restarted the disposable
+in-memory server. Server/client/Chrome debug endpoints were responsive on loopback
+ports 8083/5174/9223. The observer used the normal lobby Spectate button, selected
+the creator, saw the target-centered camera and matching points/health, and sent
+no gameplay controls when keyboard movement was attempted. Back to Players then
+selected the second player and showed that player's centered view.
+
+The second player returned to the lobby, causing a real disconnected-target
+notification. The observer returned to the refreshed player list with the server
+explanation, followed the remaining player, then used Back to lobby. An
+authenticated session-summary read confirmed spectator count zero. The second
+player reopened its existing Play view without implementing reconnect policy.
+
+The observer subsequently joined a normal two-player/two-level completion match,
+followed the creator and automatically received the same final standings as both
+players. Final run match `3e8887e8-576b-4c84-bf7a-2da580e82550` retained
+ViewA_mw60vme5 (300 points, three kills, zero deaths) and ViewB_mw60vme5
+(100 points, one kill, zero deaths). Existing player refresh, result reload,
+capacity-slot release and result-navigation checks also passed.
+
+A **synthetic public SkinHost fixture**, executed in the observer's actual browser,
+verified a five-second respawn label, zero-health HUD, restored health and changed
+respawn camera, with zero dispatched actions. It did not kill a player in the
+live browser match or fabricate server results; real module death-to-respawn is
+covered by the preceding T027 automated evidence. No human visual approval,
+non-Chrome exercise, deployment or player-reservation/reconnect test is claimed.
+T029 remains unstarted.

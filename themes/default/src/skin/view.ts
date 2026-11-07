@@ -18,6 +18,12 @@ const entity = z.object({
 export const DefaultViewSchema = z.object({
   viewerAccountId: z.string().min(1),
   viewerRole: z.enum(["player", "spectator"]),
+  spectatorView: z.object({
+    targetAccountId: z.string().min(1), cameraAnchor: point,
+    hud: z.object({ points: counter, health: z.number().finite().nonnegative() }),
+    death: z.object({ alive: z.boolean(), remainingSeconds: z.number().finite().nonnegative(),
+      respawnAtTick: counter.optional(), respawnBlocked: z.boolean().optional() })
+  }).optional(),
   tick: counter,
   level: z.number().int().positive(),
   phase: z.enum(["active", "intermission", "complete"]),

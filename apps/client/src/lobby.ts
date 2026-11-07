@@ -67,7 +67,8 @@ export function mountLobby(
   status: HTMLElement,
   account: ClientAccount,
   onLogout: () => void,
-  onPlay: (sessionId: string) => void
+  onPlay: (sessionId: string) => void,
+  onSpectate: (sessionId: string) => void
 ): void {
   const header = document.createElement("header");
   const greeting = document.createElement("p");
@@ -199,10 +200,11 @@ export function mountLobby(
     const spectate = document.createElement("button");
     spectate.type = "button";
     spectate.textContent = "Spectate";
-    spectate.disabled = true;
+    spectate.disabled = !session.canSpectate;
     spectate.title = session.canSpectate
-      ? "Spectating is not available in this implementation yet."
+      ? "Observe this session and choose a player to follow."
       : "Spectating is available for running sessions with free spectator capacity.";
+    spectate.addEventListener("click", () => onSpectate(session.id));
     statusCell.append(join, spectate);
     if (session.canPlay) {
       const play = document.createElement("button");

@@ -95,6 +95,24 @@ snapshots are sent until another target is selected. Selection/visibility are
 revalidated on each publication; target projections are reused only within that
 session/tick. Browser list/navigation/control integration is T028.
 
+T028 browser integration admits through HTTP before opening its spectator socket.
+The lobby Spectate button uses the server's `canSpectate` flag; failed admission
+is displayed rather than opening an unauthorized view. The player list validates
+public targets, disables un-followable players and sends selections through the
+existing `client.spectate.target` envelope. Acknowledgment mounts the pinned default
+skin through the public skin host for that selected account. The renderer consumes
+the server `spectatorView` camera/HUD/death fields and never dispatches spectator
+gameplay intent.
+
+Back to Players disposes the current skin, refreshes the list and ignores
+in-flight snapshots until another selection is acknowledged. Target-unavailable
+messages dispose the view and display the supplied updated list and explanation.
+Back to lobby explicitly releases membership before navigating, displaying leave
+errors with a retryable control. Disposal/page departure closes the socket and
+requests idempotent leave, including admission that completes after cancellation.
+Saved-result lifecycle messages navigate observers to the existing reloadable
+standings view. This does not implement player reconnect/reservations (T029).
+
 Initial limits: 16 KiB incoming message; 60 input commands/sec/account; at most
 1 MiB buffered outgoing bytes/socket; no per-message compression. Coalesce obsolete
 snapshots before send; close sustained slow consumers with a reconnectable error.

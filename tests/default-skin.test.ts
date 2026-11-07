@@ -15,6 +15,18 @@ function view(x: number, deaths = 0): DefaultView {
 }
 
 describe("Dots and Squares presentation", () => {
+  it("preserves the server's spectator camera, HUD and respawn projection", () => {
+    const snapshot = { ...view(100), viewerRole: "spectator", spectatorView: {
+      targetAccountId: "alice", cameraAnchor: { x: 300, y: 400 },
+      hud: { points: 500, health: 0 },
+      death: { alive: false, remainingSeconds: 3, respawnAtTick: 92, respawnBlocked: false }
+    } };
+    expect(DefaultViewSchema.parse(snapshot).spectatorView).toEqual(snapshot.spectatorView);
+    expect(DefaultViewSchema.safeParse({ ...snapshot, spectatorView: {
+      ...snapshot.spectatorView, cameraAnchor: { x: Infinity, y: 0 }
+    } }).success).toBe(false);
+  });
+
   it("interpolates shared entity positions without extrapolating authority", () => {
     expect(interpolateEntities(view(100), view(160), 0.5)[0]?.position.x).toBe(130);
     expect(interpolateEntities(view(100), view(160), 2)[0]?.position.x).toBe(160);

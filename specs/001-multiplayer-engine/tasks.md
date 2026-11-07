@@ -99,7 +99,7 @@ Checkpoint: US1+US2 is the first playable multiplayer slice, already using defau
 
 - [X] T026 [US3] Implement spectate admission, selected-target authorization, cap races, player list and leave cleanup in apps/server/src/lobby/spectators.ts; zero allowed spectators disables admission and observers do not change roster/NPC counts.
 - [X] T027 [US3] Implement target-derived camera/HUD/death snapshots and target-unavailable events in apps/server/src/transport/spectator-view.ts; no spectator control input and no cross-room target access.
-- [ ] T028 [US3] Implement target selection, switching, countdown, Back to Players/Back to Lobby and standings navigation in apps/client/src/spectate.ts using SkinHost extension slots.
+- [X] T028 [US3] Implement target selection, switching, countdown, Back to Players/Back to Lobby and standings navigation in apps/client/src/spectate.ts using SkinHost extension slots.
 - [ ] T029 [US3] Implement account-bound 60-second reservations, latest-connection replacement, stale-close guards, continued death deadlines, explicit leave forfeiture and empty-running-room abandonment in apps/server/src/lobby/reconnect.ts.
 - [ ] T030 [US3] Verify reconnect expiry, preserved points/deadlines, duplicate sockets, spectator counts/targets/death view and empty-room cleanup in tests/integration/spectate-reconnect.test.ts; record three-profile scenario in docs/verification.md.
 
@@ -118,6 +118,15 @@ death through safe respawn. Socket tests verify target loss, refreshed same-room
 followable lists, switching, no snapshots without a selection, forbidden spectator
 input, cross-room rejection and discarded old-target pending snapshots. Details
 are in docs/verification.md. T028 remains unstarted.
+
+T028 local evidence: affected tests passed (6 files, 26 tests), workspace
+type-check/build passed, and the three-window Chrome browser scenario passed.
+The observer joined through Spectate, followed/switched players, received the
+unavailable-target list, returned to the lobby with the slot released, and saw
+the same saved standings after normal match completion. The public skin-host
+fixture verified spectator countdown/HUD/respawn camera and zero controls.
+Actual evidence and synthetic-fixture limitations are in docs/verification.md.
+T029 was not started.
 
 ## Phase 6: User Story 4 - Developer Themes (Priority: P2)
 

@@ -18,6 +18,7 @@ export interface RealtimeClient {
   readonly socket: WebSocket;
   sendAction(action: JsonValue): boolean;
   sendPing(nonce: string): boolean;
+  selectTarget(targetAccountId: string): boolean;
   close(): void;
 }
 
@@ -58,6 +59,19 @@ export function connectRealtime(options: RealtimeClientOptions): RealtimeClient 
 
   return {
     socket,
+    selectTarget(targetAccountId): boolean {
+      const envelope = ClientEnvelopeSchema.parse({
+        v: 1, type: "client.spectate.target", payload: { targetAccountId }
+      });
+      if (socket.readyState !== WebSocket.OPEN) return false;
+      const serialized = JSON.stringify(envelope);
+      if (socket.bufferedAmount + new TextEncoder().encode(serialized).byteLength > 16 * 1024) {
+        socket.close(1013, "Outgoing controls stalled; reconnect to resync.");
+        return false;
+      }
+      socket.send(serialized);
+      return true;
+    },
     sendAction(action): boolean {
       if (socket.readyState !== WebSocket.OPEN) {
         return false;

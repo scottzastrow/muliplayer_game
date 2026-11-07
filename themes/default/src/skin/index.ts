@@ -121,9 +121,17 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
         if (parsed.data.viewerAccountId !== host.selectedTarget?.accountId) {
           throw new Error("The snapshot does not belong to this player's view.");
         }
+        if (parsed.data.viewerRole === "spectator" &&
+          parsed.data.spectatorView?.targetAccountId !== host.selectedTarget?.accountId) {
+          throw new Error("The spectator snapshot is missing its selected target view.");
+        }
         if (current && parsed.data.tick <= current.tick) return;
         previous = current;
         current = parsed.data;
+        if (current.viewerRole === "spectator") {
+          help.textContent = "Spectator mode. Use Back to Players to switch whom you follow.";
+          canvas.setAttribute("aria-label", "Dots and Squares spectator view.");
+        }
         interval = previous
           ? Math.min(250, Math.max(1, (current.tick - previous.tick) * 1000 / 30))
           : SNAPSHOT_INTERVAL_MS;
@@ -150,7 +158,8 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
         const player = current.players.find((item) => item.accountId === current?.viewerAccountId)!;
         const avatar = entities.find((item) =>
           item.state.kind === "player" && item.state.accountId === player.accountId);
-        const camera = avatar?.position ?? player.position;
+        const observed = current.viewerRole === "spectator" ? current.spectatorView : undefined;
+        const camera = observed?.cameraAnchor ?? avatar?.position ?? player.position;
         host.setCameraAnchor(camera);
         context.setTransform(dpr, 0, 0, dpr, 0, 0);
         context.fillStyle = "#101824";
@@ -182,11 +191,14 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
             context.fill();
           }
         }
-        points.textContent = `Points: ${player.points}`;
-        health.textContent = `Health: ${player.health}`;
-        const remaining = Math.max(0, Math.ceil(((player.respawnAtTick ?? current.tick) - current.tick) / 30));
+        points.textContent = `Points: ${observed?.hud.points ?? player.points}`;
+        health.textContent = `Health: ${observed?.hud.health ?? player.health}`;
+        const remaining = observed ? Math.ceil(observed.death.remainingSeconds)
+          : Math.max(0, Math.ceil(((player.respawnAtTick ?? current.tick) - current.tick) / 30));
         life.textContent = current.phase === "complete" ? "Match complete."
-          : !player.alive ? player.respawnBlocked ? "Waiting for a safe respawn..." : `Respawning in ${remaining}s`
+          : !(observed?.death.alive ?? player.alive)
+            ? (observed?.death.respawnBlocked ?? player.respawnBlocked)
+              ? "Waiting for a safe respawn..." : `Respawning in ${remaining}s`
           : current.phase === "intermission" ? `Level ${current.level} cleared. Next level soon.`
           : `Level ${current.level}`;
         if (focused && player.alive && current.phase === "active" && current.viewerRole === "player" &&

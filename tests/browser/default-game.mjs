@@ -219,6 +219,7 @@ async function shootUntil(page, level, remaining) {
 try {
   const alice = await newWindow();
   const bob = await newWindow();
+  const observer = await newWindow();
   const aliceWindow = await cdp("Browser.getWindowForTarget", { targetId: alice.target });
   const bobWindow = await cdp("Browser.getWindowForTarget", { targetId: bob.target });
   assert.notEqual(aliceWindow.windowId, bobWindow.windowId, "distinct actual browser windows");
@@ -231,6 +232,7 @@ try {
   const creator = `ViewA_${suffix}`;
   await signIn(alice, creator, password);
   await signIn(bob, `ViewB_${suffix}`, password);
+  await signIn(observer, `Watch_${suffix}`, password);
   await evaluate(alice, `document.querySelector('[name=setting-initialNpcsPerPlayer]').value = '1';
     document.querySelector('[name=setting-baseNpcHealth]').value = '100000';
     document.querySelector('[name=setting-maxLevels]').value = '1'`);
@@ -360,6 +362,72 @@ try {
   assert.ok(fixtureChecks.compatibilityRejected && fixtureChecks.neutral && fixtureChecks.clean);
   assert.equal(fixtureChecks.deadState, "Respawning in 5s");
   assert.deepEqual(fixtureChecks.errors, []);
+  await click(observer, "Refresh sessions");
+  await clickSessionButton(observer, creator, "Spectate");
+  await waitFor(observer, "document.querySelector('[aria-label=\"Followable players\"]') !== null");
+  await click(observer, `Follow ${creator}`);
+  await waitFor(observer, "window.__probe.snapshot?.viewerRole === 'spectator'");
+  const spectatorA = await state(observer);
+  assert.equal(spectatorA.snapshot.viewerAccountId, (await state(alice)).snapshot.viewerAccountId);
+  assert.deepEqual(spectatorA.snapshot.spectatorView.cameraAnchor, own(spectatorA).position);
+  centered(spectatorA);
+  await move(observer, "KeyD", 300);
+  assert.equal((await state(observer)).actions.length, 0, "spectator skin sends no gameplay actions");
+  const spectatorFixture = await evaluate(observer, `(async () => {
+    const { mountSkinHost } = await import('/src/skin-host.ts');
+    const { defaultSkinFactory } = await import('/@id/@multiplayer-game/default-theme');
+    const snapshot = structuredClone(window.__probe.snapshot);
+    const root = document.createElement('div');
+    document.body.append(root);
+    let inputs = 0;
+    const mounted = mountSkinHost(root, defaultSkinFactory, {
+      target: {accountId:snapshot.viewerAccountId, username:${JSON.stringify(creator)}},
+      dispatchInput: () => inputs++, navigate: () => {}, onError: error => {throw error;}
+    });
+    const target = snapshot.players.find(player => player.accountId === snapshot.viewerAccountId);
+    target.alive = false; target.health = 0; target.respawnAtTick = snapshot.tick + 150;
+    snapshot.entities = snapshot.entities.filter(entity => entity.state.accountId !== target.accountId);
+    snapshot.spectatorView.death = {alive:false,remainingSeconds:5,respawnAtTick:target.respawnAtTick,respawnBlocked:false};
+    snapshot.spectatorView.hud = {points:target.points,health:0};
+    mounted.handleSnapshot(snapshot,4);
+    await new Promise(resolve => setTimeout(resolve,100));
+    const countdown = root.querySelector('.default-life').textContent;
+    const health = root.querySelector('.default-health').textContent;
+    snapshot.tick++;
+    snapshot.spectatorView.death = {alive:true,remainingSeconds:0};
+    snapshot.spectatorView.hud.health = 100;
+    snapshot.spectatorView.cameraAnchor = {x:800,y:600};
+    target.alive = true; target.health = 100; target.position = {x:800,y:600};
+    mounted.handleSnapshot(snapshot,4);
+    await new Promise(resolve => setTimeout(resolve,100));
+    const returned = root.querySelector('.default-health').textContent;
+    const camera = mounted.host.cameraAnchor;
+    mounted.dispose(); root.remove();
+    return {countdown,health,returned,camera,inputs};
+  })()`);
+  assert.deepEqual(spectatorFixture, {countdown:"Respawning in 5s",health:"Health: 0",
+    returned:"Health: 100",camera:{x:800,y:600},inputs:0});
+  await click(observer, "Back to Players");
+  await waitFor(observer, "document.querySelector('[aria-label=\"Followable players\"]') !== null");
+  await click(observer, `Follow ViewB_${suffix}`);
+  await waitFor(observer, `window.__probe.snapshot?.viewerAccountId === ${JSON.stringify((await state(bob)).snapshot.viewerAccountId)}`);
+  await delay(100);
+  centered(await state(observer));
+  await click(bob, "Back to lobby");
+  await waitFor(observer, "document.querySelector('[aria-label=\"Followable players\"]') !== null");
+  assert.ok((await evaluate(observer, "document.querySelector('#status').textContent")).includes("no longer available"));
+  await click(observer, `Follow ${creator}`);
+  await waitFor(observer, "document.querySelector('canvas') !== null");
+  await click(observer, "Back to lobby");
+  await waitFor(observer, "document.querySelector('[aria-label=\"Active sessions\"]') !== null");
+  const released = await evaluate(observer, `(async () => {
+    const {sessions}=await(await fetch('/api/v1/sessions')).json();
+    return sessions.find(session => session.creator === ${JSON.stringify(creator)}).spectatorCount;
+  })()`);
+  assert.equal(released,0);
+  await click(bob, "Refresh sessions");
+  await clickSessionButton(bob, creator, "Play");
+  await waitFor(bob, "document.querySelector('canvas') !== null");
   const boundedControls = await evaluate(alice, `(async () => {
     const { connectRealtime } = await import('/src/connection.ts');
     const events = new EventTarget();
@@ -411,6 +479,11 @@ try {
   await click(bob, "Refresh sessions");
   await clickSessionButton(bob, creator, "Play");
   await waitFor(bob, "window.__probe.snapshot !== null");
+  await click(observer, "Refresh sessions");
+  await clickSessionButton(observer, creator, "Spectate");
+  await waitFor(observer, "document.querySelector('[aria-label=\"Followable players\"]') !== null");
+  await click(observer, `Follow ${creator}`);
+  await waitFor(observer, "document.querySelector('canvas') !== null");
   const capacityBefore = await evaluate(alice, `(async () => {
     const {settings} = await (await fetch('/api/v1/sessions/' + ${JSON.stringify(matchId)})).json();
     for (let i=0;i<3;i++) {
@@ -430,6 +503,7 @@ try {
   await shootUntil(alice, 2, 0);
   await waitFor(alice, "document.querySelector('[aria-label=\"Final standings\"]') !== null");
   await waitFor(bob, "document.querySelector('[aria-label=\"Final standings\"]') !== null");
+  await waitFor(observer, "document.querySelector('[aria-label=\"Final standings\"]') !== null");
   const resultHash = await evaluate(alice, "location.hash");
   assert.match(resultHash, /^#results\/[0-9a-f-]{36}$/);
   const standings = await evaluate(alice, "document.querySelector('[aria-label=\"Final standings\"]').textContent");
@@ -440,6 +514,7 @@ try {
   assert.ok(tableRows.every(row => Number(row[2]) > 0), "both players earned points");
   assert.equal(await evaluate(bob, "document.querySelector('[aria-label=\"Final standings\"]').textContent"), standings);
   assert.equal(await evaluate(bob, "location.hash"), resultHash);
+  assert.equal(await evaluate(observer, "document.querySelector('[aria-label=\"Final standings\"]').textContent"), standings);
   await click(alice, "Reload saved result");
   await waitFor(alice, "document.querySelector('[aria-label=\"Final standings\"]') !== null");
   assert.equal(await evaluate(alice, "document.querySelector('[aria-label=\"Final standings\"]').textContent"), standings);
@@ -533,7 +608,10 @@ try {
   assert.ok(failedConnectionNavigation.failed);
   assert.equal(failedConnectionNavigation.navigated, "lobby");
   console.log(JSON.stringify({
-    browser: version.Browser, windows: 2,
+    browser: version.Browser,     windows: 3,
+    spectatorJoinSwitchLeave: true, spectatorTargetUnavailable: true,
+    spectatorNoGameplayInput: true, spectatorSavedStandings: true,
+    spectatorDeathRespawnFixture: true,
     independentMovement: true, nearbyVisibility: true, centeredCameras: true,
     actionEnvelope: true, mouseFireAndRelease: true, pointsAndHealth: true, viewportResize: true,
     fixtureShapesAndDeathHud: true, skinDisposalAndCompatibility: true, boundedOutgoingControls: true,
