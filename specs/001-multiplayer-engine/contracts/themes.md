@@ -24,7 +24,7 @@ Implement TypeScript interfaces and runtime schemas in `packages/theme-sdk/src/`
 | ThemeDefinition | id, name, version, engineApiMajor, module id/version/stateSchemaVersion, skin renderer id/version, assets digest, settings schema/defaults |
 | GameModuleFactory | metadata, validateSettings, create(context, settings, roster, seed) returns isolated instance |
 | GameModuleInstance | initialize; validateInput; applyInput; step(dt, tick); snapshot(viewer); results; dispose |
-| ModuleContext | monotonic clock, seeded RNG, scoped entity store, geometry/spatial/nav services, bounded event sink, completion request sink, metrics counters |
+| ModuleContext | monotonic clock, seeded RNG, scoped entity store with bounded radius queries, geometry/circle movement, bounded navigation request/results, bounded event sink, completion request sink, metrics counters |
 | Capability | stable type ID plus validated state and optional behavior hooks; no mandatory universal attack method |
 | SkinFactory | metadata including accepted module/state schema; mount(host, assets) returns isolated presenter |
 | SkinInstance | handleSnapshot; handleEvents; render(frameTime, interpolatedState); handleViewport; dispose |
@@ -41,6 +41,15 @@ Dimensions are multiples of the 32-unit navigation cell and no larger than 2048 
 walkability and connectivity; authored documents and generated documents must both
 pass through that same loader. Generation is deterministic by seed, has a fixed
 attempt limit, and falls back to a known-valid traversable map.
+
+Entity stores provide radius queries backed by the session spatial index. Geometry
+services provide walkability, obstacle checks and collision-resolved circle movement.
+Navigation requests return opaque IDs and expose pending/completed path results;
+implementations enforce per-tick search/node budgets and bounded outstanding work.
+Modules must normalize player movement, query nearby targets rather than compare every
+NPC against every entity, and cap path requests per simulation step. Default-theme
+contact damage is a typed NPC capability with a one-second per-player cooldown;
+player-fired weapons, projectiles and pickups belong to later gameplay tasks.
 
 Realtime input uses a shared versioned envelope with an opaque module-defined JSON
 `action`; the protocol does not require movement, aim, fire, or any other gameplay

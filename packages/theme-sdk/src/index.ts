@@ -84,21 +84,41 @@ export interface RandomSource {
   next(): number;
 }
 
+export interface Point2 {
+  readonly x: number;
+  readonly y: number;
+}
+
 export interface EntityStore<TEntity extends { readonly id: string }> {
   get(id: string): Readonly<TEntity> | undefined;
   add(entity: TEntity): void;
   update(id: string, update: (entity: Readonly<TEntity>) => TEntity): void;
   remove(id: string): boolean;
   values(): readonly Readonly<TEntity>[];
+  queryRadius(center: Point2, radius: number, maxCells?: number): readonly Readonly<TEntity>[];
 }
 
 export interface GeometryService {
-  isWalkable(x: number, y: number): boolean;
+  isWalkable(x: number, y: number, radius?: number): boolean;
   intersectsObstacle(x: number, y: number, radius: number): boolean;
+  moveCircle(position: Point2, delta: Point2, radius: number): Point2;
 }
 
+export type NavigationPathResult =
+  | {
+      readonly status: "found";
+      readonly path: readonly Point2[];
+      readonly expandedNodes: number;
+    }
+  | {
+      readonly status: "no-path" | "limit";
+      readonly path: readonly Point2[];
+      readonly expandedNodes: number;
+    };
+
 export interface NavigationService {
-  requestPath(from: Readonly<{ x: number; y: number }>, to: Readonly<{ x: number; y: number }>): string | undefined;
+  requestPath(from: Point2, to: Point2): string | undefined;
+  getPath(requestId: string): NavigationPathResult | undefined;
 }
 
 export interface ScopedEvent {

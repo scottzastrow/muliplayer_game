@@ -8,15 +8,19 @@ import { JsonValueSchema, type JsonValue } from "@multiplayer-game/protocol";
 import { z } from "zod";
 import { DefaultPlayerActionSchema, type DefaultPlayerAction } from "./actions.js";
 import type { DefaultEntity } from "./types.js";
+import { DefaultEntitySimulator } from "./entities.js";
+import { generateMap } from "./maps.js";
 
 const DefaultSettingsSchema = z.record(z.string(), JsonValueSchema);
 
 export interface DefaultModuleState extends Record<string, JsonValue> {
   readonly acceptedInputs: number;
+  readonly entities: JsonValue[];
 }
 
 export interface DefaultModuleSnapshot extends Record<string, JsonValue> {
   readonly acceptedInputs: number;
+  readonly entities: JsonValue[];
   readonly viewerAccountId: string;
   readonly viewerRole: "player" | "spectator";
 }
@@ -67,13 +71,14 @@ export const defaultModuleFactory: GameModuleFactory<
 
     let acceptedInputs = 0;
     let disposed = false;
+    const simulator = new DefaultEntitySimulator(_context);
     return {
       stateSchemaVersion: defaultModuleMetadata.stateSchemaVersion,
       get state() {
-        return Object.freeze({ acceptedInputs });
-      },
-      initialize(): void {
-        assertActive();
+        return Object.freeze({
+          acceptedInputs,
+          entities: serializeEntities(_context.entities.values())
+        });
       },
       validateInput(input: unknown): input is DefaultPlayerAction {
         return DefaultPlayerActionSchema.safeParse(input).success;
@@ -86,15 +91,22 @@ export const defaultModuleFactory: GameModuleFactory<
         if (!DefaultPlayerActionSchema.safeParse(input).success) {
           throw new TypeError("Input does not match the default theme action schema.");
         }
+        simulator.applyInput(accountId, input);
         acceptedInputs += 1;
       },
-      step(): void {
+      step(dtSeconds: number, tick: number): void {
         assertActive();
+        simulator.step(dtSeconds, tick);
+      },
+      initialize(): void {
+        assertActive();
+        simulator.initialize(generateMap(seed).map, roster);
       },
       snapshot(viewer): DefaultModuleSnapshot {
         assertActive();
         return {
           acceptedInputs,
+          entities: serializeEntities(_context.entities.values()),
           viewerAccountId: viewer.accountId,
           viewerRole: viewer.role
         };
@@ -104,6 +116,7 @@ export const defaultModuleFactory: GameModuleFactory<
         return { acceptedInputs };
       },
       dispose(): void {
+        simulator.dispose();
         disposed = true;
       }
     };
@@ -117,3 +130,19 @@ export const defaultModuleFactory: GameModuleFactory<
 });
 
 export { DefaultPlayerActionSchema, type DefaultPlayerAction };
+export {
+  DefaultEntitySimulator,
+  defaultContactAttackCapability,
+  normalizeMovement
+} from "./entities.js";
+export type { DefaultContactAttackCapability } from "./entities.js";
+
+function serializeEntities(entities: readonly Readonly<DefaultEntity>[]): JsonValue[] {
+  return entities.map((entity) => ({
+    id: entity.id,
+    typeId: entity.typeId,
+    position: { x: entity.position.x, y: entity.position.y },
+    radius: entity.radius,
+    state: structuredClone(entity.state)
+  }));
+}

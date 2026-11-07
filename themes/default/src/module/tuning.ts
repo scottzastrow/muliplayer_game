@@ -1,0 +1,11 @@
+export const PLAYER_SPEED = 180;
+export const PLAYER_HEALTH = 100;
+export const PLAYER_RADIUS = 14;
+export const NPC_SPEED = 90;
+export const NPC_ATTRACTION_RADIUS = 512;
+export const NPC_CONTACT_DAMAGE = 10;
+export const NPC_CONTACT_COOLDOWN_TICKS = 30;
+export const MAX_NPC_PATH_REQUESTS_PER_TICK = 8;
+export const MAX_PENDING_NPC_PATHS = 64;
+export const MAX_ATTRACTION_QUERY_CELLS = 2_048;
+export const NPC_REPATH_INTERVAL_TICKS = 15;

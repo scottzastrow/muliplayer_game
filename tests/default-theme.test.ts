@@ -25,7 +25,11 @@ function createContext(): ModuleContext<DefaultEntity> {
       entities.set(id, update(current));
     },
     remove: (id) => entities.delete(id),
-    values: () => [...entities.values()]
+    values: () => [...entities.values()],
+    queryRadius: (center, radius) =>
+      [...entities.values()].filter(
+        (entity) => Math.hypot(entity.position.x - center.x, entity.position.y - center.y) <= radius
+      )
   };
   return {
     clock: { nowMs: () => 0 },
@@ -33,9 +37,13 @@ function createContext(): ModuleContext<DefaultEntity> {
     entities: store,
     geometry: {
       isWalkable: () => true,
-      intersectsObstacle: () => false
+      intersectsObstacle: () => false,
+      moveCircle: (position, delta) => ({
+        x: position.x + delta.x,
+        y: position.y + delta.y
+      })
     },
-    navigation: { requestPath: () => undefined },
+    navigation: { requestPath: () => undefined, getPath: () => undefined },
     emit: () => {},
     requestCompletion: () => {},
     metrics: {
@@ -66,6 +74,8 @@ describe("default theme registration", () => {
       roster,
       2
     );
+    first.initialize();
+    second.initialize();
     const action: DefaultPlayerAction = {
       type: "combat",
       moveX: 0,
