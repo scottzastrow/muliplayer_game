@@ -11,6 +11,7 @@ import { ZodError } from "zod";
 import { HttpError } from "../errors.js";
 import type { SqliteDatabase } from "../storage/database.js";
 import type { AuthenticatedAccount } from "../auth/accounts.js";
+import type { ThemeLoader } from "../themes/builtins.js";
 
 const SESSION_LIMIT = 5;
 const IDEMPOTENCY_WINDOW_MS = 60_000;
@@ -55,7 +56,8 @@ export class LobbyRegistry {
 
   constructor(
     readonly database: SqliteDatabase,
-    readonly clock: () => number = Date.now
+    readonly clock: () => number = Date.now,
+    readonly themeLoader?: ThemeLoader
   ) {}
 
   create(
@@ -385,6 +387,20 @@ export class LobbyRegistry {
       .get(revision.slice(0, at), revision.slice(at + 1)) as ThemeRow | undefined;
     if (!row) {
       throw new HttpError(422, "INCOMPATIBLE_THEME", "The selected theme revision is unavailable.");
+    }
+    if (this.themeLoader) {
+      try {
+        const theme = this.themeLoader.resolve(revision);
+        if (theme.definition.name !== row.name) {
+          throw new Error("Registered theme display name does not match the enabled revision.");
+        }
+      } catch {
+        throw new HttpError(
+          422,
+          "INCOMPATIBLE_THEME",
+          "The selected theme revision is not loaded by this server."
+        );
+      }
     }
     return row;
   }

@@ -1,0 +1,41 @@
+{
+  "id": "default",
+  "name": "Dots and Squares",
+  "version": "1.0.0",
+  "engineApiMajor": 1,
+  "module": {
+    "id": "default",
+    "version": "1.0.0",
+    "stateSchemaVersion": 1
+  },
+  "skin": {
+    "rendererId": "default",
+    "version": "1.0.0",
+    "acceptedModuleId": "default",
+    "acceptedStateSchemaVersions": [1]
+  },
+  "assetsDigest": "d89837b8b8c914986e5c01cf67766811bce504e9250ef2ce8cf862effb747473",
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {
+    "maxPlayers": { "type": "integer", "minimum": 1, "maximum": 32 },
+    "maxSpectators": { "type": "integer", "minimum": 0, "maximum": 64 },
+    "initialNpcsPerPlayer": { "type": "integer", "minimum": 1, "maximum": 100 },
+    "npcPopulationGrowthPercent": { "type": "number", "minimum": 0, "maximum": 100 },
+    "baseNpcHealth": { "type": "integer", "minimum": 1, "maximum": 100000 },
+    "npcHealthGrowthPercent": { "type": "number", "minimum": 0, "maximum": 100 },
+    "respawnDelaySeconds": { "type": "number", "minimum": 0, "maximum": 60 },
+    "maxLevels": { "type": "integer", "minimum": 1, "maximum": 100 },
+    "themeRevision": { "type": "string", "const": "default@1.0.0" }
+  },
+  "settingsDefaults": {
+    "maxPlayers": 4,
+    "maxSpectators": 8,
+    "initialNpcsPerPlayer": 10,
+    "npcPopulationGrowthPercent": 20,
+    "baseNpcHealth": 100,
+    "npcHealthGrowthPercent": 10,
+    "respawnDelaySeconds": 5,
+    "maxLevels": 5,
+    "themeRevision": "default@1.0.0"
+  }
+}

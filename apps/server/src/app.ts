@@ -7,6 +7,7 @@ import { registerAuthRoutes } from "./auth/routes.js";
 import { registerLobbyRoutes } from "./lobby/routes.js";
 import { LobbyRegistry } from "./lobby/registry.js";
 import { RealtimeTransport, type RealtimeOptions } from "./transport/socket.js";
+import { createThemeLoader } from "./themes/builtins.js";
 
 export interface ReadinessState {
   ready: boolean;
@@ -75,7 +76,8 @@ export function createApp(
     }
   });
 
-  const lobby = new LobbyRegistry(database);
+  const themes = createThemeLoader();
+  const lobby = new LobbyRegistry(database, Date.now, themes);
   const auth = registerAuthRoutes(app, database, config);
   registerLobbyRoutes(app, database, config, lobby, auth);
   const realtime = new RealtimeTransport(app.server, database, config, lobby, realtimeOptions);
