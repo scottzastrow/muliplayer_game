@@ -53,6 +53,9 @@ describe("session simulation lifecycle", () => {
       });
       expect(created.statusCode).toBe(201);
       const sessionId = created.json().session.id as string;
+      expect((await app.inject({
+        url: `/api/v1/matches/${sessionId}/results`, headers: { cookie }
+      })).statusCode).toBe(404);
       const started = await app.inject({
         method: "POST",
         url: `/api/v1/sessions/${sessionId}/start`,
@@ -109,6 +112,28 @@ describe("session simulation lifecycle", () => {
           { accountId: expect.any(String), username: "LifecyclePlayer", points: 200, kills: 2, rank: 1 }
         ]
       });
+      const terminal = await nextMessageOfType(socket, "server.lifecycle");
+      expect(terminal).toMatchObject({
+        sessionId,
+        payload: { status: "finished", resultId: sessionId }
+      });
+      const saved = await app.inject({
+        url: `/api/v1/matches/${sessionId}/results`, headers: { cookie }
+      });
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json().result).toMatchObject({
+        matchId: sessionId, status: "finished", finalLevel: 2,
+        standings: [{ username: "LifecyclePlayer", rank: 1, points: 200, kills: 2 }]
+      });
+      expect((await app.inject({
+        url: `/api/v1/matches/${sessionId}/results`, headers: { cookie }
+      })).json()).toEqual(saved.json());
+      expect((await app.inject({
+        url: `/api/v1/matches/${sessionId}/results`
+      })).statusCode).toBe(401);
+      expect((await app.inject({
+        url: "/api/v1/matches/not-an-id/results", headers: { cookie }
+      })).statusCode).toBe(404);
       expect(
         (
           database

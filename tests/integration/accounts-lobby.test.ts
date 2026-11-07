@@ -302,6 +302,13 @@ describe("accounts and lobby integration", () => {
       (database.prepare("SELECT state FROM matches WHERE id = ?").get(sessionId) as { state: string })
         .state
     ).toBe("abandoned");
+    const result = await app.inject({
+      url: `/api/v1/matches/${sessionId}/results`, headers: { cookie: creator.cookie }
+    });
+    expect(result.statusCode).toBe(200);
+    expect(result.json().result).toMatchObject({
+      matchId: sessionId, status: "abandoned", standings: []
+    });
     expect((await createSession(creator.cookie, DEFAULT_GAME_SETTINGS, "after-release")).statusCode).toBe(
       201
     );

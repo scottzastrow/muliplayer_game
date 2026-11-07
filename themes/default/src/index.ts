@@ -13,6 +13,7 @@ export const defaultThemeRevision = validateThemeRevision({
 });
 
 export { defaultModuleFactory, defaultSkinFactory };
+export { createDefaultResultsSkin } from "./skin/results.js";
 export {
   DEFAULT_MAP_HEIGHT,
   DEFAULT_MAP_WIDTH,

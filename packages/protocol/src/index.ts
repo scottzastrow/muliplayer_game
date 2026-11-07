@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GameSettingsSchema } from "./settings.js";
 
 export * from "./settings.js";
 
@@ -107,6 +108,47 @@ export const PublicSessionSummarySchema = z
   });
 
 export type PublicSessionSummary = z.infer<typeof PublicSessionSummarySchema>;
+
+const ResultCounterSchema = z.number().int().nonnegative().safe();
+export const MatchResultSchema = z.object({
+  matchId: z.string().uuid(),
+  status: z.enum(["finished", "abandoned", "interrupted", "failed"]),
+  finalLevel: z.number().int().positive(),
+  standings: z.array(z.object({
+    accountId: z.string().uuid(),
+    username: UsernameSchema,
+    rank: z.number().int().positive(),
+    points: ResultCounterSchema,
+    kills: ResultCounterSchema,
+    deaths: ResultCounterSchema
+  }).strict()).max(32),
+  settings: GameSettingsSchema,
+  themeDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  finalizedAt: z.iso.datetime()
+}).strict().superRefine((result, context) => {
+  if (result.finalLevel > result.settings.maxLevels ||
+      (result.status === "finished" && result.finalLevel !== result.settings.maxLevels)) {
+    context.addIssue({ code: "custom", message: "Final level does not match result settings." });
+  }
+  if (result.status !== "finished" && result.standings.length !== 0) {
+    context.addIssue({ code: "custom", message: "Incomplete matches cannot declare final standings." });
+  }
+  if (result.status === "finished" && result.standings.length === 0) {
+    context.addIssue({ code: "custom", message: "Finished matches require final standings." });
+  }
+  const accounts = new Set<string>();
+  for (const [index, standing] of result.standings.entries()) {
+    if (standing.rank !== index + 1 || accounts.has(standing.accountId)) {
+      context.addIssue({ code: "custom", message: "Standings require unique accounts and ordered ranks." });
+    }
+    accounts.add(standing.accountId);
+  }
+});
+export type MatchResult = z.infer<typeof MatchResultSchema>;
+export const TerminalLifecycleSchema = z.object({
+  status: z.enum(["finished", "abandoned", "interrupted", "failed"]),
+  resultId: z.string().uuid()
+}).strict();
 
 export function serializePublicSessionSummary(
   summary: PublicSessionSummary

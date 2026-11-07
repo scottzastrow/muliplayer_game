@@ -36,6 +36,17 @@ REVISION_CONFLICT/REJOIN_EXPIRED/USERNAME_TAKEN, 413 payload too large, 422 inva
 settings/package compatibility, 429 throttled, 503 not ready. Login failure uses a
 generic message regardless of whether the username exists.
 
+`GET /matches/:id/results` requires a valid login but does not create membership.
+It returns `{result:{matchId,status,finalLevel,standings,settings,themeDigest,
+finalizedAt}}` from the immutable saved result, or 404 if the identifier is invalid,
+unknown, or the match has no saved result yet. Each finished standing contains
+`accountId`, `username`, `rank`, `points`, `kills` and `deaths`. Ranks are persisted
+in points-descending, kills-descending, deaths-ascending, normalized-username order;
+clients preserve that order rather than recomputing scores. Abandoned, interrupted
+and failed results have empty standings and must not appear as zero-score victories.
+The public protocol validates the result shape and excludes credentials. Reloading
+is a read-only request and cannot finalize the match again.
+
 Session summary: id, name, creator display name, status, level/maxLevels,
 playerCount/maxPlayers, spectatorCount/maxSpectators, theme name/revision, settingsRevision,
 canJoin/canSpectate/canRejoin/canPlay for this account. `canPlay` is true only for

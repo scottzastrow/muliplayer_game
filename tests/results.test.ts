@@ -96,6 +96,28 @@ describe("persistent match progression and results", () => {
     expect(getMatchResult(database!, matchId)).toBeUndefined();
   });
 
+  it("orders score ties by kills, deaths, then normalized username", () => {
+    const matchId = createRunningMatch(2, 1);
+    database!.prepare(
+      `INSERT INTO accounts
+       (id, username, normalized_username, password_hash, password_salt, role, created_at)
+       VALUES (?, ?, ?, 'test-hash', 'test-salt', 'player', '2026-11-06T00:00:00Z')`
+    ).run("account-c", "Charlie", "charlie");
+    database!.prepare(
+      "INSERT INTO match_participants(match_id, account_id, joined_order) VALUES (?, ?, 2)"
+    ).run(matchId, "account-c");
+    expect(finalizeMatchResult(database!, {
+      matchId, status: "finished", finalLevel: 1,
+      standings: [
+        { accountId: "account-a", points: 100, kills: 1, deaths: 0 },
+        { accountId: "account-b", points: 100, kills: 2, deaths: 1 },
+        { accountId: "account-c", points: 100, kills: 2, deaths: 0 }
+      ]
+    })).toBe(true);
+    expect(getMatchResult(database!, matchId)?.standings.map((item) => item.username))
+      .toEqual(["Charlie", "Bob", "Alice"]);
+  });
+
   it("rejects completion before the configured maximum level", () => {
     const matchId = createRunningMatch();
     expect(() =>

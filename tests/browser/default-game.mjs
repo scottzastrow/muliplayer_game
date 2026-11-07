@@ -343,11 +343,125 @@ try {
   assert.equal(boundedControls.count, 2, "stalled controls are not queued");
   assert.equal(boundedControls.stalled, false);
   assert.equal(boundedControls.closed.code, 1013);
+  await click(alice, "Back to lobby");
+  await waitFor(alice, "document.querySelector('[aria-label=\"Active sessions\"]') !== null");
+  await evaluate(alice, `document.querySelector('[name=setting-initialNpcsPerPlayer]').value = '1';
+    document.querySelector('[name=setting-baseNpcHealth]').value = '1';
+    document.querySelector('[name=setting-maxLevels]').value = '1';
+    window.__probe.snapshot = null`);
+  await click(alice, "Create session");
+  await waitFor(alice, "document.querySelector('tbody details') !== null");
+  await evaluate(alice, "document.querySelector('tbody details').open = true");
+  await click(alice, "Start session");
+  await waitFor(alice, "window.__probe.snapshot !== null");
+  await cdp("Page.bringToFront", {}, alice.session);
+  await evaluate(alice, "document.querySelector('canvas').focus()");
+  const finalTarget = await evaluate(alice, `(() => {
+    const snapshot = window.__probe.snapshot;
+    const player = snapshot.players.find(item => item.accountId === snapshot.viewerAccountId);
+    const npc = snapshot.entities.find(item => item.state.kind === 'npc');
+    const canvas = document.querySelector('canvas').getBoundingClientRect();
+    const dx = npc.position.x - player.position.x;
+    const dy = npc.position.y - player.position.y;
+    const scale = Math.min(1, (canvas.width / 2 - 20) / Math.max(1, Math.abs(dx)),
+      (canvas.height / 2 - 20) / Math.max(1, Math.abs(dy)));
+    return { x: canvas.left + canvas.width / 2 + dx * scale,
+      y: canvas.top + canvas.height / 2 + dy * scale };
+  })()`);
+  await cdp("Input.dispatchMouseEvent", { type: "mousePressed", button: "left", clickCount: 1,
+    ...finalTarget }, alice.session);
+  await waitFor(alice, "document.querySelector('[aria-label=\"Final standings\"]') !== null");
+  await cdp("Input.dispatchMouseEvent", { type: "mouseReleased", button: "left", clickCount: 1,
+    ...finalTarget }, alice.session);
+  const resultHash = await evaluate(alice, "location.hash");
+  assert.match(resultHash, /^#results\/[0-9a-f-]{36}$/);
+  const standings = await evaluate(alice, "document.querySelector('[aria-label=\"Final standings\"]').textContent");
+  assert.ok(standings.includes("100") && standings.includes(creator));
+  await click(alice, "Reload saved result");
+  await waitFor(alice, "document.querySelector('[aria-label=\"Final standings\"]') !== null");
+  assert.equal(await evaluate(alice, "document.querySelector('[aria-label=\"Final standings\"]').textContent"), standings);
+  await cdp("Page.reload", {}, alice.session);
+  await waitFor(alice, "document.querySelector('[aria-label=\"Final standings\"]') !== null");
+  assert.equal(await evaluate(alice, "location.hash"), resultHash);
+  assert.equal(await evaluate(alice, "document.querySelector('[aria-label=\"Final standings\"]').textContent"), standings);
+  const savedResult = await evaluate(alice, `(async () => {
+    const response = await fetch('/api/v1/matches/' + location.hash.split('/')[1] + '/results');
+    return (await response.json()).result;
+  })()`);
+  const resultFixtures = await evaluate(alice, `(async () => {
+    const { mountSkinHost } = await import('/src/skin-host.ts');
+    const { createDefaultResultsSkin } = await import('/@id/@multiplayer-game/default-theme');
+    const result = ${JSON.stringify(savedResult)};
+    result.standings = [
+      { accountId: result.standings[0].accountId, username: 'Alpha', rank: 1,
+        points: 300, kills: 3, deaths: 1 },
+      { accountId: '00000000-0000-4000-8000-000000000009', username: 'beta', rank: 2,
+        points: 300, kills: 2, deaths: 0 }
+    ];
+    const root = document.createElement('div');
+    document.body.append(root);
+    let reloaded = 0;
+    let navigated;
+    const mounted = mountSkinHost(root, createDefaultResultsSkin(result, () => reloaded++), {
+      target: { accountId: result.standings[0].accountId, username: 'Alpha' },
+      dispatchInput: () => { throw new Error('Results dispatched input.'); },
+      navigate: action => { navigated = action; },
+      onError: error => { throw error; }
+    });
+    const rows = [...root.querySelectorAll('tbody tr')].map(row => [...row.children].map(cell => cell.textContent));
+    const buttons = [...root.querySelectorAll('button')];
+    buttons.find(button => button.textContent === 'Reload saved result').click();
+    buttons.find(button => button.textContent === 'Back to lobby').click();
+    mounted.dispose();
+    for (const button of buttons) button.click();
+    const disposed = root.querySelector('table') === null && reloaded === 1;
+    root.remove();
+    return { rows, reloaded, navigated, disposed };
+  })()`);
+  assert.deepEqual(resultFixtures.rows, [
+    ["1", "Alpha", "300", "3", "1"], ["2", "beta", "300", "2", "0"]
+  ]);
+  assert.equal(resultFixtures.navigated, "lobby");
+  assert.ok(resultFixtures.disposed);
+  await evaluate(alice, "location.hash = '#results/00000000-0000-4000-8000-000000000099'");
+  await waitFor(alice, "document.querySelector('#status').getAttribute('role') === 'alert'");
+  assert.equal(await evaluate(alice, "document.querySelector('#status').textContent"), "Saved match result not found.");
+  await click(alice, "Reload saved result");
+  await waitFor(alice, "document.querySelector('#status').getAttribute('role') === 'alert'");
+  await click(alice, "Back to lobby");
+  await waitFor(alice, "document.querySelector('[aria-label=\"Active sessions\"]') !== null");
+  assert.equal(await evaluate(alice, "location.hash"), "");
+  assert.equal(await evaluate(alice, "document.querySelector('canvas')"), null);
+  const failedConnectionNavigation = await evaluate(alice, `(async () => {
+    const { mountGame } = await import('/src/game.ts');
+    const root = document.createElement('div');
+    const status = document.createElement('p');
+    document.body.append(root, status);
+    let navigated;
+    const dispose = mountGame(root, status, {
+      id: ${JSON.stringify(savedResult.standings[0].accountId)},
+      username: ${JSON.stringify(creator)}, role: 'player'
+    }, '00000000-0000-4000-8000-000000000099', action => { navigated = action; });
+    for (let attempt = 0; attempt < 40 && status.getAttribute('role') !== 'alert'; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    const failed = status.getAttribute('role') === 'alert';
+    root.querySelector('button').click();
+    dispose();
+    root.remove();
+    status.remove();
+    return { failed, navigated };
+  })()`);
+  assert.ok(failedConnectionNavigation.failed);
+  assert.equal(failedConnectionNavigation.navigated, "lobby");
   console.log(JSON.stringify({
     browser: version.Browser, windows: 2,
     independentMovement: true, nearbyVisibility: true, centeredCameras: true,
     actionEnvelope: true, mouseFireAndRelease: true, pointsAndHealth: true, viewportResize: true,
-    fixtureShapesAndDeathHud: true, skinDisposalAndCompatibility: true, boundedOutgoingControls: true
+    fixtureShapesAndDeathHud: true, skinDisposalAndCompatibility: true, boundedOutgoingControls: true,
+    savedResultHandoff: true, resultReloadAndPageRefresh: true,
+    resultTableAndDisposal: true, missingResultRetry: true, backToLobby: true,
+    failedConnectionLobbyNavigation: true
   }, null, 2));
 } finally {
   for (const browserContextId of contexts) {

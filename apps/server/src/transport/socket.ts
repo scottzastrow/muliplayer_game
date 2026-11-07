@@ -6,6 +6,7 @@ import {
   ServerEnvelopeSchema,
   type ErrorCode,
   type JsonValue,
+  type MatchResult,
   type ServerEnvelope
 } from "@multiplayer-game/protocol";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
@@ -187,6 +188,7 @@ export class RealtimeTransport {
       if (state.sessionId !== sessionId || webSocket.readyState !== WebSocket.OPEN) {
         continue;
       }
+
       state.sender.send({
         v: 1,
         type: "server.snapshot",
@@ -198,6 +200,16 @@ export class RealtimeTransport {
           moduleStateSchemaVersion,
           ...snapshotForAccount(state.account.id)
         }
+      });
+    }
+  }
+
+  publishResult(sessionId: string, tick: number, status: MatchResult["status"]): void {
+    for (const [socket, state] of this.#connections) {
+      if (state.sessionId !== sessionId || socket.readyState !== WebSocket.OPEN) continue;
+      state.sender.send({
+        v: 1, type: "server.lifecycle", sessionId, tick, serverTimeMs: Date.now(),
+        payload: { status, resultId: sessionId }
       });
     }
   }

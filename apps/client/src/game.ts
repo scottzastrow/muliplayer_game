@@ -1,5 +1,6 @@
 import { defaultSkinFactory, defaultThemeDefinition } from "@multiplayer-game/default-theme";
 import type { JsonValue, ServerEnvelope } from "@multiplayer-game/protocol";
+import { TerminalLifecycleSchema } from "@multiplayer-game/protocol";
 import { connectRealtime, type RealtimeClient } from "./connection.js";
 import type { ClientAccount } from "./auth.js";
 import { mountSkinHost, type MountedSkinHost } from "./skin-host.js";
@@ -25,16 +26,25 @@ export function mountGame(
   heading.textContent = "Connecting to game...";
   const view = document.createElement("div");
   view.className = "game-view";
-  root.replaceChildren(heading, view);
+  const back = document.createElement("button");
+  back.type = "button";
+  back.textContent = "Back to lobby";
+  const listeners = new AbortController();
+  back.addEventListener("click", () => navigate("lobby"), { signal: listeners.signal });
+  root.replaceChildren(heading, back, view);
   showStatus(status, "Connecting...");
-  function dispose(): void {
+  function stopRealtime(): void {
     if (disposed) return;
     disposed = true;
     mounted?.dispose();
     connection?.close();
   }
+  function dispose(): void {
+    stopRealtime();
+    listeners.abort();
+  }
   function fail(message: string): void {
-    dispose();
+    stopRealtime();
     showStatus(status, message, true);
   }
   function handleMessage(message: ServerEnvelope): void {
@@ -74,6 +84,13 @@ export function mountGame(
         mounted.handleSnapshot(message.payload, message.payload.moduleStateSchemaVersion);
       } else if (message.type === "server.event") {
         mounted?.handleEvents([message.payload]);
+      } else if (message.type === "server.lifecycle") {
+        const terminal = TerminalLifecycleSchema.safeParse(message.payload);
+        if (!terminal.success || terminal.data.resultId !== sessionId) {
+          throw new Error("Received an invalid saved-result notification.");
+        }
+        dispose();
+        navigate("results");
       }
     } catch (error) {
       fail(error instanceof Error ? error.message : "Unable to display game state.");

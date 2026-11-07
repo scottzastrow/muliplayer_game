@@ -72,7 +72,8 @@ export class SessionLifecycle {
     readonly lobby: LobbyRegistry,
     readonly themes: ThemeLoader,
     readonly publishSnapshot: SnapshotPublisher,
-    readonly reportError: (error: unknown) => void = () => {}
+    readonly reportError: (error: unknown) => void = () => {},
+    readonly publishResult?: (sessionId: string, tick: number) => void
   ) {}
 
   async start(sessionId: string): Promise<void> {
@@ -282,6 +283,7 @@ export class SessionLifecycle {
       throw new Error("Finished match result was already finalized or the match is no longer active.");
     }
     this.#release(active);
+    this.publishResult?.(active.id, tick);
   }
 
   #publish(active: ActiveSession, tick: number): void {

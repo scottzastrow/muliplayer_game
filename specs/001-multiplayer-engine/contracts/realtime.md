@@ -54,3 +54,11 @@ not accumulate indefinitely: the next snapshot/hello reconstructs current state.
 Snapshots include protocol and module state schema versions; an unsupported client
 must fail with a clear compatibility error before receiving malformed state.
 Module payloads are validated on both boundaries and scoped to the pinned module.
+
+On normal match completion, Core commits final standings and terminal state,
+releases the runner, then sends `server.lifecycle` with
+`{status:"finished",resultId:<session UUID>}` to that session's connected players.
+This is a saved-result notification, not client-authoritative scoring. The client
+closes gameplay controls and fetches `/api/v1/matches/:id/results` only after this
+notification; a preceding complete-phase snapshot alone does not imply persistence
+has finished. Result links remain reloadable without a live WebSocket or runner.

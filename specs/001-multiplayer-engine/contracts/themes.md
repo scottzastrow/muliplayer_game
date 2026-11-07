@@ -89,7 +89,17 @@ through the shared action envelope, at no more than 30 scheduled sends/second.
 Blur, hidden tabs, death and disposal clear controls; release stops firing.
 The host cancels frames/observers and the skin removes event listeners on disposal.
 Shapes need no assets; undeclared asset requests fail explicitly. Asset package
-loading and results/spectator views remain separate later tasks.
+loading and spectator views remain separate later tasks.
+
+The default package exports `createDefaultResultsSkin(result, reload)` as an
+isolated public skin factory for saved-result presentation through the same host.
+It displays saved Rank/Player/Points/Kills/Deaths order, highlights the current
+account, provides Reload saved result and invokes `host.navigate("lobby")` for
+Back to lobby. Core fetches and validates saved results and owns the stable
+`#results/<match UUID>` URL, including login/page-reload restoration and cancellation
+when leaving. The theme never writes results or sends gameplay input from this
+view. Missing/invalid results show an accessible error with retry and lobby
+controls; unfinished results explicitly say final scores are unavailable.
 
 Level population and NPC health use the frozen player roster and configured per-level
 growth formulas; every level is preflighted against runtime ceilings before play.

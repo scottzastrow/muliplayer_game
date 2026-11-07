@@ -3,8 +3,8 @@
 ## T023 - Dots and Squares browser view (2026-11-06)
 
 T022 was committed as `f0ce5b8` on `001-multiplayer-engine` before this slice.
-T023 uses the public theme skin factory and browser skin host; T024 results and
-back-to-lobby presentation have not been implemented.
+T023 used the public theme skin factory and browser skin host; T024 results and
+back-to-lobby presentation were not included in that slice.
 
 Executed on Windows with Node 24.11.0 and Chrome 156.0.8078.80:
 
@@ -65,3 +65,44 @@ background-rendering throttling disabled. Run `npm run test:browser`; override
 two separate visible browser windows and closes only its own contexts afterward.
 Use disposable accounts/data: it exercises real registration and creates a match.
 Keep remote debugging local and close that isolated browser after verification.
+
+## T024 - Saved standings and lobby return (2026-11-06)
+
+T023 was committed as `38f4437` (`feat: add playable Dots and Squares browser
+view`) before implementation. T024 adds authenticated saved-result retrieval,
+the post-persistence lifecycle notification and the default theme's results skin.
+T025 remains unstarted.
+
+`npm run check` and `npm run build` passed. The affected Vitest selection passed:
+7 files, 35 tests (`session-lifecycle`, `results`, `result-contract`, `protocol`,
+`default-skin`, `realtime`, and `accounts-lobby`). The normal session-start
+integration completed two levels, received the saved-result notification, reloaded
+identical saved standings, verified unauthenticated retrieval fails and confirmed
+the result remains exactly once with the session slot released. Contract tests
+cover missing/invalid scores, ordered unique ranks and honest unfinished results;
+storage tests preserve score/kills/deaths/normalized-username tie ordering.
+
+`npm run test:browser` passed in two visible Chrome 156.0.8078.80 windows on the
+same isolated local ports described above. After the existing movement/HUD checks,
+the test returned to the lobby, created a one-level solo match with one 1-HP NPC,
+started normally and fired through mouse controls. Completion automatically
+displayed saved final standings (100 points, one kill). Reload saved result and a
+full page refresh retained the same table and `#results/<UUID>` URL. A public-host
+results fixture verified all five table columns, preserved ranks, navigation and
+disposed button handlers. An unknown-result URL displayed the actual server error
+and supported retry and Back to lobby; a rejected game connection also retained
+working lobby navigation.
+
+Initial T024 checks intentionally failed for the missing lifecycle notification.
+Two implementation placements were corrected after TypeScript checks caught a
+nested transport method and a completion callback placed in shutdown rather than
+finalization. The first browser completion attempt aimed outside the resized
+Canvas; the harness now aims along the NPC direction inside the viewport. A later
+attempt ran while builds rewrote watched workspace outputs and lost its mounted
+Canvas; repeated attempts also consumed disposable session slots. Neither was
+counted as a pass. The final successful browser run used a freshly restarted
+in-memory test server after all builds completed.
+
+No production deployment, capacity exercise, human visual review or non-Chrome
+browser check was performed. The result page refresh was real browser execution;
+the results table fixture was synthetic and did not fabricate server standings.

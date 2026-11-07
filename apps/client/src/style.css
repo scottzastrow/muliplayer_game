@@ -14,3 +14,4 @@ th, td { padding: 0.5rem; text-align: left; }
 .game-world { height: max(240px, calc(100dvh - 260px)); width: 100%; overflow: hidden; }
 .game-world canvas:focus { outline: 3px solid #1688bf; outline-offset: -3px; }
 .game-controls { font-size: 0.9rem; }
+.results-view .game-world { height: auto; overflow: auto; }

@@ -10,6 +10,8 @@ import {
   type AuthContext
 } from "../auth/routes.js";
 import { LobbyRegistry } from "./registry.js";
+import { MatchResultSchema } from "@multiplayer-game/protocol";
+import { getMatchResult } from "../storage/results.js";
 
 export function registerLobbyRoutes(
   app: FastifyInstance,
@@ -19,6 +21,13 @@ export function registerLobbyRoutes(
   authContext: AuthContext,
   startSession: (sessionId: string) => Promise<void>
 ): void {
+  app.get<{ Params: { id: string } }>("/api/v1/matches/:id/results", async (request) => {
+    authenticateRequest(database, request);
+    const result = getMatchResult(database, parseId(request.params.id));
+    if (!result) throw new HttpError(404, "NOT_FOUND", "Saved match result not found.");
+    return { result: MatchResultSchema.parse(result) };
+  });
+
   app.get("/api/v1/sessions", async (request) => {
     const account = authenticateRequest(database, request);
     return { sessions: registry.list(account.id) };

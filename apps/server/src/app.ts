@@ -91,7 +91,8 @@ export function createApp(
       app.log.error(
         { errorType: error instanceof Error ? error.name : "UnknownError" },
         "Session lifecycle failed"
-      )
+      ),
+    (sessionId, tick) => realtime?.publishResult(sessionId, tick, "finished")
   );
   registerLobbyRoutes(app, database, config, lobby, auth, (sessionId) =>
     lifecycle.start(sessionId)
