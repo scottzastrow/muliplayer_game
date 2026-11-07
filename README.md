@@ -4,7 +4,7 @@ Browser-based multiplayer game engine POC targeting AWS Lightsail. Development u
 
 ## Current development baseline
 
-Spec Kit 1.3.2 is initialized with the Codex integration and Bash scripts. Game implementation has not started.
+Spec Kit 1.3.2 is configured for IntelliJ + GitHub Copilot with PowerShell helpers. Game implementation has not started.
 
 - [Project constitution](.specify/memory/constitution.md)
 - [Specification and editable POC assumptions](specs/001-multiplayer-engine/spec.md)
@@ -13,7 +13,7 @@ Spec Kit 1.3.2 is initialized with the Codex integration and Bash scripts. Game 
 - [Theme developer contract](specs/001-multiplayer-engine/contracts/themes.md)
 - [Planned quickstart and validation](specs/001-multiplayer-engine/quickstart.md)
 
-Open this checkout in Codex and use `$speckit-implement` to execute the task list, then `$speckit-converge` to assess remaining work. These are agent chat commands, not terminal commands. See AGENTS.md before edits. The current feature is `specs/001-multiplayer-engine`; if the checkout-local `.specify/feature.json` pointer is absent, the matching branch name allows the scripts to resolve it. Do not rerun init over project changes unnecessarily.
+Open this checkout in IntelliJ with Copilot Agent mode. Follow `.github/copilot-instructions.md` and the installed skills in `.github/skills/`. If exposed by your plugin, `/speckit-implement` executes the task list and `/speckit-converge` assesses remaining work; otherwise ask Copilot to read the matching SKILL.md and follow it. These are chat workflows, not terminal commands. See AGENTS.md before edits. The current feature is `specs/001-multiplayer-engine`; if the checkout-local `.specify/feature.json` pointer is absent, the matching branch name allows the scripts to resolve it. Do not rerun init over project changes unnecessarily.
 
 ## Repository ownership and configuration
 

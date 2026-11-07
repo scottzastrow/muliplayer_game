@@ -5,17 +5,19 @@ implemented by tasks, not commands verified against existing game code.
 
 ## Current Spec Kit use
 
-Install Python 3.11+, uv, Git, and a compatible Codex environment. This repository
-was initialized using Specify CLI 1.3.2 with Codex skills and Bash scripts. Pin the
+Install Python 3.11+, uv, Git, and IntelliJ with GitHub Copilot Agent mode. This repository
+uses Specify CLI 1.3.2 with Copilot skills and PowerShell helpers (Bash helpers remain available). Pin the
 same version when reproducing the setup:
 
 ```bash
 uv tool install specify-cli==1.3.2
 ```
 
-Clone the repository, check out `001-multiplayer-engine`, and open Codex at its root.
-The `.agents/skills/` directory supplies `$speckit-implement`, `$speckit-analyze` and
-`$speckit-converge`; these are agent chat invocations, not shell commands. Read the
+Clone the repository, check out `001-multiplayer-engine`, and open it in IntelliJ.
+The `.github/skills/` directory supplies the Spec Kit workflows. Read
+`.github/copilot-instructions.md` in Copilot Agent chat. If the plugin exposes them,
+use `/speckit-implement`, `/speckit-analyze` and `/speckit-converge`; otherwise ask it
+to read and follow the corresponding SKILL.md. These are chat workflows, not shell commands. Read the
 constitution/spec/plan/tasks and preserve explicit assumptions before implementing.
 
 ## Required application command interface (future implementation)

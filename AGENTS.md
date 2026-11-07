@@ -1,6 +1,8 @@
 # Multiplayer Game
 
-Use the installed Spec Kit workflow in `.agents/skills/`.
+Use the installed Copilot Spec Kit workflow in `.github/skills/`.
+Copilot entry instructions are in `.github/copilot-instructions.md`; those instructions
+reference these shared rules rather than defining another development policy.
 Read `.specify/memory/constitution.md`, then the feature selected in
 `.specify/feature.json` (when present) and its spec/plan/contracts/tasks before implementation.
 If the checkout-local pointer is absent, use the current feature path below.
