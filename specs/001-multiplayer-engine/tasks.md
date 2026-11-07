@@ -196,7 +196,7 @@ failure. No browser, deployment or load test was run; T038 was not started.
 - [X] T038 [US5] Implement bounded host/per-session metrics, timing histograms, event-loop delay, CPU/RSS, bytes/buffers/RTT/counts and operator-only metrics export in apps/server/src/runtime/metrics.ts and apps/client/src/admin-metrics.ts; no high-cardinality username labels.
 - [X] T039 [US5] Implement synthetic-account external protocol load harness with independent rooms/players/spectators and pursuing/firing behaviors in tools/load/index.ts and tools/load/workloads.json; support seeded runs, warm-up/steps/soak and machine-readable results.
 - [X] T040 [US5] Add systemd/Nginx HTTPS-WSS examples, env/data permissions, restart/readiness, safe SQLite backup/restore and co-hosted-service notes in deploy/game.service, deploy/nginx.conf and deploy/README.md; use EnvironmentFile=/etc/multiplayer-game/game.env, preserve existing HTTPS setup recorded in docs/hosting.md, and do not provision or alter live AWS without instruction/access.
-- [ ] T041 [US5] Verify restart reconciliation/account/results durability, failure isolation, slow consumers, queue limits and shutdown behavior in tests/integration/operations.test.ts; run a local load-harness smoke check and record conditions in docs/verification.md.
+- [X] T041 [US5] Verify restart reconciliation/account/results durability, failure isolation, slow consumers, queue limits and shutdown behavior in tests/integration/operations.test.ts; run a local load-harness smoke check and record conditions in docs/verification.md.
 - [ ] T042 [US5] On an authorized provisioned target, execute quickstart.md capacity matrix from a separate host and write revision/hardware/settings/metrics/failures/30-minute-soak results in docs/capacity-report.md; leave unchecked until real execution.
 
 T038 local evidence: the focused metrics/browser-view/realtime/lifecycle selection
@@ -235,6 +235,12 @@ precautions. Linux-native `systemd-analyze verify`, `nginx -t`, Certbot renewal,
 public HTTPS/authenticated WSS, deployed readiness/permissions and an isolated
 target restore drill remain pending operator deployment gates; no live host
 commands or changes were performed. T041 was not started.
+
+T041 local evidence: the operations integration test passed once (1 file,
+5 tests), including the actual CLI smoke against a disposable loopback server;
+`npm run check` passed once. Workload conditions, observed results and the
+separate live-host gates are recorded in docs/verification.md. T042 was not
+started.
 
 ## Phase 8: Polish and Cross-Cutting Concerns
 

@@ -408,3 +408,41 @@ SDK and default-theme builds. The affected test selection passed **6 files and
 revision admission, and active-match pinned resolution after disablement.
 `git diff --check` passed. No browser, deployment, load test or full-suite run
 was performed for T031. T032 was not started; changes remain uncommitted.
+
+## T041 - Local operations and load-harness smoke (2026-11-07)
+
+`npm exec -- vitest run tests/integration/operations.test.ts` passed once on
+Windows: **1 file, 5 tests**. `npm run check` also passed once. The operations
+tests verified:
+
+- Temporary on-disk SQLite reopen preserved an account and finished result.
+  Stale waiting/running metadata simulated a crash; reconciliation marked both
+  interrupted once, and integrity and foreign-key checks passed.
+- A synthetic module-step exception produced one failed result and released its
+  session slot while another runner continued producing snapshots.
+- A fake slow socket coalesced 2,000 snapshots within the 1 MiB sender limit,
+  dropping 1,999 obsolete snapshots and flushing tick 2,000. Reliable overflow
+  closed it with code 1013; a separate healthy sender still delivered its event.
+- A real loopback WebSocket and temporary SQLite database closed during shutdown;
+  reopening preserved the account and one interrupted result.
+
+The fifth test invoked the actual load CLI against a disposable server bound to
+`127.0.0.1` on an ephemeral port, using an in-memory database and test-only
+origin. The CLI ran locally, not from a separate load host. Its configured seed
+was 41, with one player and one spectator per room, zero registration interval,
+0.2-second warm-up, one room for 0.3 seconds, two rooms for 0.3 seconds, and a
+0.3-second soak. Each room used two NPCs per player, 100,000 base NPC health,
+one maximum level and otherwise default settings.
+
+The report completed with no reported workload or cleanup failures, two distinct
+rooms and five phases. The two-room step had four clients; both players produced
+movement and firing actions. Reported clients had positive snapshot and incoming
+byte counts, at least one RTT sample was present, and no active authentication
+sessions remained after cleanup. The report was temporary; exact throughput,
+latency values and resource measurements are not retained or claimed here.
+
+**Separate live-host gates:** no Lightsail commands or changes were made. Native
+systemd/Nginx validation, deployed readiness and permissions, public HTTPS and
+authenticated WSS, certificate renewal and an isolated restore drill remain
+operator deployment checks. The separate-host 1/3/5-room capacity matrix and
+30-minute soak remain T042; this short loopback smoke establishes no capacity.

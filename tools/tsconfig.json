@@ -16,6 +16,7 @@
     "../tests/admin-metrics.test.ts",
     "../tests/load-harness.test.ts",
     "../tests/integration/load-harness.test.ts",
-    "../tests/deployment.test.ts"
+    "../tests/deployment.test.ts",
+    "../tests/integration/operations.test.ts"
   ]
 }
