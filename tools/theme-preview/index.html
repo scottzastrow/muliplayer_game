@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Deterministic local Game Theme renderer preview" />
+    <title>Game Theme Preview</title>
+    <style>
+      :root { color-scheme: dark; font: 16px system-ui, sans-serif; background: #101824; color: #eef4fa; }
+      body { margin: 0; padding: 1rem; }
+      header { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; }
+      label { display: grid; gap: .35rem; }
+      select { min-width: 12rem; padding: .5rem; }
+      #preview-status { min-height: 1.5rem; color: #b7d7e8; }
+      #preview-host { min-height: 65vh; border: 1px solid #53677a; border-radius: .5rem; overflow: hidden; }
+      #preview-host .game-world { min-height: 50vh; }
+      #preview-host canvas { background: #101824; }
+      .preview-note { color: #a7b5c3; }
+      .fixture-hud { padding: .75rem; background: #263d50; border-bottom: 3px solid #e6a14a; }
+      .fixture-hud-heading { margin: 0; color: #ffcf82; }
+      .fixture-hud-points, .fixture-hud-health { white-space: pre-line; font-size: 1.2rem; font-weight: 700; }
+      .fixture-controls { display: flex; gap: .5rem; flex-wrap: wrap; padding: .5rem; }
+      .fixture-world-summary { padding: .4rem .8rem; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>Game Theme Preview</h1>
+        <p class="preview-note">Fixed local snapshots only. No account, server, or live match is used.</p>
+      </div>
+      <label for="preview-theme">Theme renderer
+        <select id="preview-theme">
+          <option value="default@1.0.0">Dots and Squares</option>
+          <option value="fixture@1.0.0">Fleeing Squares fixture</option>
+        </select>
+      </label>
+      <label for="preview-scenario">Preview scenario
+        <select id="preview-scenario">
+          <option value="life">Living player</option>
+          <option value="death">Death and respawn</option>
+          <option value="combat">Combat projectile</option>
+          <option value="pickup">Health pickup</option>
+          <option value="spectator">Spectator follow</option>
+          <option value="results">Saved results</option>
+        </select>
+      </label>
+    </header>
+    <p id="preview-status" role="status" aria-live="polite"></p>
+    <main id="preview-host"></main>
+    <script type="module" src="/theme-preview.ts"></script>
+  </body>
+</html>

@@ -25,6 +25,8 @@
     "operator": "node --env-file=.env --import tsx tools/operator.ts",
     "theme:code": "node --import tsx tools/install-theme-code.ts",
     "theme:validate": "node --env-file=.env --import tsx tools/validate-theme.ts",
+    "theme:build": "npm run build --workspace @multiplayer-game/protocol && npm run build --workspace @multiplayer-game/theme-sdk && npm run build --workspace @multiplayer-game/engine && npm run build --workspace @multiplayer-game/default-theme && npm run build --workspace @multiplayer-game/fixture-theme",
+    "theme:preview": "npm run theme:build && npm run preview:themes --workspace @multiplayer-game/client",
     "start": "node --env-file=.env apps/server/dist/main.js"
   },
   "devDependencies": {

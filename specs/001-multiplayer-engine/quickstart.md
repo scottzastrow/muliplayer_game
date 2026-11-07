@@ -1,7 +1,8 @@
 # Planned Quickstart and Validation
 
-Status: design only. Application commands below are the required interface to be
-implemented by tasks, not commands verified against existing game code.
+Application commands below are implemented unless explicitly identified as future
+workload or deployment interfaces. Their existence does not imply that an unexecuted
+browser, deployment, or capacity scenario has been verified.
 
 ## Current Spec Kit use
 
@@ -37,12 +38,12 @@ npm test
 npm run dev
 ```
 
-`dev` must start the server and Vite client together. Root scripts must also support
-`npm start` for built production assets/server, `npm run theme:preview -- --theme default`,
+`dev` must start the server and Vite client together. Root scripts also support
+`npm start` for built production assets/server and `npm run theme:preview`,
 `npm run theme:validate -- --package <path>`, and local operator bootstrap via
 `npm run operator:grant -- --username <existing-account>` (never a password argument).
-As implementation progresses, distinguish commands that now exist from future
-interfaces that remain unimplemented; task evidence records what actually ran.
+`theme:preview` launches deterministic local renderer fixtures; it is not a
+multiplayer server. Task evidence records checks actually run.
 `npm run theme:validate -- --package <archive.zip>` validates and installs an asset
 package that references code already registered in the server build. It never
 installs executable code from an uploaded archive.

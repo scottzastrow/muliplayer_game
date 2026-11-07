@@ -138,7 +138,7 @@ T029 was not started.
 - [X] T033 [US4] Implement streaming ZIP/manifest/asset validation and atomic content-addressed installation in apps/server/src/themes/packages.ts and tools/validate-theme.ts; enforce all byte/entry/pixel/path/type/hash limits from contracts/themes.md.
 - [X] T034 [US4] Implement operator-only upload/enable endpoints and UI in apps/server/src/themes/routes.ts and apps/client/src/admin-themes.ts; normal creators select enabled installed themes from lobby settings.
 - [X] T035 [US4] Create alternate enemy capability and replacement HUD fixture in themes/fixture/module/index.ts, themes/fixture/skin/index.ts and themes/fixture/theme.json without modifying core; verify multiple renderer instances dispose cleanly.
-- [ ] T036 [US4] Build theme preview with deterministic life/death/combat/pickup/spectator/results fixtures in tools/theme-preview.ts and document build/install/override ownership in docs/theme-development.md, including external themes repository layout, pinned SDK consumption, extension examples and owner handoff; expose root npm theme commands.
+- [X] T036 [US4] Build theme preview with deterministic life/death/combat/pickup/spectator/results fixtures in tools/theme-preview.ts and document build/install/override ownership in docs/theme-development.md, including external themes repository layout, pinned SDK consumption, extension examples and owner handoff; expose root npm theme commands.
 - [ ] T037 [US4] Verify SDK conformance, behavior/HUD replacement, pinned active versions, secret-free snapshots, malformed/incompatible/traversal/oversized/executable uploads and role checks in tests/contract/themes.test.ts and tests/integration/theme-install.test.ts; add an external-consumer build fixture in tests/contract/external-theme/ using only the public pinned SDK.
 
 T031 local evidence: `npm run check` passed, including workspace type-checks and
@@ -169,6 +169,13 @@ revision's public definition and client compatibility, fleeing enemy movement
 against default pursuit, isolated HUD/renderer instances with clean disposal,
 and Dots and Squares plus fixture sessions running concurrently. No browser,
 deployment or load test was run; T036 was not started.
+
+T036 local evidence: focused preview fixture tests passed (1 file, 2 tests),
+and `npm run check` passed. Snapshot fixtures passed the default view schema for
+living, death/respawn, combat, pickup and spectator cases; saved results passed
+the public result schema. The deterministic Vite renderer preview and theme
+development/consumer ownership guide are implemented. The browser preview itself
+was not launched; T037 was not started.
 
 ## Phase 7: User Story 5 - Operations and Capacity (Priority: P3)
 

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.ts",
+    "preview:themes": "vite --config theme-preview.vite.config.ts",
     "build": "vite build --config vite.config.ts",
     "check": "tsc --project tsconfig.json --noEmit"
   },
