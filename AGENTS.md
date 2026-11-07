@@ -17,3 +17,17 @@ If the checkout-local pointer is absent, use the current feature path below.
 - Do not commit credentials/runtime data or write the student's personal reflection for them.
 - This planning branch has no game implementation yet. Future run commands are
   contracts to implement, not currently verified commands.
+
+## Companion repository and environment
+
+Only this engine repository defines shared contracts and the future compiled SDK.
+The designer works in `scottzastrow/multiplayer-game-themes` and pins an engine
+revision/release. Contract gaps must be proposed to the engine owner, not resolved
+by copying and changing SDK declarations in the themes repo. Keep the default
+reference theme here and maintain an external-consumer conformance fixture.
+
+Load local `.env` through the application's startup scripts; commit `.env.example`
+only. Production uses systemd EnvironmentFile=/etc/multiplayer-game/game.env.
+No Windows persistent environment variables or production credentials are required
+for designer previews. Consult docs/hosting.md for reported infrastructure state;
+its setup success does not imply a deployed game or completed capacity test.

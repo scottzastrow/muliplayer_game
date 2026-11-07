@@ -15,6 +15,15 @@ Spec Kit 1.3.2 is initialized with the Codex integration and Bash scripts. Game 
 
 Open this checkout in Codex and use `$speckit-implement` to execute the task list, then `$speckit-converge` to assess remaining work. These are agent chat commands, not terminal commands. See AGENTS.md before edits. The current feature is `specs/001-multiplayer-engine`; if the checkout-local `.specify/feature.json` pointer is absent, the matching branch name allows the scripts to resolve it. Do not rerun init over project changes unnecessarily.
 
+## Repository ownership and configuration
+
+- Engine: https://github.com/scottzastrow/multiplayer-game-engine — core, server, SDK/contracts, default reference theme and owner-controlled releases.
+- Themes: https://github.com/scottzastrow/multiplayer-game-themes — designer-owned theme modules, skins and assets, with read-only version-pinned SDK consumption.
+- Theme collaborators do not need engine write access or Lightsail access. Repository separation supplies the permission boundary; AGENTS.md is guidance, not an access control.
+- Local configuration uses an ignored `.env` copied from `.env.example`; no Windows system environment variables required. Runtime loading must be implemented before these examples are considered runnable.
+- Production configuration will live in `/etc/multiplayer-game/game.env`, loaded by systemd. Never put production secrets in either repository or browser bundles.
+- Hosting baseline: [deployment record](docs/hosting.md). HTTPS placeholder is configured; game runtime is not deployed.
+
 ## Confirmed scope
 
 - Public registration and login with username and password; authenticated players can rejoin their existing active session. Store password hashes, never plaintext passwords.

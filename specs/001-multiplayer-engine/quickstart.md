@@ -21,7 +21,7 @@ constitution/spec/plan/tasks and preserve explicit assumptions before implementi
 ## Required application command interface (future implementation)
 
 Prerequisites: Node 24 LTS, npm, local writable disk, supported desktop browser.
-Create `.env` from the future `.env.example`. No live credentials are needed locally.
+Copy committed `.env.example` to ignored `.env`; startup scripts must load it automatically. No Windows system environment variables are required. No live credentials are needed locally.
 Expected environment: HOST=127.0.0.1, PORT=8082, DATABASE_PATH=./var/game.sqlite,
 PUBLIC_ORIGIN=http://localhost:5173, NODE_ENV=development. Development proxy forwards
 HTTP and WebSocket requests from Vite to the local server. Production uses one HTTPS origin.
@@ -84,4 +84,4 @@ from another machine. Use synthetic accounts, a known map seed and disposable da
 - Apply the provisional budgets in plan.md; stop/label failed runs on runaway queues,
   memory pressure or sustained deadline misses. Record failures as well as passes.
 
-No AWS provisioning, cost increase, host changes or production load tests have run.
+Dedicated Lightsail infrastructure and HTTPS placeholder were configured by the owner; see ../../docs/hosting.md. No game deployment or production load test has run.

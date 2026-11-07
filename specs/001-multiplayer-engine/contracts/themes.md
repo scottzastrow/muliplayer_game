@@ -67,3 +67,19 @@ sessions only; asset cleanup may remove only unreferenced revisions.
 - Developer guide maps hook ownership, package layout, build/install commands,
   compatibility, override examples, no-code asset upload versus trusted-code installation,
   and prohibited authority changes.
+
+## Cross-repository developer contract
+
+Canonical source: `scottzastrow/multiplayer-game-engine`. Consumer:
+`scottzastrow/multiplayer-game-themes`. Consumer `engine-contract.lock.json` records
+an immutable engine commit and contract paths; it is a planning pin until a compiled
+SDK/release exists. The owner must publish SDK types, runtime schemas, fixtures,
+reference module/skin and local preview tooling from this repository. Theme code
+must import the released SDK, not engine private source paths. Upgrading a pin is
+an explicit reviewed change with compatibility checks; do not track a moving branch
+as the compatibility definition. Local full-game verification may use an engine
+checkout read-only as a dependency; no deployment credentials are required.
+
+New hooks/schema changes require an engine-side proposal and a new version/pin.
+Theme releases contain source/build provenance and compatibility metadata; owner
+reviews and installs code. Designer repo collaboration grants no deployment access.

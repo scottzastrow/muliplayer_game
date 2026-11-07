@@ -96,6 +96,25 @@ Pre-research and post-design gates both pass by design; runtime evidence remains
 **Structure Decision**: Small npm workspace with explicit engine/theme boundaries;
 no external microservices or separate database host required for the POC.
 
+## Companion repository and configuration
+
+The engine repo owns `packages/theme-sdk`, `packages/protocol`, contracts and
+`themes/default`. The themes repo owns authored modules/skins/assets, never engine
+internals or production configuration. Publish a versioned distributable SDK from
+this repo (no third repository); until available, pin an immutable contract commit
+and explicitly block compile/preview claims. Verify one external consumer builds
+against the released SDK without importing private engine paths.
+
+Root local scripts must load `.env` with Node's env-file support or a single documented
+loader; Windows users must not need persistent system variables. Validate values in
+config.ts and fail with redacted diagnostics. Production systemd loads the separate
+`/etc/multiplayer-game/game.env`; only PUBLIC_ORIGIN may be exposed as intentional
+client configuration, not the whole process environment. No env file is needed in
+the themes repo unless later preview tooling needs optional nonsecret local settings.
+
+Existing hosting state and production environment layout are recorded in
+`docs/hosting.md`. It reports infrastructure only, not readiness of application scripts.
+
 ## Phase 0: Research Decisions
 
 See [research.md](research.md). Select local SQLite over hosted persistence for a

@@ -13,14 +13,14 @@ Every task has a checkbox, stable ID, story label where appropriate and exact pa
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 Initialize npm workspaces and lock compatible Node 24/TypeScript/Fastify/ws/Zod/better-sqlite3/Vite/Vitest versions in package.json, package-lock.json, apps/server/package.json, apps/client/package.json and packages/*/package.json; add build/check/test/dev/start scripts and .env.example per quickstart.md.
+- [ ] T001 Initialize npm workspaces and lock compatible Node 24/TypeScript/Fastify/ws/Zod/better-sqlite3/Vite/Vitest versions in package.json, package-lock.json, apps/server/package.json, apps/client/package.json and packages/*/package.json; add build/check/test/dev/start scripts that load ignored local .env without Windows system variables, and .env.example per quickstart.md.
 - [ ] T002 Configure shared strict compilation and browser/server builds in tsconfig.base.json, apps/server/tsconfig.json and apps/client/vite.config.ts; ensure one dev origin proxies HTTP and WebSockets.
 - [ ] T003 Configure focused checks and build validation in vitest.config.ts and .github/workflows/ci.yml; exclude runtime data and secrets using .gitignore.
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
 - [ ] T004 Define runtime-validated version-1 envelopes, errors, public serializers and settings in packages/protocol/src/index.ts and packages/protocol/src/settings.ts from contracts/; reject unknown/nonfinite fields and exclude secrets.
-- [ ] T005 Define engine/module/skin/capability interfaces in packages/theme-sdk/src/index.ts from contracts/themes.md, including isolated factories, scoped services, state schema compatibility and presentation host slots.
+- [ ] T005 Define engine/module/skin/capability interfaces in packages/theme-sdk/src/index.ts from contracts/themes.md, including isolated factories, scoped services, state schema compatibility and presentation host slots; publish the versioned SDK/types/runtime schemas from this repo for pinned external consumption, with no private-path imports.
 - [ ] T006 Implement injectable monotonic clock, seeded RNG and bounded SessionRunner in packages/engine/src/runner.ts; fixed 30 Hz steps, maximum three catch-up steps/turn, immutable snapshots, dispose and exception reporting.
 - [ ] T007 Implement SQLite migration runner and tables in apps/server/src/storage/migrations/001-initial.sql and apps/server/src/storage/database.ts; enforce data-model.md UNIQUE/FK constraints, WAL, busy timeout, short transactions and token/hash redaction.
 - [ ] T008 Implement typed configuration, safe error handling, structured request IDs, readiness and graceful startup/shutdown in apps/server/src/config.ts and apps/server/src/main.ts; reconcile stale active matches as Interrupted.
@@ -81,8 +81,8 @@ Checkpoint: US1+US2 is the first playable multiplayer slice, already using defau
 - [ ] T033 [US4] Implement streaming ZIP/manifest/asset validation and atomic content-addressed installation in apps/server/src/themes/packages.ts and tools/validate-theme.ts; enforce all byte/entry/pixel/path/type/hash limits from contracts/themes.md.
 - [ ] T034 [US4] Implement operator-only upload/enable endpoints and UI in apps/server/src/themes/routes.ts and apps/client/src/admin-themes.ts; normal creators select enabled installed themes from lobby settings.
 - [ ] T035 [US4] Create alternate enemy capability and replacement HUD fixture in themes/fixture/module/index.ts, themes/fixture/skin/index.ts and themes/fixture/theme.json without modifying core; verify multiple renderer instances dispose cleanly.
-- [ ] T036 [US4] Build theme preview with deterministic life/death/combat/pickup/spectator/results fixtures in tools/theme-preview.ts and document build/install/override ownership in docs/theme-development.md; expose root npm theme commands.
-- [ ] T037 [US4] Verify SDK conformance, behavior/HUD replacement, pinned active versions, secret-free snapshots, malformed/incompatible/traversal/oversized/executable uploads and role checks in tests/contract/themes.test.ts and tests/integration/theme-install.test.ts.
+- [ ] T036 [US4] Build theme preview with deterministic life/death/combat/pickup/spectator/results fixtures in tools/theme-preview.ts and document build/install/override ownership in docs/theme-development.md, including external themes repository layout, pinned SDK consumption, extension examples and owner handoff; expose root npm theme commands.
+- [ ] T037 [US4] Verify SDK conformance, behavior/HUD replacement, pinned active versions, secret-free snapshots, malformed/incompatible/traversal/oversized/executable uploads and role checks in tests/contract/themes.test.ts and tests/integration/theme-install.test.ts; add an external-consumer build fixture in tests/contract/external-theme/ using only the public pinned SDK.
 
 ## Phase 7: User Story 5 - Operations and Capacity (Priority: P3)
 
@@ -91,7 +91,7 @@ Checkpoint: US1+US2 is the first playable multiplayer slice, already using defau
 
 - [ ] T038 [US5] Implement bounded host/per-session metrics, timing histograms, event-loop delay, CPU/RSS, bytes/buffers/RTT/counts and operator-only metrics export in apps/server/src/runtime/metrics.ts and apps/client/src/admin-metrics.ts; no high-cardinality username labels.
 - [ ] T039 [US5] Implement synthetic-account external protocol load harness with independent rooms/players/spectators and pursuing/firing behaviors in tools/load/index.ts and tools/load/workloads.json; support seeded runs, warm-up/steps/soak and machine-readable results.
-- [ ] T040 [US5] Add systemd/Nginx HTTPS-WSS examples, env/data permissions, restart/readiness, safe SQLite backup/restore and co-hosted-service notes in deploy/game.service, deploy/nginx.conf and deploy/README.md; do not provision or alter live AWS without instruction/access.
+- [ ] T040 [US5] Add systemd/Nginx HTTPS-WSS examples, env/data permissions, restart/readiness, safe SQLite backup/restore and co-hosted-service notes in deploy/game.service, deploy/nginx.conf and deploy/README.md; use EnvironmentFile=/etc/multiplayer-game/game.env, preserve existing HTTPS setup recorded in docs/hosting.md, and do not provision or alter live AWS without instruction/access.
 - [ ] T041 [US5] Verify restart reconciliation/account/results durability, failure isolation, slow consumers, queue limits and shutdown behavior in tests/integration/operations.test.ts; run a local load-harness smoke check and record conditions in docs/verification.md.
 - [ ] T042 [US5] On an authorized provisioned target, execute quickstart.md capacity matrix from a separate host and write revision/hardware/settings/metrics/failures/30-minute-soak results in docs/capacity-report.md; leave unchecked until real execution.
 

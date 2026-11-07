@@ -136,6 +136,9 @@ players, enemies, and spectators; produce a reproducible measured report.
 - **FR-017**: Operator metrics and real protocol load clients MUST support reproducible capacity measurements including spectators and pursuing enemies, without a claimed unmeasured capacity.
 - **FR-018**: Workloads, message/asset sizes, pending network data, NPC/projectile totals, and navigation work MUST have documented configurable ceilings with visible limit behavior.
 
+- **FR-019**: The engine repository MUST own shared contracts, the SDK and default reference theme. The companion themes repository MUST consume a pinned compatible revision without engine/server write access. Developer instructions MUST describe extensions, validation, local preview, package handoff and compatibility-change requests.
+- **FR-020**: Local startup MUST load an ignored `.env` copied from committed `.env.example` without requiring Windows system variables. Production MUST load a separate operator-managed environment file; no secrets may enter client bundles or theme packages.
+
 ### Key Entities
 
 - **Account**: unique normalized username, password credential, operator role.
@@ -192,3 +195,12 @@ explicit conversation decisions are user-confirmed.
 - Creator theme selection locks at start. Administrator installs vetted executable
   modules out of band; administrator package upload validates/registers assets and
   references only already installed module versions. Regular users select installed themes.
+
+## Confirmed follow-up decisions — 2026-11-06
+
+Engine repository is named `scottzastrow/multiplayer-game-engine`; designer repository
+is `scottzastrow/multiplayer-game-themes`. There remain exactly two repositories;
+the SDK/default example stay in the engine repo. Public Game Theme vocabulary and
+session-wide theme selection are unchanged. Local configuration uses `.env`; production
+uses `/etc/multiplayer-game/game.env`. Dedicated Lightsail host and HTTPS domain are
+reported configured; see ../../docs/hosting.md for evidence and remaining work.
