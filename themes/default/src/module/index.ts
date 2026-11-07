@@ -9,6 +9,7 @@ import { z } from "zod";
 import { DefaultPlayerActionSchema, type DefaultPlayerAction } from "./actions.js";
 import type { DefaultEntity } from "./types.js";
 import { DefaultEntitySimulator } from "./entities.js";
+import { DefaultCombatSimulator } from "./combat.js";
 import { generateMap } from "./maps.js";
 
 const DefaultSettingsSchema = z.record(z.string(), JsonValueSchema);
@@ -72,6 +73,7 @@ export const defaultModuleFactory: GameModuleFactory<
     let acceptedInputs = 0;
     let disposed = false;
     const simulator = new DefaultEntitySimulator(_context);
+    const combat = new DefaultCombatSimulator(_context);
     return {
       stateSchemaVersion: defaultModuleMetadata.stateSchemaVersion,
       get state() {
@@ -92,11 +94,15 @@ export const defaultModuleFactory: GameModuleFactory<
           throw new TypeError("Input does not match the default theme action schema.");
         }
         simulator.applyInput(accountId, input);
+        if (input.type === "combat") {
+          combat.applyInput(accountId, { x: input.aimX, y: input.aimY }, input.fire);
+        }
         acceptedInputs += 1;
       },
       step(dtSeconds: number, tick: number): void {
         assertActive();
         simulator.step(dtSeconds, tick);
+        combat.step(tick);
       },
       initialize(): void {
         assertActive();
@@ -116,6 +122,7 @@ export const defaultModuleFactory: GameModuleFactory<
         return { acceptedInputs };
       },
       dispose(): void {
+        combat.dispose();
         simulator.dispose();
         disposed = true;
       }
@@ -136,6 +143,8 @@ export {
   normalizeMovement
 } from "./entities.js";
 export type { DefaultContactAttackCapability } from "./entities.js";
+export { DefaultCombatSimulator } from "./combat.js";
+export { DefaultPickupSimulator } from "./pickups.js";
 
 function serializeEntities(entities: readonly Readonly<DefaultEntity>[]): JsonValue[] {
   return entities.map((entity) => ({

@@ -5,6 +5,7 @@ import {
   type MapDefinition,
   type MapSpawn
 } from "@multiplayer-game/theme-sdk";
+import { PICKUP_RADIUS } from "./tuning.js";
 
 export const DEFAULT_MAP_WIDTH = 2_048;
 export const DEFAULT_MAP_HEIGHT = 2_048;
@@ -259,7 +260,30 @@ function createDefaultSpawns(): MapSpawn[] {
     { id: "npc-northeast", kind: "npc" as const, position: { x: 1_520, y: 528 }, radius: 8 },
     { id: "npc-southeast", kind: "npc" as const, position: { x: 1_264, y: 1_520 }, radius: 8 }
   ];
-  return [...players, ...npcs];
+  const pickups = [
+    {
+      id: "pickup-health",
+      kind: "pickup" as const,
+      pickupType: "health" as const,
+      position: { x: 784, y: 1_008 },
+      radius: PICKUP_RADIUS
+    },
+    {
+      id: "pickup-rapid-fire",
+      kind: "pickup" as const,
+      pickupType: "rapid-fire" as const,
+      position: { x: 1_264, y: 1_008 },
+      radius: PICKUP_RADIUS
+    },
+    {
+      id: "pickup-spread",
+      kind: "pickup" as const,
+      pickupType: "spread" as const,
+      position: { x: 784, y: 1_264 },
+      radius: PICKUP_RADIUS
+    }
+  ];
+  return [...players, ...npcs, ...pickups];
 }
 
 function createSeededRandom(seed: number): () => number {

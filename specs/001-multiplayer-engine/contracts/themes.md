@@ -36,6 +36,8 @@ Objects have stable `id` and `typeId`, world `position`, and optional string `ta
 and JSON `properties`. Collision entries reference an object ID and define a
 rectangle centered on that object's position. Spawn entries have stable IDs, a
 `player`, `npc`, or `pickup` kind, a cell-centered position and a clearance radius.
+Pickup spawns must identify `health`, `rapid-fire`, or `spread`; other spawn kinds
+cannot declare a pickup effect.
 Dimensions are multiples of the 32-unit navigation cell and no larger than 2048 by
 2048. The theme's shared loader additionally checks collision bounds, spawn
 walkability and connectivity; authored documents and generated documents must both
@@ -48,8 +50,10 @@ Navigation requests return opaque IDs and expose pending/completed path results;
 implementations enforce per-tick search/node budgets and bounded outstanding work.
 Modules must normalize player movement, query nearby targets rather than compare every
 NPC against every entity, and cap path requests per simulation step. Default-theme
-contact damage is a typed NPC capability with a one-second per-player cooldown;
-player-fired weapons, projectiles and pickups belong to later gameplay tasks.
+contact damage is a typed NPC capability with a one-second per-player cooldown.
+The default module authoritatively fires bounded-lifetime projectiles, damages NPCs
+without friendly fire, serializes single-claim health and weapon pickups, and tracks
+player score, kills, deaths and expiring powerup effects.
 
 Realtime input uses a shared versioned envelope with an opaque module-defined JSON
 `action`; the protocol does not require movement, aim, fire, or any other gameplay

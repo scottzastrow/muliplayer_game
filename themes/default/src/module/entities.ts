@@ -11,6 +11,7 @@ import {
   NPC_REPATH_INTERVAL_TICKS,
   NPC_SPEED,
   PLAYER_HEALTH,
+  MAX_PICKUPS_PER_SESSION,
   PLAYER_RADIUS,
   PLAYER_SPEED,
   MAX_NPC_PATH_REQUESTS_PER_TICK,
@@ -53,6 +54,7 @@ export class DefaultEntitySimulator {
   readonly #npcNavigation = new Map<string, NpcNavigationState>();
   readonly #lastContactAttackTick = new Map<string, number>();
   readonly #playerIds = new Map<string, string>();
+  readonly #pickupIds = new Set<string>();
   #initialized = false;
   #disposed = false;
 
@@ -74,7 +76,10 @@ export class DefaultEntitySimulator {
       const state: DefaultPlayerState = {
         kind: "player",
         accountId: member.accountId,
-        health: PLAYER_HEALTH
+        health: PLAYER_HEALTH,
+        points: 0,
+        kills: 0,
+        deaths: 0
       };
       this.context.entities.add({
         id,
@@ -91,6 +96,7 @@ export class DefaultEntitySimulator {
       const id = `npc:${spawn.id}`;
       const state: DefaultNpcState = {
         kind: "npc",
+        health: 100,
         attackCapability: defaultContactAttackCapability
       };
       this.context.entities.add({
@@ -101,6 +107,26 @@ export class DefaultEntitySimulator {
         state
       });
       this.#npcNavigation.set(id, { nextPathPoint: 0, lastRequestTick: -Infinity });
+    }
+    const pickupSpawns = map.definition.spawns.filter((candidate) => candidate.kind === "pickup");
+    if (pickupSpawns.length > MAX_PICKUPS_PER_SESSION) {
+      this.context.metrics.increment("default.pickup.rejected_cap");
+      throw new RangeError("Map exceeds the supported pickup limit.");
+    }
+    for (const spawn of pickupSpawns) {
+      const pickupType = spawn.pickupType;
+      if (!pickupType) {
+        throw new TypeError(`Pickup spawn ${spawn.id} has no pickup type.`);
+      }
+      const pickupId = `pickup:${spawn.id}`;
+      this.context.entities.add({
+        id: pickupId,
+        typeId: `pickup.${pickupType}`,
+        position: spawn.position,
+        radius: spawn.radius,
+        state: { kind: "pickup", pickupType }
+      });
+      this.#pickupIds.add(pickupId);
     }
     this.#initialized = true;
   }
@@ -139,9 +165,13 @@ export class DefaultEntitySimulator {
     for (const id of this.#npcNavigation.keys()) {
       this.context.entities.remove(id);
     }
+    for (const id of this.#pickupIds) {
+      this.context.entities.remove(id);
+    }
     this.#movementByAccount.clear();
     this.#playerIds.clear();
     this.#npcNavigation.clear();
+    this.#pickupIds.clear();
     this.#lastContactAttackTick.clear();
     this.#disposed = true;
   }
@@ -164,6 +194,11 @@ export class DefaultEntitySimulator {
 
   #pursuePlayers(dtSeconds: number, tick: number): void {
     let pathRequests = 0;
+    for (const id of this.#npcNavigation.keys()) {
+      if (this.context.entities.get(id)?.state.kind !== "npc") {
+        this.#npcNavigation.delete(id);
+      }
+    }
     const npcs = this.context.entities.values().filter(
       (entity): entity is DefaultEntity =>
         entity.state.kind === "npc" && entity.typeId === "npc"

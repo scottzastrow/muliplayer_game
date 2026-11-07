@@ -32,21 +32,36 @@ export {
 } from "./module/index.js";
 export {
   DefaultEntitySimulator,
+  DefaultCombatSimulator,
   defaultContactAttackCapability,
   normalizeMovement
 } from "./module/index.js";
+export { DefaultPickupSimulator } from "./module/index.js";
 export type { DefaultContactAttackCapability } from "./module/index.js";
 export {
   MAX_ATTRACTION_QUERY_CELLS,
+  HEALTH_PICKUP_AMOUNT,
+  MAX_PICKUPS_PER_SESSION,
+  MAX_PLAYER_HEALTH,
   MAX_NPC_PATH_REQUESTS_PER_TICK,
   MAX_PENDING_NPC_PATHS,
+  MAX_PROJECTILES_PER_SESSION,
   NPC_ATTRACTION_RADIUS,
   NPC_CONTACT_COOLDOWN_TICKS,
   NPC_CONTACT_DAMAGE,
   NPC_REPATH_INTERVAL_TICKS,
   NPC_SPEED,
+  PLAYER_BULLET_DAMAGE,
+  PLAYER_FIRE_RATE_PER_SECOND,
   PLAYER_HEALTH,
+  PLAYER_RAPID_FIRE_RATE_PER_SECOND,
   PLAYER_RADIUS,
-  PLAYER_SPEED
+  PLAYER_SHOT_SPEED,
+  PLAYER_SPEED,
+  PICKUP_RADIUS,
+  POWERUP_DURATION_TICKS,
+  PROJECTILE_LIFETIME_TICKS,
+  PROJECTILE_RADIUS,
+  SPREAD_ANGLE_RADIANS
 } from "./module/tuning.js";
 export type { DefaultEntity } from "./module/types.js";

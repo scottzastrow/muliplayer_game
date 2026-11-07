@@ -43,10 +43,27 @@ export const MapSpawnSchema = z
   .object({
     id: IdentifierSchema,
     kind: z.enum(["player", "npc", "pickup"]),
+    pickupType: z.enum(["health", "rapid-fire", "spread"]).optional(),
     position: PositionSchema,
     radius: z.number().finite().min(0).max(MAP_CELL_SIZE / 2)
   })
-  .strict();
+  .strict()
+  .superRefine((spawn, context) => {
+    if (spawn.kind === "pickup" && !spawn.pickupType) {
+      context.addIssue({
+        code: "custom",
+        path: ["pickupType"],
+        message: "Pickup spawns must declare an effect type."
+      });
+    }
+    if (spawn.kind !== "pickup" && spawn.pickupType) {
+      context.addIssue({
+        code: "custom",
+        path: ["pickupType"],
+        message: "Only pickup spawns may declare a pickup effect type."
+      });
+    }
+  });
 
 export const MapDefinitionSchema = z
   .object({

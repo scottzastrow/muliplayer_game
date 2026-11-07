@@ -7,6 +7,8 @@ export {
   type DefaultModuleState,
   type DefaultPlayerAction
 } from "../src/module/index.js";
+export { DefaultCombatSimulator } from "../src/module/combat.js";
+export { DefaultPickupSimulator } from "../src/module/pickups.js";
 export {
   DefaultEntitySimulator,
   defaultContactAttackCapability,
