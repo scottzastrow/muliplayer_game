@@ -85,6 +85,7 @@ const probe = `(() => {
       this.addEventListener('message', event => {
         const message = JSON.parse(event.data);
         if (message.type === 'server.snapshot') window.__probe.snapshot = message.payload;
+        if (message.type === 'server.spectate.target') window.__probe.target = message.payload;
       });
     }
     send(data) {
@@ -233,6 +234,12 @@ try {
   await signIn(alice, creator, password);
   await signIn(bob, `ViewB_${suffix}`, password);
   await signIn(observer, `Watch_${suffix}`, password);
+  if (process.argv.includes("--reconnect")) {
+    const { verifyReconnect } = await import("./reconnect.mjs");
+    await verifyReconnect({ alice, bob, observer, creator, bobName: `ViewB_${suffix}`,
+      cdp, evaluate, waitFor, click, clickSessionButton, state, own, move, shootUntil, delay,
+      browser: version.Browser });
+  } else {
   await evaluate(alice, `document.querySelector('[name=setting-initialNpcsPerPlayer]').value = '1';
     document.querySelector('[name=setting-baseNpcHealth]').value = '100000';
     document.querySelector('[name=setting-maxLevels]').value = '1'`);
@@ -247,7 +254,7 @@ try {
   await click(alice, "Start session");
   await waitFor(alice, "window.__probe.snapshot !== null");
   await click(bob, "Refresh sessions");
-  await clickSessionButton(bob, creator, "Play");
+  await clickSessionButton(bob, creator, "Rejoin");
   await waitFor(bob, "window.__probe.snapshot !== null");
   await delay(200);
   const startA = await state(alice);
@@ -621,6 +628,7 @@ try {
     twoPlayerTwoLevelCompletion: true, sharedStandingsAfterBothRefreshes: true,
     fullCapacitySlotRelease: true, matchId, finalStandings: tableRows
   }, null, 2));
+  }
 } finally {
   for (const browserContextId of contexts) {
     try {

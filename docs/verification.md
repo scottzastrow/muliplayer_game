@@ -358,5 +358,35 @@ Intermediate checks exposed an unreachable old running-leave branch, stale built
 module support during concurrent build/tests, spectator leave incorrectly routed
 as player expiry, initial-spawn drift, and test-fixture/nesting mistakes. These were
 corrected; final builds and tests ran sequentially to avoid stale package consumers.
-No T029 browser scenario, full-suite/load test or deployment is claimed. T030
-remains unstarted; T029 changes are left uncommitted and no milestone push was made.
+At the T029 handoff, no browser scenario, full-suite/load test or deployment had
+been claimed. T029 remained uncommitted at that point; no milestone push was made.
+
+## T030 - Reconnect and three-profile verification (2026-11-07)
+
+Added `tests/browser/reconnect.mjs`, loaded by the existing
+`npm run test:browser -- --reconnect` branch. The real Chrome scenario created a
+match for Alice and Bob, earned a score, and had an observer follow Alice. After
+Alice's page disconnected, the observer received target-unavailable and switched
+to Bob. Alice used the lobby Rejoin action and resumed with the same account,
+score and single player record. A second authenticated WebSocket replaced Alice's
+current socket; its snapshot retained unique participant identities, with two
+players and one spectator in the session summary.
+
+Executed on Windows with Node 24.11.0, npm 11.6.1 and Chrome 156.0.8078.80. The
+test used an isolated in-memory server at `127.0.0.1:8082`, Vite at
+`127.0.0.1:5173`, a disposable Chrome profile with loopback debugging at
+`127.0.0.1:9223`, and three synthetic accounts. `npm run build` passed, with
+the existing non-fatal Zod/Rollup annotation warnings. The targeted Chrome
+command `npm run test:browser -- --reconnect` passed once; its completed steps
+are printed with the `[reconnect]` prefix. No live death/respawn browser
+observation, deployment or load test is claimed.
+
+`npm test` was run once after the browser pass: **21/22 files and 107/108 tests
+passed**. The reconnect, default-respawn/death-view, spectator and remaining
+realtime integration tests passed. The one failure was
+`tests/integration/realtime.test.ts > realtime transport > sends WebSocket
+heartbeats and closes after two missing pong responses`, which received
+`Unexpected server response: 403`; it was not rerun. The detailed reconnect
+coverage remains in the existing reconnect, default-respawn, realtime,
+spectators and spectator-view test files rather than duplicating those tests in
+a new integration file.

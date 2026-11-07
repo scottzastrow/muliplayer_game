@@ -101,7 +101,7 @@ Checkpoint: US1+US2 is the first playable multiplayer slice, already using defau
 - [X] T027 [US3] Implement target-derived camera/HUD/death snapshots and target-unavailable events in apps/server/src/transport/spectator-view.ts; no spectator control input and no cross-room target access.
 - [X] T028 [US3] Implement target selection, switching, countdown, Back to Players/Back to Lobby and standings navigation in apps/client/src/spectate.ts using SkinHost extension slots.
 - [X] T029 [US3] Implement account-bound 60-second reservations, latest-connection replacement, stale-close guards, continued death deadlines, explicit leave forfeiture and empty-running-room abandonment in apps/server/src/lobby/reconnect.ts.
-- [ ] T030 [US3] Verify reconnect expiry, preserved points/deadlines, duplicate sockets, spectator counts/targets/death view and empty-room cleanup in tests/integration/spectate-reconnect.test.ts; record three-profile scenario in docs/verification.md.
+- [X] T030 [US3] Verify reconnect expiry, preserved points/deadlines, duplicate sockets, spectator counts/targets/death view and empty-room cleanup using tests/reconnect.test.ts, tests/default-respawn.test.ts, tests/integration/realtime.test.ts, tests/integration/spectators.test.ts and tests/spectator-view.test.ts; add the three-profile Chrome flow in tests/browser/reconnect.mjs and record evidence in docs/verification.md.
 
 T026 local evidence: affected checks passed (5 files, 25 tests) and workspace
 type-check passed. Admission races, zero capacity, repeated admission/leave,
