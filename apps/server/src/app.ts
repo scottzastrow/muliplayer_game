@@ -6,6 +6,7 @@ import type { SqliteDatabase } from "./storage/database.js";
 import { registerAuthRoutes } from "./auth/routes.js";
 import { registerLobbyRoutes } from "./lobby/routes.js";
 import { LobbyRegistry } from "./lobby/registry.js";
+import { RealtimeTransport, type RealtimeOptions } from "./transport/socket.js";
 
 export interface ReadinessState {
   ready: boolean;
@@ -14,7 +15,8 @@ export interface ReadinessState {
 export function createApp(
   config: AppConfig,
   database: SqliteDatabase,
-  readiness: ReadinessState = { ready: false }
+  readiness: ReadinessState = { ready: false },
+  realtimeOptions: RealtimeOptions = {}
 ){
   const app = Fastify({
     genReqId: () => randomUUID(),
@@ -29,11 +31,6 @@ export function createApp(
         censor: "[REDACTED]"
       }
     }
-  });
-
-  app.addHook("onClose", async () => {
-    readiness.ready = false;
-    database.close();
   });
 
   app.addHook("onRequest", async (request, reply) => {
@@ -81,6 +78,14 @@ export function createApp(
   const lobby = new LobbyRegistry(database);
   const auth = registerAuthRoutes(app, database, config);
   registerLobbyRoutes(app, database, config, lobby, auth);
+  const realtime = new RealtimeTransport(app.server, database, config, lobby, realtimeOptions);
+  app.addHook("preClose", async () => {
+    realtime.close();
+  });
+  app.addHook("onClose", async () => {
+    readiness.ready = false;
+    database.close();
+  });
 
   return app;
 }

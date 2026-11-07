@@ -181,6 +181,19 @@ export class LobbyRegistry {
     return readSettings(this.database, sessionId);
   }
 
+  hasPlayerMembership(sessionId: string, accountId: string): boolean {
+    return Boolean(
+      this.database
+        .prepare(
+          `SELECT 1 FROM match_participants p
+           JOIN matches m ON m.id = p.match_id
+           WHERE p.match_id = ? AND p.account_id = ?
+             AND m.state IN ('waiting', 'running')`
+        )
+        .get(sessionId, accountId)
+    );
+  }
+
   join(account: AuthenticatedAccount, sessionId: string): PublicSessionSummary {
     return this.database.transaction(() => {
       const row = this.#readSession(sessionId, account.id);

@@ -46,7 +46,7 @@ Checkpoint: US1 independently demonstrates account and session lifecycle; it is 
 **Goal**: Deliver real two-player combat through generated finite levels.
 **Independent test**: Two browsers move, meet, fight, die, respawn and finish two levels.
 
-- [ ] T015 [US2] Implement authenticated/origin-checked WebSocket upgrade, membership routing, input sequence/rate validation, heartbeats, reconnectable errors and bounded/coalesced sends in apps/server/src/transport/socket.ts and apps/client/src/connection.ts from contracts/realtime.md.
+- [X] T015 [US2] Implement authenticated/origin-checked WebSocket upgrade, membership routing, input sequence/rate validation, heartbeats, reconnectable errors and bounded/coalesced sends in apps/server/src/transport/socket.ts and apps/client/src/connection.ts from contracts/realtime.md.
 - [ ] T016 [US2] Implement scoped entity store, spatial grid, collision geometry and bounded staggered navigation in packages/engine/src/world.ts and packages/engine/src/navigation.ts; no cross-room mutable singleton or all-pairs NPC loop.
 - [ ] T017 [US2] Register the default factory/renderer through public theme interfaces in themes/default/theme.json, themes/default/module/index.ts and apps/server/src/themes/builtins.ts; do not bypass SDK for default.
 - [ ] T018 [US2] Implement seeded connected-map generation, obstacles, legal placement and bounded fallback in themes/default/module/maps.ts; 2048×2048 world and 32-unit cells per contracts/settings.md.
