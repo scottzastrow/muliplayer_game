@@ -50,7 +50,7 @@ is a read-only request and cannot finalize the match again.
 Session summary: id, name, creator display name, status, level/maxLevels,
 playerCount/maxPlayers, spectatorCount/maxSpectators, theme name/revision, settingsRevision,
 canJoin/canSpectate/canRejoin/canPlay for this account. `canPlay` is true only for
-an existing participant in a running session; it opens the browser view and does
+an admitted, unexpired participant in a running session; it opens the browser view and does
 not perform Join or grant reconnect admission. Counts and direct actions share one
 authoritative registry. The server generates `name` as the selected theme's display
 name, followed by ` — ` and the authenticated creator's username. The display name is
@@ -100,3 +100,14 @@ Proposed throttles: login 10 attempts/minute per IP and per normalized username,
 register 5/minute per IP, authenticated mutations 60/minute/account. Bound throttle
 storage and expire entries. Behind Nginx trust only the configured local proxy, not
 arbitrary forwarded headers. Auth request bodies max 4 KiB; other JSON max 16 KiB.
+
+### Player reconnect (T029)
+
+T029 implements Rejoin for a frozen running-match participant authenticated with
+the account's current login. It returns `{session}`; the subsequent WebSocket
+hello/snapshot resumes module state. Disconnect reserves participation for exactly
+60 seconds; repeated Rejoin requests do not extend that deadline. Invalid bodies
+return 400, missing authentication 401, and absent/expired/forfeited reservations
+409 (`REJOIN_EXPIRED`). Leave forfeits running participation immediately, but
+retains the frozen result roster and difficulty budget. Waiting-room leave still
+removes membership; spectator leave only releases its separate spectator slot.

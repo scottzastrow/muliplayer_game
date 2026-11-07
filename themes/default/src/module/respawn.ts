@@ -16,6 +16,9 @@ interface PendingRespawn {
 export class DefaultRespawnSimulator {
   readonly #players = new Map<string, PlayerEntity>();
   readonly #pending = new Map<string, PendingRespawn>();
+  readonly #disconnected = new Set<string>();
+  readonly #expired = new Set<string>();
+  readonly #returning = new Set<string>();
   readonly #delayTicks: number;
 
   constructor(
@@ -67,29 +70,53 @@ export class DefaultRespawnSimulator {
   }
 
   respawnEligible(tick: number): void {
-    for (const [accountId, pending] of this.#pending) {
-      if (tick < pending.respawnAtTick) continue;
+    const candidates = new Set([...this.#pending.keys(), ...this.#returning]);
+    for (const accountId of candidates) {
+      const pending = this.#pending.get(accountId);
+      if (this.#disconnected.has(accountId) || this.#expired.has(accountId) ||
+        (pending && tick < pending.respawnAtTick)) continue;
       const player = this.#players.get(accountId)!;
-      const position = this.#safePosition(player.radius);
+      const position = this.#safePosition(player.radius, pending ? undefined : player.position);
       if (!position) {
-        pending.blocked = true;
+        if (pending) pending.blocked = true;
         this.context.metrics.increment("default.respawn.blocked");
         continue;
       }
       const returned: PlayerEntity = {
         ...player,
         position,
-        state: { ...player.state, health: PLAYER_HEALTH }
+        state: { ...player.state, health: pending ? PLAYER_HEALTH : player.state.health }
       };
       this.resetInput(accountId);
       this.context.entities.add(returned);
       this.#players.set(accountId, returned);
       this.#pending.delete(accountId);
+      this.#returning.delete(accountId);
     }
   }
 
   isDefeated(accountId: string): boolean {
-    return this.#pending.has(accountId);
+    return this.#pending.has(accountId) || this.#disconnected.has(accountId) ||
+      this.#expired.has(accountId) || this.#returning.has(accountId);
+  }
+
+  setPresence(accountId: string, presence: "connected" | "disconnected" | "expired", tick: number): void {
+    const player = this.#players.get(accountId);
+    if (!player) throw new RangeError("Presence account is not in the frozen roster.");
+    if (presence === "connected") {
+      if (this.#expired.has(accountId)) throw new Error("Expired participation cannot be restored.");
+      if (!this.#disconnected.delete(accountId)) return;
+      this.#returning.add(accountId);
+      this.respawnEligible(tick);
+      return;
+    }
+    this.removeDefeated(tick);
+    const live = this.context.entities.get(player.id);
+    if (live?.state.kind === "player") this.#players.set(accountId, { ...live, state: live.state });
+    this.context.entities.remove(player.id);
+    this.resetInput(accountId);
+    this.#disconnected.add(accountId);
+    if (presence === "expired") this.#expired.add(accountId);
   }
 
   awardKill(accountId: string): void {
@@ -127,8 +154,11 @@ export class DefaultRespawnSimulator {
       return {
         ...structuredClone(state),
         position: { ...(live?.position ?? player.position) },
-        alive: pending === undefined,
-        ...(pending ? { respawnAtTick: pending.respawnAtTick, respawnBlocked: pending.blocked } : {})
+        alive: pending === undefined && !this.#returning.has(accountId),
+        connected: !this.#disconnected.has(accountId),
+        expired: this.#expired.has(accountId),
+        ...(pending ? { respawnAtTick: pending.respawnAtTick, respawnBlocked: pending.blocked } :
+          this.#returning.has(accountId) ? { respawnAtTick: 0, respawnBlocked: true } : {})
       };
     });
   }
@@ -136,10 +166,14 @@ export class DefaultRespawnSimulator {
   dispose(): void {
     this.#players.clear();
     this.#pending.clear();
+    this.#disconnected.clear();
+    this.#expired.clear();
+    this.#returning.clear();
   }
 
-  #safePosition(radius: number): Point2 | undefined {
+  #safePosition(radius: number, preferred?: Point2): Point2 | undefined {
     const clearance = radius + SAFE_SPAWN_MARGIN;
+    if (preferred && this.#isSafe(preferred, clearance)) return preferred;
     const inset = Math.ceil(clearance / MAP_CELL_SIZE - 0.5);
     const columns = this.map.definition.bounds.width / MAP_CELL_SIZE - 2 * inset;
     const rows = this.map.definition.bounds.height / MAP_CELL_SIZE - 2 * inset;
@@ -156,19 +190,18 @@ export class DefaultRespawnSimulator {
         x: ((cell % columns) + inset + 0.5) * MAP_CELL_SIZE,
         y: (Math.floor(cell / columns) + inset + 0.5) * MAP_CELL_SIZE
       };
-      if (
-        !this.map.isWalkable(position, clearance) ||
-        !this.context.geometry.isWalkable(position.x, position.y, clearance) ||
-        this.context.geometry.intersectsObstacle(position.x, position.y, clearance)
-      ) continue;
-      const hazards = this.context.entities.queryRadius(position, clearance + PLAYER_RADIUS, 64);
-      if (hazards.some((entity) =>
-        (entity.state.kind === "npc" || entity.state.kind === "projectile" || entity.state.kind === "player") &&
-        Math.hypot(position.x - entity.position.x, position.y - entity.position.y) <=
-          clearance + entity.radius
-      )) continue;
+      if (!this.#isSafe(position, clearance)) continue;
       return position;
     }
     return undefined;
+  }
+
+  #isSafe(position: Point2, clearance: number): boolean {
+    if (!this.map.isWalkable(position, clearance) ||
+      !this.context.geometry.isWalkable(position.x, position.y, clearance) ||
+      this.context.geometry.intersectsObstacle(position.x, position.y, clearance)) return false;
+    return !this.context.entities.queryRadius(position, clearance + PLAYER_RADIUS, 64).some(entity =>
+      (entity.state.kind === "npc" || entity.state.kind === "projectile" || entity.state.kind === "player") &&
+      Math.hypot(position.x - entity.position.x, position.y - entity.position.y) <= clearance + entity.radius);
   }
 }

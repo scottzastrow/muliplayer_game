@@ -20,7 +20,7 @@ export function registerLobbyRoutes(
   registry: LobbyRegistry,
   authContext: AuthContext,
   startSession: (sessionId: string) => Promise<void>,
-  closeSpectator: (sessionId: string, accountId: string) => void
+  closeMember: (sessionId: string, accountId: string) => void
 ): void {
   app.get<{ Params: { id: string } }>("/api/v1/matches/:id/results", async (request) => {
     authenticateRequest(database, request);
@@ -54,6 +54,17 @@ export function registerLobbyRoutes(
       const created = registry.create(account, request.body);
       reply.code(created.created ? 201 : 200);
       return { session: created.summary, settings: created.settings };
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/api/v1/sessions/:id/rejoin",
+    async (request) => {
+      requireJson(request);
+      requireSameOrigin(request, config);
+      const account = requireAccount(authContext, request);
+      requireEmptyBody(request.body);
+      return { session: registry.rejoin(account, parseId(request.params.id)) };
     }
   );
 
@@ -120,7 +131,7 @@ export function registerLobbyRoutes(
       requireEmptyBody(request.body);
       const sessionId = parseId(request.params.id);
       registry.leave(account, sessionId);
-      closeSpectator(sessionId, account.id);
+      closeMember(sessionId, account.id);
       reply.code(204);
     }
   );

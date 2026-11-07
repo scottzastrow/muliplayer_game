@@ -163,6 +163,7 @@ export interface GameModuleInstance<
   initialize(): void | Promise<void>;
   validateInput(input: unknown): input is TInput;
   applyInput(accountId: string, input: Readonly<TInput>): void;
+  setPlayerPresence?(accountId: string, presence: "connected" | "disconnected" | "expired"): void;
   step(dtSeconds: number, tick: number): void;
   snapshot(viewer: Readonly<{ accountId: string; role: "player" | "spectator" }>): TSnapshot;
   results(): TResult;

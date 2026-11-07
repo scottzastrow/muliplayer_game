@@ -99,11 +99,16 @@ export function createApp(
     (sessionId, tick) => realtime?.publishResult(sessionId, tick, "finished")
   );
   registerLobbyRoutes(app, database, config, lobby, auth,
-    (sessionId) => lifecycle.start(sessionId),
-    (sessionId, accountId) => realtime?.closeSpectator(sessionId, accountId)
+    async (sessionId) => {
+      await lifecycle.start(sessionId);
+      realtime?.activateSession(sessionId);
+    },
+    (sessionId, accountId) => realtime?.leaveMember(sessionId, accountId)
   );
   realtime = new RealtimeTransport(app.server, database, config, lobby, {
     ...realtimeOptions,
+    onPlayerPresence: (sessionId, accountId, presence) =>
+      lifecycle.setPlayerPresence(sessionId, accountId, presence),
     onPlayerInput: (input) => {
       if (!lifecycle.applyInput(input)) {
         return false;

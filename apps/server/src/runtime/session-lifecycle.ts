@@ -117,6 +117,8 @@ export class SessionLifecycle {
         seed
       );
       await module.initialize();
+      if (!module.setPlayerPresence) throw new Error("The pinned module does not support reconnect presence.");
+      for (const member of roster) module.setPlayerPresence(member.accountId, "disconnected");
       const active: ActiveSession = {
         id: sessionId,
         settings,
@@ -136,12 +138,20 @@ export class SessionLifecycle {
         }
       });
       this.#sessions.set(sessionId, active);
+      this.lobby.reconnect.start(sessionId, roster.map(member => member.accountId));
       active.timer = setInterval(
         () => this.#advance(active),
         FIXED_STEP_MS
       );
     } catch (error) {
-      if (module) {
+      const registered = this.#sessions.get(sessionId);
+      if (registered) {
+        try {
+          this.#release(registered);
+        } catch (disposeError) {
+          this.reportError(disposeError);
+        }
+      } else if (module) {
         try {
           module.dispose();
         } catch (disposeError) {
@@ -156,7 +166,8 @@ export class SessionLifecycle {
 
   applyInput(input: ModuleInput): boolean {
     const active = this.#sessions.get(input.sessionId);
-    if (!active || !active.roster.some((member) => member.accountId === input.accountId)) {
+    if (!active || !this.lobby.reconnect.connected(input.sessionId, input.accountId) ||
+      !active.roster.some((member) => member.accountId === input.accountId)) {
       return false;
     }
     if (!active.module.validateInput(input.action)) {
@@ -166,9 +177,20 @@ export class SessionLifecycle {
     return true;
   }
 
-  playerLives(sessionId: string): ReadonlyMap<string, "alive" | "dead"> {
+  setPlayerPresence(sessionId: string, accountId: string, presence: "connected" | "disconnected" | "expired"): void {
     const active = this.#sessions.get(sessionId);
-    const lives = new Map<string, "alive" | "dead">();
+    if (!active) return;
+    try {
+      if (!active.module.setPlayerPresence) throw new Error("The pinned module does not support reconnect presence.");
+      active.module.setPlayerPresence(accountId, presence);
+    } catch (error) {
+      this.#fail(active, error);
+    }
+  }
+
+  playerLives(sessionId: string): ReadonlyMap<string, "alive" | "dead" | "unavailable"> {
+    const active = this.#sessions.get(sessionId);
+    const lives = new Map<string, "alive" | "dead" | "unavailable">();
     if (!active) return lives;
     const snapshot = active.module.snapshot({ accountId: active.roster[0]!.accountId, role: "player" });
     for (const player of snapshot.players) {
@@ -176,7 +198,7 @@ export class SessionLifecycle {
         typeof player.accountId !== "string" || typeof player.alive !== "boolean") {
         throw new TypeError("The active module returned an invalid player life state.");
       }
-      lives.set(player.accountId, player.alive ? "alive" : "dead");
+      lives.set(player.accountId, player.expired === true ? "unavailable" : player.alive ? "alive" : "dead");
     }
     return lives;
   }
@@ -250,6 +272,15 @@ export class SessionLifecycle {
   }
 
   #step(active: ActiveSession, dtSeconds: number, tick: number): void {
+    for (const accountId of this.lobby.reconnect.expire(active.id)) {
+      this.setPlayerPresence(active.id, accountId, "expired");
+    }
+    if (this.lobby.reconnect.abandoned(active.id)) {
+      this.lobby.markTerminal(active.id, "abandoned");
+      this.#release(active);
+      return;
+    }
+    if (this.#sessions.get(active.id) !== active) return;
     active.navigation.processTick();
     active.module.step(dtSeconds, tick);
     if (tick % SNAPSHOT_INTERVAL_TICKS === 0) {

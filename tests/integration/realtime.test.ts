@@ -138,6 +138,7 @@ describe("realtime transport", () => {
   it("rechecks membership before accepting inputs on an established connection", async () => {
     const socket = await connect(memberCookie);
     await nextMessage(socket);
+    const closed = closedWith(socket, 1_000);
     const left = await app.inject({
       method: "POST",
       url: `/api/v1/sessions/${sessionId}/leave`,
@@ -153,13 +154,13 @@ describe("realtime transport", () => {
         payload: { sequence: 0, action: { type: "unsupported" } }
       })
     );
-    const error = await nextMessageOfType(socket, "server.error");
-    expect(error).toMatchObject({
-      type: "server.error",
-      payload: { code: "FORBIDDEN", fatal: true }
-    });
-    expect(await closedWith(socket, 1_000)).toBe(1008);
+    expect(await closed).toBe(1000);
     expect(inputs).toHaveLength(0);
+    expect(database.prepare("SELECT COUNT(*) AS count FROM match_participants WHERE match_id = ?")
+      .get(sessionId)).toEqual({ count: 2 });
+    const forfeited = await app.inject({ method: "POST", url: `/api/v1/sessions/${sessionId}/rejoin`,
+      headers: { ...BASE_HEADERS, cookie: memberCookie }, payload: {} });
+    expect(forfeited.statusCode).toBe(409);
   });
 
   it("sends WebSocket heartbeats and closes after two missing pong responses", async () => {
@@ -180,6 +181,53 @@ describe("realtime transport", () => {
     expect(await closedWith(silent, 250)).toBe(1013);
   });
 
+    it("rejoins an existing account after login with retained score, one avatar and unchanged NPC totals", async () => {
+      const socket = await connect(memberCookie);
+      await nextMessage(socket);
+      const first = await nextMessageOfType(socket, "server.snapshot");
+      const snapshot = first.payload as Record<string, unknown>;
+      const accountId = snapshot.viewerAccountId as string;
+      const remaining = (snapshot.entities as Array<{ state: { kind: string } }>)
+        .filter(entity => entity.state.kind === "npc").length;
+      const closed = closedWith(socket, 1_000);
+      socket.close();
+      await closed;
+      await delay(30);
+      expect(await rejectedStatus(memberCookie)).toBe(403);
+      const newLogin = await app.inject({ method: "POST", url: "/api/v1/auth/login",
+        headers: BASE_HEADERS, payload: { username: "SocketMember", password: "correct horse battery staple 123" } });
+      expect(newLogin.statusCode).toBe(200);
+      const cookie = String(newLogin.headers["set-cookie"]).split(";")[0]!;
+      const outsider = await app.inject({ method: "POST", url: `/api/v1/sessions/${sessionId}/rejoin`,
+        headers: { ...BASE_HEADERS, cookie: outsiderCookie }, payload: {} });
+      expect(outsider.statusCode).toBe(409);
+      expect((await app.inject({ method: "POST", url: `/api/v1/sessions/${sessionId}/rejoin`,
+        headers: BASE_HEADERS, payload: {} })).statusCode).toBe(401);
+      expect((await app.inject({ method: "POST", url: `/api/v1/sessions/${sessionId}/rejoin`,
+        headers: { ...BASE_HEADERS, cookie }, payload: { accountId: "another-account" } })).statusCode).toBe(400);
+      for (let retry = 0; retry < 2; retry++) {
+        const response = await app.inject({ method: "POST", url: `/api/v1/sessions/${sessionId}/rejoin`,
+          headers: { ...BASE_HEADERS, cookie }, payload: {} });
+        expect(response.statusCode).toBe(200);
+      }
+      const resumed = await connect(cookie);
+      await nextMessage(resumed);
+      const restored = (await nextMessageOfType(resumed, "server.snapshot")).payload as Record<string, unknown>;
+      expect((restored.players as Array<{ accountId: string; points: number }>).find(player => player.accountId === accountId))
+        .toMatchObject({ points: 0, deaths: 0, connected: true });
+      expect((restored.entities as Array<{ state: { kind: string; accountId?: string } }>)
+        .filter(entity => entity.state.accountId === accountId)).toHaveLength(1);
+      expect((restored.entities as Array<{ state: { kind: string } }>)
+        .filter(entity => entity.state.kind === "npc")).toHaveLength(remaining);
+      const duplicate = await connect(cookie);
+      await nextMessage(duplicate);
+      await delay(30);
+      const latest = (await nextMessageOfType(duplicate, "server.snapshot")).payload as Record<string, unknown>;
+      expect((latest.players as Array<{ accountId: string; points: number }>).find(player => player.accountId === accountId))
+        .toMatchObject({ points: 0, connected: true });
+      expect(database.prepare("SELECT COUNT(*) AS count FROM match_participants WHERE match_id = ? AND account_id = ?")
+        .get(sessionId, accountId)).toEqual({ count: 1 });
+    });
   it("publishes module snapshots and rejects actions the active module does not validate", async () => {
     const socket = await connect(creatorCookie);
     await nextMessageOfType(socket, "server.hello");
@@ -194,7 +242,6 @@ describe("realtime transport", () => {
         entities: expect.any(Array)
       }
     });
-
     socket.send(
       JSON.stringify({
         v: 1,
@@ -208,6 +255,21 @@ describe("realtime transport", () => {
     expect(inputs).toHaveLength(0);
     socket.close();
   });
+
+    it("replaces an account's old room connection without adding a player to its frozen match", async () => {
+      const old = await connect(memberCookie);
+      await nextMessage(old);
+      const replacementRoom = await app.inject({ method: "POST", url: "/api/v1/sessions",
+        headers: { ...BASE_HEADERS, cookie: memberCookie }, payload: { settings: DEFAULT_GAME_SETTINGS } });
+      expect(replacementRoom.statusCode).toBe(201);
+      const closed = closedWith(old, 1_000);
+      const replacement = await connect(memberCookie, replacementRoom.json().session.id);
+      expect(await closed).toBe(4001);
+      await nextMessage(replacement);
+      const summary = (await app.inject({ method: "GET", url: `/api/v1/sessions/${sessionId}`,
+        headers: { cookie: memberCookie } })).json().session;
+      expect(summary).toMatchObject({ playerCount: 2, canRejoin: true, canPlay: false });
+    });
 
   it("limits each client frame and closes connections that exceed the input rate", async () => {
     const socket = await connect(creatorCookie);
@@ -262,13 +324,13 @@ describe("realtime transport", () => {
     });
   }
 
-  function webSocketUrl(): string {
-    return `${baseUrl.replace(/^http/, "ws")}/ws?sessionId=${sessionId}`;
+  function webSocketUrl(targetSessionId = sessionId): string {
+    return `${baseUrl.replace(/^http/, "ws")}/ws?sessionId=${targetSessionId}`;
   }
 
-  function connect(cookie: string): Promise<WebSocket> {
+  function connect(cookie: string, targetSessionId = sessionId): Promise<WebSocket> {
     return new Promise((resolve, reject) => {
-      const socket = new WebSocket(webSocketUrl(), {
+      const socket = new WebSocket(webSocketUrl(targetSessionId), {
         headers: { cookie, origin: ORIGIN }
       });
       receivedMessages.set(socket, []);

@@ -18,6 +18,7 @@ import {
 import type { AuthenticatedAccount } from "../auth/accounts.js";
 import type { ThemeLoader } from "../themes/builtins.js";
 import { SpectatorRegistry, type PlayerFollowState } from "./spectators.js";
+import { ReconnectRegistry } from "./reconnect.js";
 
 const SESSION_LIMIT = 5;
 const IDEMPOTENCY_WINDOW_MS = 60_000;
@@ -59,6 +60,7 @@ export interface CreatedSession {
 export class LobbyRegistry {
   readonly #dedupe = new Map<string, DedupeEntry>();
   readonly spectators: SpectatorRegistry;
+  readonly reconnect: ReconnectRegistry;
 
   constructor(
     readonly database: SqliteDatabase,
@@ -67,6 +69,7 @@ export class LobbyRegistry {
     playerStates?: (sessionId: string) => ReadonlyMap<string, PlayerFollowState>
   ) {
     this.spectators = new SpectatorRegistry(database, playerStates);
+    this.reconnect = new ReconnectRegistry(clock);
   }
 
   create(
@@ -185,8 +188,9 @@ export class LobbyRegistry {
         row.member === 0 &&
         !this.spectators.has(sessionId, accountId) &&
         this.spectators.count(sessionId) < settings.maxSpectators,
-      canRejoin: false,
-      canPlay: row.state === "running" && row.member !== 0
+      canRejoin: row.state === "running" && row.member !== 0 &&
+        this.reconnect.eligible(sessionId, accountId) && !this.reconnect.connected(sessionId, accountId),
+      canPlay: row.state === "running" && row.member !== 0 && this.reconnect.canUpgrade(sessionId, accountId)
     });
   }
 
@@ -195,7 +199,7 @@ export class LobbyRegistry {
   }
 
   hasPlayerMembership(sessionId: string, accountId: string): boolean {
-    return Boolean(
+    const member = Boolean(
       this.database
         .prepare(
           `SELECT 1 FROM match_participants p
@@ -205,6 +209,17 @@ export class LobbyRegistry {
         )
         .get(sessionId, accountId)
     );
+    const row = this.database.prepare("SELECT state FROM matches WHERE id = ?").get(sessionId) as
+      { state: string } | undefined;
+    return member && (row?.state === "waiting" || this.reconnect.eligible(sessionId, accountId));
+  }
+
+  rejoin(account: AuthenticatedAccount, sessionId: string): PublicSessionSummary {
+    const row = this.#readSession(sessionId, account.id);
+    if (!row) throw new HttpError(404, "NOT_FOUND", "Session not found.");
+    if (row.state !== "running") throw new HttpError(409, "REJOIN_EXPIRED", "The match is not active.");
+    this.reconnect.rejoin(sessionId, account.id);
+    return this.getSummary(sessionId, account.id)!;
   }
 
   join(account: AuthenticatedAccount, sessionId: string): PublicSessionSummary {
@@ -307,6 +322,10 @@ export class LobbyRegistry {
       if (!row.member) {
         return;
       }
+      if (row.state === "running") {
+        this.reconnect.forfeit(sessionId, account.id);
+        return;
+      }
       this.database
         .prepare("DELETE FROM match_participants WHERE match_id = ? AND account_id = ?")
         .run(sessionId, account.id);
@@ -326,8 +345,6 @@ export class LobbyRegistry {
         } else {
           this.#markTerminal(sessionId, "abandoned", "abandoned");
         }
-      } else if (row.state === "running" && !remaining) {
-        this.#markTerminal(sessionId, "abandoned", "abandoned");
       }
     })();
   }
@@ -353,7 +370,10 @@ export class LobbyRegistry {
       { matchId: sessionId, status: "finished", finalLevel, standings },
       new Date(this.clock()).toISOString()
     );
-    if (finalized) this.spectators.releaseSession(sessionId);
+    if (finalized) {
+      this.spectators.releaseSession(sessionId);
+      this.reconnect.release(sessionId);
+    }
     return finalized;
   }
 
@@ -379,6 +399,7 @@ export class LobbyRegistry {
       new Date(this.clock()).toISOString()
     );
     this.spectators.releaseSession(sessionId);
+    this.reconnect.release(sessionId);
   }
 
   #readSession(sessionId: string, accountId: string): SessionRow | undefined {

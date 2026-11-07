@@ -38,6 +38,8 @@ export interface RealtimeOptions {
   readonly heartbeatIntervalMs?: number;
   readonly maxBufferedBytes?: number;
   readonly onPlayerInput?: (input: ModuleInput) => void | boolean;
+  readonly onPlayerPresence?: (sessionId: string, accountId: string,
+    presence: "connected" | "disconnected" | "expired") => void;
 }
 
 interface OutgoingSocket {
@@ -134,6 +136,7 @@ interface ConnectionState {
   readonly sender: BoundedMessageSender;
   readonly role: "player" | "spectator";
   readonly spectatorConnection?: symbol;
+  playerConnection?: symbol;
   lastSequence: number;
   invalidMessages: number;
   awaitingPong: boolean;
@@ -200,6 +203,27 @@ export class RealtimeTransport {
     const socket = this.#currentByMember.get(`${sessionId}:${accountId}`);
     if (socket && this.#connections.get(socket)?.role === "spectator") {
       socket.close(1000, "Left spectator session.");
+    }
+  }
+
+  leaveMember(sessionId: string, accountId: string): void {
+    const socket = this.#currentByMember.get(`${sessionId}:${accountId}`);
+    const state = socket && this.#connections.get(socket);
+    if (state?.role === "player") this.options.onPlayerPresence?.(sessionId, accountId, "expired");
+    else if (this.database.prepare("SELECT 1 FROM match_participants WHERE match_id = ? AND account_id = ?")
+      .get(sessionId, accountId)) {
+      this.options.onPlayerPresence?.(sessionId, accountId, "expired");
+    }
+    socket?.close(1000, "Left session.");
+  }
+
+  activateSession(sessionId: string): void {
+    for (const [socket, state] of this.#connections) {
+      if (state.sessionId !== sessionId || state.role !== "player" ||
+        socket.readyState !== WebSocket.OPEN ||
+        this.#currentByMember.get(`${sessionId}:${state.account.id}`) !== socket) continue;
+      state.playerConnection = this.lobby.reconnect.attach(sessionId, state.account.id);
+      this.options.onPlayerPresence?.(sessionId, state.account.id, "connected");
     }
   }
 
@@ -287,6 +311,10 @@ export class RealtimeTransport {
       if (!summary || (summary.status !== "waiting" && summary.status !== "running")) {
         throw new HttpError(404, "NOT_FOUND", "Session not found.");
       }
+      if (summary.status === "running" && this.lobby.hasPlayerMembership(sessionId, account.id) &&
+        !this.lobby.reconnect.canUpgrade(sessionId, account.id)) {
+        throw new HttpError(403, "FORBIDDEN", "Rejoin admission is required.");
+      }
 
       this.#webSockets.handleUpgrade(request, socket, head, (webSocket) => {
         this.#accept(webSocket, account, sessionId, summary);
@@ -315,6 +343,8 @@ export class RealtimeTransport {
     const role = this.lobby.hasPlayerMembership(sessionId, account.id) ? "player" : "spectator";
     const spectatorConnection = role === "spectator"
       ? this.lobby.spectators.attach(sessionId, account.id) : undefined;
+    const playerConnection = role === "player" && summary.status === "running"
+      ? this.lobby.reconnect.attach(sessionId, account.id) : undefined;
     const memberKey = `${sessionId}:${account.id}`;
     const previous = this.#currentByMember.get(memberKey);
     if (previous && previous.readyState === WebSocket.OPEN) {
@@ -331,6 +361,7 @@ export class RealtimeTransport {
       sender,
       role,
       ...(spectatorConnection ? { spectatorConnection } : {}),
+      ...(playerConnection ? { playerConnection } : {}),
       lastSequence: -1,
       invalidMessages: 0,
       awaitingPong: false,
@@ -342,6 +373,12 @@ export class RealtimeTransport {
     };
     this.#connections.set(webSocket, state);
     this.#currentByMember.set(memberKey, webSocket);
+    for (const [older, olderState] of this.#connections) {
+      if (older === webSocket || olderState.account.id !== account.id || olderState.sessionId === sessionId) continue;
+      this.#remove(older, olderState);
+      older.close(4001, "Replaced by a newer connection.");
+    }
+    if (playerConnection) this.options.onPlayerPresence?.(sessionId, account.id, "connected");
     const window = this.#inputWindows.get(account.id);
     if (window) {
       window.connections += 1;
@@ -603,6 +640,10 @@ export class RealtimeTransport {
     this.#connections.delete(webSocket);
     if (state.spectatorConnection) {
       this.lobby.spectators.detach(state.sessionId, state.account.id, state.spectatorConnection);
+    }
+    if (state.playerConnection &&
+      this.lobby.reconnect.detach(state.sessionId, state.account.id, state.playerConnection)) {
+      this.options.onPlayerPresence?.(state.sessionId, state.account.id, "disconnected");
     }
     const memberKey = `${state.sessionId}:${state.account.id}`;
     if (this.#currentByMember.get(memberKey) === webSocket) {

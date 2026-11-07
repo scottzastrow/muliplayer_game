@@ -206,6 +206,22 @@ export function mountLobby(
       : "Spectating is available for running sessions with free spectator capacity.";
     spectate.addEventListener("click", () => onSpectate(session.id));
     statusCell.append(join, spectate);
+    if (session.canRejoin) {
+      const rejoin = document.createElement("button");
+      rejoin.type = "button";
+      rejoin.textContent = "Rejoin";
+      rejoin.addEventListener("click", async () => {
+        rejoin.disabled = true;
+        try {
+          await api(`/api/v1/sessions/${session.id}/rejoin`, { method: "POST", body: "{}" });
+          onPlay(session.id);
+        } catch (error) {
+          showStatus(status, messageOf(error), true);
+          rejoin.disabled = false;
+        }
+      });
+      statusCell.append(rejoin);
+    }
     if (session.canPlay) {
       const play = document.createElement("button");
       play.type = "button";

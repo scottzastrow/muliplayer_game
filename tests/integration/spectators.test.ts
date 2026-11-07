@@ -176,7 +176,8 @@ describe("spectator admission and targets", () => {
     spectator.socket.send(JSON.stringify({ v: 1, type: "client.spectate.target", payload: { targetAccountId: owner.id } }));
     expect(await spectator.next("server.error")).toMatchObject({ payload: { code: "FORBIDDEN" } });
     const view = (await players(id, observer.cookie)).json();
-    expect(view.players.map((entry: { accountId: string }) => entry.accountId)).toEqual([rival.id]);
+    expect(view.players.filter((entry: { life: string }) => entry.life !== "unavailable")
+      .map((entry: { accountId: string }) => entry.accountId)).toEqual([rival.id]);
     expect(view.spectator.targetAccountId).toBeNull();
   });
 
@@ -228,8 +229,8 @@ describe("spectator admission and targets", () => {
     expect(registry.count(id)).toBe(0);
     await spectate(id, observer.cookie);
     await mutation(id, "leave", owner.cookie);
-    expect((await summary(id, observer.cookie)).spectatorCount).toBe(0);
-    expect((await spectate(id, observer.cookie)).statusCode).toBe(409);
+    expect((await summary(id, observer.cookie)).spectatorCount).toBe(1);
+    expect((await players(id, observer.cookie)).json().players).toMatchObject([{ life: "unavailable", followable: false }]);
   });
 
   async function account(username: string) {

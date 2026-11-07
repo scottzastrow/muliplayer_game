@@ -6,6 +6,17 @@ upgrade cannot create a sixth room, bypass start rules or add a spectator over c
 Only one current session role/connection per account; socket generations prevent
 late close callbacks from detaching a replacement connection.
 
+T029 binds a player's reconnect reservation to account and session, not an old
+socket or login token. Initial running admission permits the first socket; after
+detach, authenticated HTTP Rejoin is required before upgrade. Latest connections
+replace earlier account connections, reset input sequence for their generation,
+and clear retained controls on disconnect. Stale closes cannot remove the newer
+avatar or reservation. Disconnected avatars are absent from active play; the module
+keeps score, health and pending death deadlines. They never change the frozen
+roster or NPC budget. Explicit Leave or the exact 60-second deadline forfeits
+return. A running room with no connected players for 60 seconds is abandoned and
+its runner, spectator slots and session slot are released, even with observers.
+
 Every message is a versioned envelope with `v:1`, `type`, `requestId?`, and `payload`.
 Server messages add `sessionId`, `tick`, and `serverTimeMs` when applicable.
 

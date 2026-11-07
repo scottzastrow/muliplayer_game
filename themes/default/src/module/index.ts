@@ -157,6 +157,10 @@ export const defaultModuleFactory: GameModuleFactory<
         }
         acceptedInputs += 1;
       },
+      setPlayerPresence(accountId, presence): void {
+        assertActive();
+        respawn.setPresence(accountId, presence, currentTick);
+      },
       step(dtSeconds: number, tick: number): void {
         assertActive();
         currentTick = tick;

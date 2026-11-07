@@ -305,3 +305,58 @@ live browser match or fabricate server results; real module death-to-respawn is
 covered by the preceding T027 automated evidence. No human visual approval,
 non-Chrome exercise, deployment or player-reservation/reconnect test is claimed.
 T029 remains unstarted.
+
+## T029 - Account-bound player reconnect
+
+T028 browser work was reviewed and committed locally as `9bf8008`
+(`feat: add browser spectator controls`), with only browser/theme/tests/contracts
+and verification/task documentation staged. No push was made.
+
+Implemented 60-second account/session reservations, authenticated empty-body
+HTTP Rejoin and the lobby Rejoin action. The latest authorized account connection
+replaces older connections, including across rooms; matching-generation detach
+removes the avatar and controls without changing the frozen roster or NPC budget.
+Running Leave forfeits return but retains the result participant row. Expiry or
+60 seconds without connected players abandons the empty room even with spectators,
+releasing runner, reservations, spectator capacity and the session slot.
+
+Dots and Squares retains score, kills/deaths, health and the original pending
+death deadline through disconnect. A living return validates its previous location
+first, then uses at most 64 bounded safe-placement candidates. Blocked returns
+retry with visible respawn status and no health reset. A dead player whose deadline
+passed while absent returns only after authorized admission; no immunity is added.
+The public SDK presence hook owns this module behavior; gameplay input remains the
+existing module-defined action envelope.
+
+Executed:
+
+- `npm run check`: PASS for all workspaces and prerequisite protocol/SDK/theme builds.
+- `npm test -- --run tests\reconnect.test.ts tests\default-respawn.test.ts tests\integration\realtime.test.ts tests\integration\spectators.test.ts tests\integration\accounts-lobby.test.ts tests\integration\session-lifecycle.test.ts tests\theme-sdk.test.ts tests\default-theme.test.ts`: **8 files / 42 tests passed**.
+- `git diff --check`: PASS.
+
+Deterministic default-module tests preserve 500 points, five kills and one death
+with the original tick-160 respawn deadline, a single returned avatar and unchanged
+NPC totals. Additional checks cover an elapsed disconnected deadline and bounded
+blocked placement retaining 200 points and 40 health. Real HTTP/WebSocket tests
+log in again, deny outsider/unauthenticated/invalid-body admission, require Rejoin
+after detach, accept repeated admission without duplication, replace sockets with
+stale-close protection and keep two frozen participant rows after forfeiture.
+Transport score retention here uses an unchanged zero-point state; nonzero score
+and pending-death preservation are exercised with the real default module, not a
+claimed browser match.
+
+An injected-clock real-runner check keeps an observer-only room running at
+59,999 ms, abandons it at 60,000 ms, clears spectator/reservation state and proves
+the room is absent from the active list while its frozen participant row remains.
+The normal match-completion/result/slot-release and spectator suites also pass.
+
+Additional UI regression command
+`npm test -- --run tests\spectator-client.test.ts tests\default-skin.test.ts`:
+**2 files / 6 tests passed** (48 passing tests across the affected checks).
+
+Intermediate checks exposed an unreachable old running-leave branch, stale built
+module support during concurrent build/tests, spectator leave incorrectly routed
+as player expiry, initial-spawn drift, and test-fixture/nesting mistakes. These were
+corrected; final builds and tests ran sequentially to avoid stale package consumers.
+No T029 browser scenario, full-suite/load test or deployment is claimed. T030
+remains unstarted; T029 changes are left uncommitted and no milestone push was made.

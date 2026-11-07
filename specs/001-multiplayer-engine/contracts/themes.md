@@ -23,13 +23,25 @@ Implement TypeScript interfaces and runtime schemas in `packages/theme-sdk/src/`
 | --- | --- |
 | ThemeDefinition | id, name, version, engineApiMajor, module id/version/stateSchemaVersion, skin renderer id/version, assets digest, settings schema/defaults |
 | GameModuleFactory | metadata, validateSettings, create(context, settings, roster, seed) returns isolated instance |
-| GameModuleInstance | initialize; validateInput; applyInput; step(dt, tick); snapshot(viewer); results; dispose |
+| GameModuleInstance | initialize; validateInput; applyInput; setPlayerPresence(accountId, connected/disconnected/expired); step(dt, tick); snapshot(viewer); results; dispose |
 | ModuleContext | monotonic clock, seeded RNG, scoped entity store with bounded radius queries, geometry/circle movement, bounded navigation request/results, bounded event sink, completion request sink, metrics counters |
 | Capability | stable type ID plus validated state and optional behavior hooks; no mandatory universal attack method |
 | SkinFactory | metadata including accepted module/state schema; mount(host, assets) returns isolated presenter |
 | SkinInstance | handleSnapshot; handleEvents; render(frameTime, interpolatedState); handleViewport; dispose |
 | SkinHost | Canvas/DOM slots, input dispatch, camera anchor, selected target data, safe navigation callbacks, bounded asset loader/audio services |
 | MapDefinition | validated, versioned map document shared by authored maps and seeded generators; includes stable objects, explicit collision shapes and typed spawn points |
+
+T029 adds the optional TypeScript `setPlayerPresence` hook; the running-session
+host requires it and fails explicitly if a pinned module lacks reconnect support.
+Only the engine calls it after authenticated admission, matching-generation detach,
+reservation expiry, or explicit leave. The module removes disconnected avatars and
+controls while preserving the frozen roster, score and life deadlines; expiry
+cannot recreate a participant. Dots and Squares resumes a living player at their
+previous position only if it remains safe, otherwise tries at most 64 generated
+candidates per tick. A blocked return reports the existing respawn presentation
+fields without resetting retained health. Dead players keep their original
+deadline, even while disconnected. Additive player snapshot fields `connected`
+and `expired` expose presence without altering the opaque action envelope.
 
 `MapDefinition` v1 is validated by the public SDK before either source is loaded.
 Objects have stable `id` and `typeId`, world `position`, and optional string `tags`

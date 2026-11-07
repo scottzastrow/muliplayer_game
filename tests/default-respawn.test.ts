@@ -9,6 +9,75 @@ import {
 import { createSpectatorView } from "../apps/server/src/transport/spectator-view.js";
 
 describe("default player respawn", () => {
+  it("resumes score and pending death without changing the frozen NPC budget or duplicating an avatar", () => {
+    const { module, world } = createSimulation();
+    try {
+      const npcCount = () => world.entities().filter(entity => entity.state.kind === "npc").length;
+      const initialNpcs = npcCount();
+      defeat(world, 500, 5);
+      module.step(0, 10);
+      module.setPlayerPresence?.("alice", "disconnected");
+      module.step(0, 100);
+      expect(world.getEntity("player:alice")).toBeUndefined();
+      module.setPlayerPresence?.("alice", "connected");
+      module.setPlayerPresence?.("alice", "connected");
+      expect(module.snapshot({ accountId: "alice", role: "player" })).toMatchObject({
+        players: [{ points: 500, deaths: 1, alive: false, respawnAtTick: 160 }]
+      });
+      module.step(0, 159);
+      expect(world.getEntity("player:alice")).toBeUndefined();
+      module.step(0, 160);
+      expect(world.entities().filter(entity => entity.state.kind === "player")).toHaveLength(1);
+      expect(world.getEntity("player:alice")?.state).toMatchObject({ points: 500, kills: 5, deaths: 1 });
+      expect(npcCount()).toBe(initialNpcs);
+      module.setPlayerPresence?.("alice", "disconnected");
+      module.step(0, 200);
+      expect(world.getEntity("player:alice")).toBeUndefined();
+      module.setPlayerPresence?.("alice", "connected");
+      expect(world.entities().filter(entity => entity.state.kind === "player")).toHaveLength(1);
+      expect(world.getEntity("player:alice")?.state).toMatchObject({ points: 500, deaths: 1 });
+    } finally { module.dispose(); }
+  });
+
+  it("continues a death deadline while disconnected but only places the player on authorized return", () => {
+    const { module, world } = createSimulation();
+    try {
+      defeat(world, 300, 3);
+      module.step(0, 1);
+      module.setPlayerPresence?.("alice", "disconnected");
+      module.step(0, 200);
+      expect(world.getEntity("player:alice")).toBeUndefined();
+      module.setPlayerPresence?.("alice", "connected");
+      expect(world.getEntity("player:alice")?.state).toMatchObject({ points: 300, health: 100, deaths: 1 });
+      module.setPlayerPresence?.("alice", "expired");
+      module.step(0, 300);
+      expect(world.getEntity("player:alice")).toBeUndefined();
+      expect(() => module.setPlayerPresence?.("alice", "connected")).toThrow();
+    } finally { module.dispose(); }
+  });
+
+  it("bounds a blocked live return and retries safely without resetting health or score", () => {
+    const { module, world, setBlocked, walkabilityChecks } = createSimulation();
+    try {
+      const player = world.getEntity("player:alice")!;
+      world.addEntity({ ...player, state: { ...player.state, health: 40, points: 200 } });
+      module.setPlayerPresence?.("alice", "disconnected");
+      setBlocked(true);
+      const before = walkabilityChecks();
+      module.setPlayerPresence?.("alice", "connected");
+      expect(walkabilityChecks() - before).toBeLessThanOrEqual(65);
+      expect(world.getEntity("player:alice")).toBeUndefined();
+      expect(module.snapshot({ accountId: "alice", role: "player" })).toMatchObject({
+        players: [{ points: 200, health: 40, connected: true, alive: false, respawnBlocked: true }]
+      });
+      setBlocked(false);
+      module.step(0, 10);
+      const returned = world.getEntity("player:alice")!;
+      expect(returned.state).toMatchObject({ points: 200, health: 40 });
+      expect(world.geometry.intersectsObstacle(returned.position, returned.radius + 64)).toBe(false);
+    } finally { module.dispose(); }
+  });
+
   it("projects a spectator's real module death deadline, retained HUD and safe return anchor", () => {
     const { module, world } = createSimulation();
     try {
