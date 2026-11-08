@@ -34,7 +34,7 @@ export async function verifyWaveTimeout({
       hud: document.querySelector('.default-wave-time')?.textContent,
       viewer: snapshot.viewerAccountId };
   })()`);
-  assert.ok(Number.isFinite(initial.seconds) && initial.seconds > 0 && initial.seconds <= 63,
+  assert.ok(Number.isFinite(initial.seconds) && initial.seconds > 0 && initial.seconds <= 126,
     "player receives the authoritative starting wave countdown");
   assert.equal(initial.hud, `Wave time remaining: ${Math.ceil(initial.seconds)}s`);
   assert.ok(Number.isFinite(observerInitial.seconds) && observerInitial.seconds > 0,
@@ -58,7 +58,7 @@ export async function verifyWaveTimeout({
   assert.equal(observerLater.hud, `Wave time remaining: ${Math.ceil(observerLater.seconds)}s`);
 
   let finished = false;
-  for (let attempt = 0; attempt < 160; attempt++) {
+  for (let attempt = 0; attempt < Math.ceil((initial.seconds + 15) * 2); attempt++) {
     finished = await evaluate(alice,
       "document.querySelector('[aria-label=\"Final standings\"]') !== null");
     if (finished) break;

@@ -8,7 +8,7 @@ import { createSpectatorView } from "../apps/server/src/transport/spectator-view
 
 describe("wave countdown", () => {
   it.each([
-    [0, 60], [1, 63], [10, 90], [79, 297], [80, 300], [81, 300], [2000, 300]
+    [0, 120], [1, 126], [10, 180], [20, 240], [39, 354], [40, 360], [41, 360], [2000, 360]
   ])("gives %i starting NPCs a %i-second budget", (npcs, seconds) => {
     expect(calculateWaveDurationSeconds(npcs)).toBe(seconds);
   });
@@ -39,21 +39,21 @@ describe("wave countdown", () => {
   it("advances once on a pre-deadline clear and resets the next wave from its starting count", () => {
     const simulation = createSimulation();
     try {
-      expect(simulation.module.state).toMatchObject({ level: 1, waveRemainingSeconds: 63 });
-      simulation.now = 62_999;
+      expect(simulation.module.state).toMatchObject({ level: 1, waveRemainingSeconds: 126 });
+      simulation.now = 125_999;
       simulation.removeNpcs();
       simulation.module.step(0, 1);
       simulation.module.step(0, 2);
       expect(simulation.requests).toEqual([{ kind: "level", reason: "level-1-cleared" }]);
       expect(simulation.module.state).toMatchObject({ phase: "intermission" });
       expect(simulation.module.state).not.toHaveProperty("waveRemainingSeconds");
-      simulation.now = 90_000;
+      simulation.now = 150_000;
       simulation.module.step(0, 151);
       expect(simulation.module.state).toMatchObject({
-        phase: "active", level: 2, waveRemainingSeconds: 66
+        phase: "active", level: 2, waveRemainingSeconds: 132
       });
       expect(simulation.world.entities().filter(entity => entity.state.kind === "npc")).toHaveLength(2);
-      simulation.now = 91_000;
+      simulation.now = 151_000;
       simulation.removeNpcs();
       simulation.module.step(0, 152);
       simulation.module.step(0, 153);
@@ -75,34 +75,34 @@ describe("wave countdown", () => {
       simulation.module.step(0, 10);
       const snapshot = () => simulation.module.snapshot({ accountId: "alice", role: "player" });
       expect(snapshot()).toMatchObject({
-        waveRemainingSeconds: 53, players: [{ alive: false, points: 200, respawnAtTick: 160 }]
+        waveRemainingSeconds: 116, players: [{ alive: false, points: 200, respawnAtTick: 160 }]
       });
       expect(createSpectatorView("alice", snapshot())).toMatchObject({
-        waveRemainingSeconds: 53, spectatorView: { death: { alive: false } }
+        waveRemainingSeconds: 116, spectatorView: { death: { alive: false } }
       });
       simulation.now = 15_000;
       simulation.module.step(0, 160);
       expect(snapshot()).toMatchObject({
-        waveRemainingSeconds: 48, players: [{ alive: true, points: 200, health: 100 }]
+        waveRemainingSeconds: 111, players: [{ alive: true, points: 200, health: 100 }]
       });
       simulation.now = 20_000;
       simulation.module.setPlayerPresence?.("alice", "disconnected");
       simulation.module.step(0, 161);
-      expect(snapshot().waveRemainingSeconds).toBe(43);
+      expect(snapshot().waveRemainingSeconds).toBe(106);
     } finally { simulation.module.dispose(); }
   });
 
   it("times out once at the exact deadline, even if the last NPC is cleared then", () => {
     const simulation = createSimulation();
     try {
-      simulation.now = 62_999;
+      simulation.now = 125_999;
       simulation.module.step(0, 1);
       expect(simulation.requests).toEqual([]);
-      simulation.now = 63_000;
+      simulation.now = 126_000;
       simulation.removeNpcs();
       simulation.module.step(0, 2);
       simulation.module.step(0, 3);
-      simulation.now = 70_000;
+      simulation.now = 133_000;
       simulation.module.step(0, 4);
       expect(simulation.requests).toEqual([{ kind: "match", reason: "wave-timeout" }]);
       expect(simulation.module.state).toMatchObject({
@@ -117,9 +117,9 @@ describe("wave countdown", () => {
     try {
       const player = simulation.world.getEntity("player:alice")!;
       simulation.world.addEntity({ ...player, state: { ...player.state, health: 0 } });
-      simulation.now = 58_000;
+      simulation.now = 121_000;
       simulation.module.step(0, 1);
-      simulation.now = 63_000;
+      simulation.now = 126_000;
       simulation.module.step(0, 151);
       expect(simulation.world.getEntity(player.id)).toBeUndefined();
       expect(simulation.module.results()).toMatchObject({

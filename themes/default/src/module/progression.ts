@@ -10,9 +10,9 @@ import { Countdown, type ModuleContext } from "@multiplayer-game/theme-sdk";
 import type { DefaultEntity } from "./types.js";
 
 export const LEVEL_INTERMISSION_TICKS = 5 * 30;
-export const WAVE_BASE_DURATION_SECONDS = 60;
-export const WAVE_SECONDS_PER_NPC = 3;
-export const WAVE_MAX_DURATION_SECONDS = 300;
+export const WAVE_BASE_DURATION_SECONDS = 120;
+export const WAVE_SECONDS_PER_NPC = 6;
+export const WAVE_MAX_DURATION_SECONDS = 360;
 
 export function calculateWaveDurationSeconds(startingNpcCount: number): number {
   if (!Number.isSafeInteger(startingNpcCount) || startingNpcCount < 0) {
