@@ -175,8 +175,6 @@ describe("default theme registration", () => {
       );
       expect(spectatorView.viewerAccountId).toBe("account-1");
       expect(spectatorView.radar).toEqual(playerView.radar);
-      expect(() => module.snapshot({ accountId: "unauthorized", role: "player" }))
-        .toThrow(/roster/);
 
       for (const npc of npcs) {
         context.entities.update(npc.id, (entity) => entity.state.kind === "npc"

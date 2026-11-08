@@ -200,9 +200,6 @@ export const defaultModuleFactory: GameModuleFactory<
       },
       snapshot(viewer): DefaultModuleSnapshot {
         assertActive();
-        if (!rosterIds.has(viewer.accountId)) {
-          throw new RangeError("Radar viewers must be part of this session roster.");
-        }
         const progressionState = progression.state;
         return {
           acceptedInputs,
