@@ -1,5 +1,27 @@
 # Local verification
 
+## Timer and NPC settings browser exercise (2026-11-08)
+
+Revision `58ad727`, Windows, Node 24.11.0, npm 11.6.1 and Chrome
+156.0.8078.80. A CDP-driven visible browser used an isolated Chrome profile,
+an in-memory local server at `127.0.0.1:18083` and Vite at
+`127.0.0.1:15174`. A disposable account created both rooms through the host UI.
+The browser probe observed actual WebSocket snapshots and HUD text; this was
+automated browser observation, not human visual review.
+
+| Exercise | Observed result |
+| --- | --- |
+| Host settings | Created a one-player room with 10 initial NPCs, edited speed to 0 and detection range to 700, saved, reloaded the page and reopened creator controls. The fields still displayed 0 and 700. |
+| Zero speed | In the started match, all 10 NPC positions remained unchanged across 46 snapshots, ticks 2–92 (about three seconds); the nearest was 273.4 units from the player, within the configured range. |
+| Countdown | The first snapshot showed 179.909 seconds and the HUD displayed `Wave time remaining: 180s`; after about three seconds the snapshot showed 176.919 seconds. |
+| Short detection range | A second one-player, one-NPC match used speed 90 and range 96. The NPC at (528, 528) stayed idle during 73 sampled snapshots with the player outside 96 units, including a 2.2-second stationary observation. Its first observed movement was at a separation of 84.51 units after the player entered the range; it subsequently moved to approximately (553.93, 480.66). |
+
+Two initial attempts did not reach the range: the keyboard-and-mouse arrow movement
+was relative to changing aim, so the scripted route missed the NPC. Switching the
+disposable account to keyboard-only controls and using forward/strafe produced the
+recorded successful run. No deployment or capacity test was performed; T042 remains
+open.
+
 ## NPC settings and final suite (2026-11-08)
 
 The timer retune was committed separately as `afc44e45379bba8b3a79fb0abde373af667bbd3e`.
