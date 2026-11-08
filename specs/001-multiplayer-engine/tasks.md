@@ -49,7 +49,7 @@ Checkpoint: US1 independently demonstrates account and session lifecycle; it is 
 - [X] T015 [US2] Implement authenticated/origin-checked WebSocket upgrade, membership routing, input sequence/rate validation, heartbeats, reconnectable errors and bounded/coalesced sends in apps/server/src/transport/socket.ts and apps/client/src/connection.ts from contracts/realtime.md.
 - [X] T016 [US2] Implement scoped entity store, spatial grid, collision geometry and bounded staggered navigation in packages/engine/src/world.ts and packages/engine/src/navigation.ts; no cross-room mutable singleton or all-pairs NPC loop.
 - [X] T017 [US2] Register the default factory/renderer through public theme interfaces in themes/default/theme.json, themes/default/module/index.ts and apps/server/src/themes/builtins.ts; do not bypass SDK for default.
-- [X] T018 [US2] Implement a shared validated map format, seeded connected-map generation, obstacles, legal placement and bounded fallback in packages/theme-sdk/src/maps.ts and themes/default/module/maps.ts; 2048×2048 world and 32-unit cells per contracts/settings.md.
+- [X] T018 [US2] Implement a shared validated map format, Fixed/default and Simple Generated source-selected map modes, seeded connected-map generation, obstacles, legal placement and bounded fallback in packages/theme-sdk/src/maps.ts and themes/default/module/maps.ts; 2048×2048 world and 32-unit cells per contracts/settings.md.
 - [X] T019 [US2] Implement normalized player movement, proximity NPC pursuit and capability-based attacks in themes/default/module/entities.ts; use settings.md speeds/range/contact cooldown and capped navigation work.
 - [X] T020 [US2] Implement authoritative shots/hits, single-claim health/rapid-fire/spread pickups, timed effects, caps and score/death accounting in themes/default/module/combat.ts and themes/default/module/pickups.ts; use settings.md tuning and no friendly fire.
 - [X] T021 [US2] Implement roster-frozen growth formulas, overflow-safe preflight, five-second intermissions, max-level completion and idempotent finalization in themes/default/module/progression.ts, apps/server/src/runtime/session-lifecycle.ts and apps/server/src/storage/results.ts; verify normal session-start completion in tests/integration/session-lifecycle.test.ts without truncating NPC totals.
@@ -57,6 +57,22 @@ Checkpoint: US1 independently demonstrates account and session lifecycle; it is 
 - [X] T023 [US2] Implement skin host, interpolation, centered camera, input bindings and default shapes/HUD in apps/client/src/skin-host.ts and themes/default/skin/index.ts; points largest, health visible, camera independent per player and viewport resize supported.
 - [X] T024 [US2] Implement match-end standings/result reload and back-to-lobby controls in themes/default/skin/results.ts and apps/client/src/results.ts with deterministic tie ordering from spec.md.
 - [X] T025 [US2] Verify deterministic navigation, local attraction, no pickup duplication, growth, simultaneous last kills, death timing/no immunity, safe-spawn failure and five-session isolation in tests/integration/gameplay.test.ts; run two-browser scenario and record actual evidence in docs/verification.md.
+
+Map-mode follow-up (2026-11-08), T018/T036/T043: Simple Generated selects one
+validated seed-based layout for world/module collision, navigation, shots,
+presentation and radar across waves; Fixed remains the shipped source default.
+The developer guide documents mode selection, bounded fallback and disposable
+seed reproduction. The diagnostic Chrome resume passed once with seed 42,
+retaining the movement/shot/radar assertions and completing the full walk-around.
+The previously failing north leg went from (530,463.999976) to
+(530,385.999976), facing (0,-1), on a continuous radius-14 clear route.
+No geometry or timeout changes were made; that earlier leg failure was not
+reproduced and its cause remains unknown. Exact inputs/bounds and local conditions
+are recorded in docs/verification.md. This does not complete T042 or constitute
+deployment, human visual, cross-browser or capacity evidence.
+After restoring Fixed, workspace build/check and diff validation passed; the
+focused map/runtime/theme/combat/skin/lifecycle selection passed 7 files,
+37 tests, including the seed-42 full-radius walk-around regression.
 
 T022 local evidence: the affected gameplay/transport selection passed (6 files,
 29 tests), followed by the full regression suite including the additional

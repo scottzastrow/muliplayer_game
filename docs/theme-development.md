@@ -86,6 +86,152 @@ targets only within this radius and still uses bounded spatial queries. Zero dis
 automatic pursuit. The host exposes it on create/edit; values lock on start, and the
 additive v1 schema supplies 512 for older rooms/results that omit it.
 
+## Dots and Squares map modes
+
+The theme developer selects the source-code constant `DEFAULT_MAP_MODE` in
+`themes/default/src/module/maps.ts`: `"fixed"` (the shipped default, **Tile Cluster
+Arena**) or `"simple-generated"` (**Simple Generated**). This is trusted theme
+configuration, not a lobby setting, environment variable or public session API.
+Change the constant, rebuild with `npm run theme:build`, and restart the local
+server before starting new matches. Existing running matches keep their selected
+map. The companion fixture also wraps the default module and uses this map.
+
+Simple Generated uses the match seed and attempt number to move the four solid
+four-tile clusters by up to six 32-unit cells in each direction. The selected
+layout is shared for the entire match, including later waves. Every candidate goes
+through `loadMap`: the public map schema, collision bounds, all spawn clearances
+and player-sized grid connectivity between all spawns are checked. After at most
+`MAX_MAP_GENERATION_ATTEMPTS` (4) invalid candidates, the validated Fixed arena is
+used. Unexpected generator errors propagate instead of causing a fallback. While a
+fallback match is running, the operator metrics include `default.map.fallback`.
+The server passes the chosen definition into the default module: the world,
+navigation, collision and projectile checks, rendered obstacles and radar
+footprints use its geometry. A module running outside this server context can
+call `generateMap` directly.
+
+To reproduce a layout, use the same safe-integer match seed, mode, and code
+revision. `generateMap` uses the low 32 bits of the seed; the server currently
+creates a random seed for each room and has no API to select or disclose it.
+For a persistent **local** database, an authorized developer can obtain the session
+`id` from the authenticated `GET /api/v1/sessions` response in browser developer
+tools, then look up its seed without printing account data:
+
+```powershell
+@'
+import { DatabaseSync } from "node:sqlite";
+const db = new DatabaseSync(process.env.DATABASE_PATH ?? "./var/game.sqlite", { readOnly: true });
+const match = db.prepare("SELECT seed FROM matches WHERE id = ?").get("paste-session-id");
+if (!match) throw new Error("Session not found in this database");
+console.log("match seed:", match.seed);
+db.close();
+'@ | node --env-file=.env --input-type=module
+```
+
+In-memory databases disappear when their server stops and cannot be queried from
+another process. Never copy a production database or credentials for theme work.
+After `npm run theme:build`, inspect/revalidate a known seed locally:
+
+```powershell
+@'
+import { generateMap, loadMap } from "@multiplayer-game/default-theme";
+const result = generateMap(42, "simple-generated"); // replace 42 with the recorded seed
+loadMap(result.map.definition); // throws if schema, spawns or routes are invalid
+console.log(JSON.stringify({ source: result.source, attempts: result.attempts,
+  obstacles: result.map.obstacles }, null, 2));
+'@ | node --input-type=module
+npm test -- tests\maps.test.ts tests\generated-map-integration.test.ts tests\integration\generated-map-runtime.test.ts tests\default-skin.test.ts
+```
+
+`source` is `"fixed"`, `"generated"` or `"fallback"`; Fixed reports zero
+attempts. The generator's optional third argument supplies a candidate function
+for authored experiments and fallback tests; candidate validation and the four
+attempt limit still apply. The tests compare same-seed output and different-seed
+geometry, force fallback, and check startup, terrain presentation, movement,
+projectile blocking, navigation, radar and wave persistence. They do not replace a
+real-browser playtest of the generated mode.
+
+### Disposable Chrome seed-42 playtest
+
+The focused seed-42 Chrome scenario passed on the diagnostic resume recorded in
+`docs/verification.md`, including open/blocked shots, movement blocking, matching
+world/radar footprints and the complete walk-around. Earlier attempts failed:
+the initial southward aim was outside the canvas and left the player facing east;
+a later northward-leg failure was not reproduced on resume, so its cause remains
+unknown. The harness now retains each leg's positions, target, authoritative
+facing, sent movement vectors and nearby obstacle bounds. Geometry and timeouts
+were not changed. This is automated Chrome evidence, not human visual review,
+cross-browser or capacity verification. Seed 42 generates on the first attempt;
+its northwest cluster begins at (544,448), not Fixed's (384,384).
+
+Use unused loopback ports and a new local database/profile, never an existing
+developer or production database. From the repository root, set `DEFAULT_MAP_MODE`
+to `"simple-generated"` in `themes/default/src/module/maps.ts`, then run
+`npm run build`. Create ignored `var\simple-generated-playtest.env` with:
+
+```dotenv
+NODE_ENV=development
+HOST=127.0.0.1
+PORT=18084
+PUBLIC_ORIGIN=http://127.0.0.1:15175
+DATABASE_PATH=./var/simple-generated-playtest.sqlite
+```
+
+Start the server and client in separate PowerShell terminals at the repository
+root (no persistent Windows environment changes):
+
+```powershell
+node --env-file=var\simple-generated-playtest.env apps\server\dist\main.js
+```
+
+```powershell
+node --env-file=var\simple-generated-playtest.env node_modules\vite\bin\vite.js apps\client --config apps\client\vite.config.ts --host 127.0.0.1 --port 15175 --strictPort
+```
+
+In another terminal launch a disposable visible Chrome, using a fresh profile
+directory:
+
+```powershell
+& 'C:\Program Files\Google\Chrome\Application\chrome.exe' "--user-data-dir=$((Join-Path $PWD 'var\simple-generated-chrome'))" --remote-debugging-address=127.0.0.1 --remote-debugging-port=19224 --no-first-run --no-default-browser-check http://127.0.0.1:15175
+```
+
+Check `/health/ready` on both ports 18084 and 15175 and `/json/version` on 19224.
+Then run:
+
+```powershell
+$env:BROWSER_TEST_ORIGIN = 'http://127.0.0.1:15175'
+$env:BROWSER_DEBUG_URL = 'http://127.0.0.1:19224'
+$env:BROWSER_TEST_DATABASE_PATH = (Resolve-Path var\simple-generated-playtest.sqlite).Path
+$env:BROWSER_TEST_SCREENSHOT = Join-Path $PWD 'var\simple-generated-playtest.png'
+node tests\browser\default-game.mjs --simple-generated
+```
+
+The scenario creates disposable accounts and a one-player Dots and Squares room:
+one NPC, 100000 NPC health, NPC movement/detection zero and one level. Before start,
+it updates **only that waiting room's seed** to 42 in the disposable database and
+reads it back. This is a local test fixture, not a seed-selection session API.
+It checks the initial clear (272,272) spawn and exact generated geometry, records
+the original aim's actual facing/movement, then attempts the northern approach
+via y=400, x=430. Aim offsets are scaled into the canvas, authoritative facing is
+checked before moving, and ArrowUp means forward relative to that facing, not
+world north. Planned axis-aligned route segments are checked against the continuous
+swept radius-14 circle, as well as loader walkability at one-unit intervals. Each
+leg logs its start/end, target, authoritative facing, observed displacement,
+sent movement/aim inputs and nearby obstacle bounds before its endpoint assertion.
+The encounter is at
+y=464, firing/moving east toward the 32-unit tile at (544,448). A clear-lane shot
+above the tile provides a control; the same tile must stop both shots and the
+player and have a radar footprint centered at (560,464). The final walk-around
+attempt goes north to y=400, east to x=704 and south to y=464, beyond the entire
+cluster's east face at x=640 (x=624 would still be inside solid geometry).
+A screenshot is saved only after all scenario assertions, including walking
+around, pass. The recorded resume ended at approximately (710,464); the north
+leg had exactly 14 units of center-to-obstacle clearance (legal tangency).
+
+Afterward close the disposable Chrome and stop only these two terminal services.
+Restore `DEFAULT_MAP_MODE` to `"fixed"` and run `npm run build` before normal local
+use. Remove only the named disposable env/database (including its WAL/SHM files),
+screenshot and profile after those services stop. Do not deploy or mark T042 done.
+
 The definition in `theme.json` binds theme, module, renderer, engine API major,
 state schema, settings, and the canonical manifest digest. A compatibility change
 must be proposed in this engine repository, versioned, and checked against both

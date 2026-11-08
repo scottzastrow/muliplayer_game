@@ -23,6 +23,7 @@ import {
   type DefaultEntity,
   type DefaultModuleSnapshot
 } from "@multiplayer-game/default-theme";
+import type { MapDefinition } from "@multiplayer-game/theme-sdk";
 import type { SqliteDatabase } from "../storage/database.js";
 import type { LobbyRegistry } from "../lobby/registry.js";
 import type { ThemeLoader } from "../themes/builtins.js";
@@ -88,7 +89,8 @@ export class SessionLifecycle {
     let module: ActiveSession["module"] | undefined;
     try {
       const { settings, seed, revision, themeDigest, roster } = this.#readRuntime(sessionId);
-      const map = generateMap(seed).map;
+      const selectedMap = generateMap(seed);
+      const map = selectedMap.map;
       const world = new SessionWorld<DefaultEntity>(
         sessionId,
         map.definition.bounds,
@@ -102,11 +104,15 @@ export class SessionLifecycle {
       const pathResults = new Map<string, NavigationPathResult>();
       const completionRequests: ActiveSession["completionRequests"] = [];
       this.metrics?.startSession(sessionId);
+      if (selectedMap.source === "fallback") {
+        this.metrics?.moduleMetrics(sessionId).increment("default.map.fallback");
+      }
       const context = createModuleContext(
         world,
         navigation,
         pathResults,
         seed,
+        map.definition,
         (request) => {
           if (completionRequests.length >= MAX_COMPLETION_REQUESTS_PER_STEP) {
             throw new RangeError("The module exceeded its completion-request limit.");
@@ -407,9 +413,10 @@ function createModuleContext(
   navigation: BoundedNavigation,
   pathResults: Map<string, NavigationPathResult>,
   seed: number,
+  defaultMapDefinition: MapDefinition,
   requestCompletion: ModuleContext<DefaultEntity>["requestCompletion"],
   metrics: ModuleMetrics = { increment: () => {}, gauge: () => {} }
-): ModuleContext<DefaultEntity> {
+): ModuleContext<DefaultEntity> & { readonly defaultMapDefinition: MapDefinition } {
   const entities: EntityStore<DefaultEntity> = {
     get: (id) => world.getEntity(id),
     add: (entity) => world.addEntity(entity),
@@ -454,6 +461,7 @@ function createModuleContext(
   return {
     clock: new SystemMonotonicClock(),
     random: new SeededRandom(seed),
+    defaultMapDefinition,
     entities,
     geometry: {
       isWalkable: (x, y, radius = 0) => world.geometry.isCircleWalkable({ x, y }, radius),

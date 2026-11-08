@@ -58,11 +58,13 @@ describe("default theme maps", () => {
     expect(() => loadMap(disconnected)).toThrow(/unreachable by a player/);
   });
 
-  it("generates deterministic connected maps with legal default spawns", () => {
+  it("keeps Tile Cluster Arena fixed across seeds", () => {
     const first = generateMap(42);
     const second = generateMap(42);
     const otherSeed = generateMap(43);
 
+    expect(first.source).toBe("fixed");
+    expect(first.attempts).toBe(0);
     expect(first.map.definition).toEqual(second.map.definition);
     expect(first.map.definition.id).toBe(DEFAULT_ARENA_ID);
     expect(first.map.definition.name).toBe(DEFAULT_ARENA_NAME);
@@ -82,6 +84,77 @@ describe("default theme maps", () => {
         )
       ).toBe(false);
     }
+  });
+
+  it("generates repeatable, varied layouts validated for every spawn", () => {
+    const first = generateMap(42, "simple-generated");
+    const repeat = generateMap(42, "simple-generated");
+    const other = generateMap(43, "simple-generated");
+    expect(first.source).toBe("generated");
+    expect(first.map.definition).toEqual(repeat.map.definition);
+    expect(first.attempts).toBe(repeat.attempts);
+    expect(other.source).toBe("generated");
+    expect(other.map.obstacles).not.toEqual(first.map.obstacles);
+    expect(first.map.definition.name).toBe("Simple Generated");
+    expect(first.map.obstacles).toHaveLength(16);
+    for (let seed = 0; seed < 32; seed += 1) {
+      const { map, attempts } = generateMap(seed, "simple-generated");
+      expect(attempts).toBeGreaterThanOrEqual(1);
+      expect(attempts).toBeLessThanOrEqual(MAX_MAP_GENERATION_ATTEMPTS);
+      expect(loadMap(map.definition).obstacles).toEqual(map.obstacles);
+      for (const spawn of map.definition.spawns) {
+        expect(map.isWalkable(spawn.position, spawn.radius)).toBe(true);
+      }
+    }
+  });
+
+  it("clears the seed-42 walk-around at full player radius, including west-face tangency", () => {
+    const map = generateMap(42, "simple-generated").map;
+    const geometry = new WorldGeometry(map.definition.bounds, map.obstacles);
+    const route = [
+      { x: 530, y: 464 }, { x: 530, y: 400 },
+      { x: 704, y: 400 }, { x: 704, y: 464 }
+    ];
+    for (let index = 1; index < route.length; index += 1) {
+      const from = route[index - 1]!;
+      const to = route[index]!;
+      const steps = Math.ceil(Math.hypot(to.x - from.x, to.y - from.y));
+      for (let step = 0; step <= steps; step += 1) {
+        const point = {
+          x: from.x + (to.x - from.x) * step / steps,
+          y: from.y + (to.y - from.y) * step / steps
+        };
+        expect(map.isWalkable(point, 14)).toBe(true);
+        expect(geometry.isCircleWalkable(point, 14)).toBe(true);
+      }
+      expect(geometry.moveCircle(from, { x: to.x - from.x, y: to.y - from.y }, 14))
+        .toEqual(to);
+    }
+    expect(map.isWalkable({ x: 624, y: 464 }, 14)).toBe(false);
+    expect(map.isWalkable({ x: 650, y: 464 }, 0)).toBe(true);
+    expect(map.isWalkable({ x: 650, y: 464 }, 14)).toBe(false);
+  });
+
+  it("falls back to the fixed arena after four invalid candidates and propagates other failures", () => {
+    const fixed = generateMap(42, "fixed").map;
+    const invalid = structuredClone(fixed.definition);
+    invalid.spawns[0]!.position = {
+      x: fixed.obstacles[0]!.x + 16,
+      y: fixed.obstacles[0]!.y + 16
+    };
+    const attempts: number[] = [];
+    const fallback = generateMap(42, "simple-generated", (_seed, attempt) => {
+      attempts.push(attempt);
+      return invalid;
+    });
+    expect(attempts).toEqual([0, 1, 2, 3]);
+    expect(fallback.source).toBe("fallback");
+    expect(fallback.attempts).toBe(MAX_MAP_GENERATION_ATTEMPTS);
+    expect(fallback.map.definition).toEqual(fixed.definition);
+    expect(() => generateMap(42, "simple-generated", () => {
+      throw new Error("generator failure");
+    })).toThrow("generator failure");
+    expect(() => generateMap(Number.NaN, "fixed")).toThrow(RangeError);
   });
 
   it("blocks direct movement and routes around the encounter cluster", () => {

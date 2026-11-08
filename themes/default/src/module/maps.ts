@@ -12,6 +12,8 @@ export const DEFAULT_MAP_HEIGHT = 2_048;
 export const DEFAULT_ARENA_ID = "dots-and-squares-tile-arena-v1";
 export const DEFAULT_ARENA_NAME = "Tile Cluster Arena";
 export const MAX_MAP_GENERATION_ATTEMPTS = 4;
+export const DEFAULT_MAP_MODE: MapMode = "fixed";
+export type MapMode = "fixed" | "simple-generated";
 const DEFAULT_PLAYER_RADIUS = 14;
 const TETROMINO_CLUSTERS: readonly {
   readonly id: string;
@@ -62,7 +64,7 @@ export interface LoadedMap {
 
 export interface GeneratedMap {
   readonly map: LoadedMap;
-  readonly source: "generated" | "fallback";
+  readonly source: "fixed" | "generated" | "fallback";
   readonly attempts: number;
 }
 
@@ -122,14 +124,24 @@ export function loadMap(input: unknown): LoadedMap {
   });
 }
 
-export function generateMap(seed: number): GeneratedMap {
+export function generateMap(
+  seed: number,
+  mode: MapMode = DEFAULT_MAP_MODE,
+  createCandidate: (seed: number, attempt: number) => unknown = createGeneratedCandidate
+): GeneratedMap {
   if (!Number.isSafeInteger(seed)) {
     throw new RangeError("Map generation seed must be a safe integer.");
+  }
+  if (mode === "fixed") {
+    return Object.freeze({ map: loadMap(createTileClusterArena()), source: "fixed", attempts: 0 });
+  }
+  if (mode !== "simple-generated") {
+    throw new RangeError("Unknown Dots and Squares map mode.");
   }
 
   for (let attempt = 0; attempt < MAX_MAP_GENERATION_ATTEMPTS; attempt += 1) {
     try {
-      const map = loadMap(createGeneratedCandidate(seed, attempt));
+      const map = loadMap(createCandidate(seed, attempt));
       return Object.freeze({ map, source: "generated", attempts: attempt + 1 });
     } catch (error) {
       if (!(error instanceof MapValidationError)) {
@@ -139,7 +151,7 @@ export function generateMap(seed: number): GeneratedMap {
   }
 
   return Object.freeze({
-    map: loadMap(createFallbackDefinition()),
+    map: loadMap(createTileClusterArena()),
     source: "fallback",
     attempts: MAX_MAP_GENERATION_ATTEMPTS
   });
@@ -201,17 +213,30 @@ function spawnCellIndex(spawn: MapSpawn, columns: number, cellSize: number): num
 }
 
 function createGeneratedCandidate(seed: number, attempt: number): MapDefinition {
-  return createTileClusterArena(`generated-${seed >>> 0}-${attempt + 1}`);
+  const clusters = TETROMINO_CLUSTERS.map((cluster, index) => ({
+    ...cluster,
+    tileX: cluster.tileX + seededOffset(seed, attempt, index * 2),
+    tileY: cluster.tileY + seededOffset(seed, attempt, index * 2 + 1)
+  }));
+  return createTileClusterArena(clusters, "dots-and-squares-simple-generated-v1", "Simple Generated");
 }
 
-function createFallbackDefinition(): MapDefinition {
-  return createTileClusterArena("fallback");
+function seededOffset(seed: number, attempt: number, coordinate: number): number {
+  let value = (seed >>> 0) ^ Math.imul(attempt + 1, 0x9e3779b9) ^
+    Math.imul(coordinate + 1, 0x85ebca6b);
+  value = Math.imul(value ^ (value >>> 16), 0x7feb352d);
+  value = Math.imul(value ^ (value >>> 15), 0x846ca68b);
+  return ((value ^ (value >>> 16)) >>> 0) % 13 - 6;
 }
 
-function createTileClusterArena(objectIdPrefix: string): MapDefinition {
-  const tiles = TETROMINO_CLUSTERS.flatMap((cluster) =>
+function createTileClusterArena(
+  clusters = TETROMINO_CLUSTERS,
+  id = DEFAULT_ARENA_ID,
+  name = DEFAULT_ARENA_NAME
+): MapDefinition {
+  const tiles = clusters.flatMap((cluster) =>
     cluster.tiles.map(([offsetX, offsetY], index) => {
-      const id = `${objectIdPrefix}-${cluster.id}-${index + 1}`;
+      const id = `tile-${cluster.id}-${index + 1}`;
       const tileX = cluster.tileX + offsetX;
       const tileY = cluster.tileY + offsetY;
       return {
@@ -233,8 +258,8 @@ function createTileClusterArena(objectIdPrefix: string): MapDefinition {
   );
   return {
     formatVersion: 1,
-    id: DEFAULT_ARENA_ID,
-    name: DEFAULT_ARENA_NAME,
+    id,
+    name,
     bounds: { width: DEFAULT_MAP_WIDTH, height: DEFAULT_MAP_HEIGHT },
     cellSize: MAP_CELL_SIZE,
     objects: tiles.map(({ collision: _collision, ...object }) => object),

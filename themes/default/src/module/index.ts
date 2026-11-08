@@ -11,7 +11,7 @@ import { DefaultPlayerActionSchema, type DefaultPlayerAction } from "./actions.j
 import type { DefaultEntity, DefaultPlayerState } from "./types.js";
 import { DefaultEntitySimulator } from "./entities.js";
 import { DefaultCombatSimulator } from "./combat.js";
-import { generateMap } from "./maps.js";
+import { generateMap, loadMap } from "./maps.js";
 import { DefaultRespawnSimulator } from "./respawn.js";
 import {
   DefaultProgression,
@@ -104,7 +104,9 @@ export const defaultModuleFactory: GameModuleFactory<
       gameSettings.npcMovementSpeed,
       gameSettings.npcDetectionRange
     );
-    const map = generateMap(seed).map;
+    const map = "defaultMapDefinition" in _context
+      ? loadMap(_context.defaultMapDefinition)
+      : generateMap(seed).map;
     const presentationMap = {
       width: map.definition.bounds.width,
       height: map.definition.bounds.height,

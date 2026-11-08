@@ -1,5 +1,174 @@
 # Local verification
 
+## Seed-42 walk-around diagnostic resume (2026-11-08)
+
+**Passed once.** The focused `node tests\browser\default-game.mjs
+--simple-generated` Chrome playtest completed the whole encounter. The harness
+retains the existing endpoint tolerance, movement durations, shot/blocking and
+world/radar assertions. It now captures every leg's start/end, target,
+authoritative facing, observed displacement, bounded sent movement/aim inputs
+and nearby obstacle bounds. Axis-aligned route checks additionally measure
+continuous swept-circle clearance for the full radius 14; the existing loader
+checks at one-unit intervals remain. No geometry or timeout was changed.
+The prior north-leg failure was not reproduced; no cause or gameplay fix is
+claimed for it.
+
+The previously failing leg's captured values were:
+
+| Value | Observation |
+| --- | --- |
+| Start | (530, 463.99997592427854) |
+| Planned target | (530, 400) |
+| End | (530, 385.99997592427854), within the unchanged 20-unit tolerance |
+| Authoritative facing, start/end | (0, -1) / (0, -1) |
+| Actual displacement | (0, -78) |
+| Sent movement, sequences 213-219 | (6.123233995736766e-17, -1) throughout |
+| First / last world aim | (530, 221.39998507955198) / (530, 161.39998507955198) |
+| Full-radius route clearance | Minimum center-to-obstacle distance 14; no intersected obstacles (legal west-face tangency) |
+
+Nearby obstacle bounds were x=544..576/y=448..480 (clearance 14),
+x=576..608/y=448..480 (46), x=608..640/y=448..480 (78) and
+x=576..608/y=480..512 (48.703191). The east leg continued from
+(530,385.999976) to (710,385.999967), displacement approximately (180,0);
+the south leg ended at (710,463.999967). Their minimum planned-route
+center clearances were 62.000024 and 70 respectively, both greater than radius 14.
+All sampled positions remained walkable.
+
+The exact first-attempt generated geometry was received from the real server.
+The clear-lane shots reached x=820; blocked shots reached at most x=540 and
+disappeared before their two-second lifetime. The player stopped at
+(530,463.999976), stayed blocked while holding forward, and then walked around
+the full cluster's x=640 east face. Visible world tiles and north-up radar
+footprints matched throughout. A screenshot was captured only after every
+assertion passed; no human visual review is claimed.
+
+Windows, Node 24.11.0, npm 11.6.1, visible Chrome 156.0.8078.80; a fresh
+disposable SQLite database and Chrome profile, server 18084, client 15175 and
+loopback debugging 19224. Server/proxied readiness and Chrome debugging returned
+HTTP 200 before execution. `npm run build` and both browser script syntax checks
+passed before the single run. The source constant was temporarily Simple
+Generated for the fixture and restored to Fixed afterward. Local services were
+stopped; runtime evidence is kept outside tracked source. T042 remains open;
+no deployment, cross-browser or capacity run was performed.
+
+After restoring Fixed, `npm run build`, `npm run check` and `git diff --check`
+passed. The focused map/default-theme/combat/skin/generated-runtime/lifecycle
+selection passed **7 files, 37 tests**, including the new radius-14 seed-42
+walk-around regression and a center-clear but radius-blocked east waypoint.
+The prior seven-file selection had 36 tests. No full-suite rerun was performed
+in this resume. Logs and the screenshot are retained in the session's `files`
+directory rather than committed runtime data.
+
+## Seed-42 facing investigation and focused Chrome rerun (2026-11-08)
+
+**Not passed at this checkpoint; subsequently resumed above.** The focused Chrome scenario
+was rerun exactly once. Its first failure was `AssertionError: reach open y
+approach` at `tests/browser/simple-generated.mjs:126`, called at line 196 when
+attempting to leave the blocked west face for the northern walk-around at y=400.
+The failing endpoint was not included in the assertion output; no cause is claimed
+for that second approach failure and no timeout was increased.
+
+The original approach assumed a mouse offset of (0,300) would face south. Runtime
+evidence showed a 940.8 by 525.2 CSS-pixel canvas: that offset is outside the canvas.
+Facing remained (1,0); ArrowUp sent `moveX:1, moveY:0, aimX:372, aimY:272`.
+A 120-ms diagnostic press moved the player from (272,272) to (290,272), east,
+not toward y=400. The skin receives pointer movement on the canvas and maps forward
+movement relative to facing. This was a test-direction error, not blocked geometry.
+Loader checks at one-unit intervals confirmed the radius-14 route from (272,272)
+to (272,400), the northern lane to x=704 and the west approach at x=430 are clear.
+The cluster spans x=544..640: x=624 at y=464 is blocked, so the proposed walk-around
+uses x=704 rather than a point inside the cluster.
+
+With proportional in-canvas aim and an authoritative-facing assertion before each
+leg, the corrected initial y=400 and x=430 approaches passed. The real server
+selected seed 42's first-attempt generated geometry. The clear-lane shot control,
+blocked shots, player stop at the first tile's west face, continued blocking and
+matching visible world/radar footprints all passed before the walk-around failed.
+The whole scenario is **not verified**, and no screenshot was produced.
+
+Windows, Node 24.11.0, visible Chrome 156.0.8078.80; fresh local SQLite database
+and Chrome profile, server 18084, client 15175 and loopback debugging 19224.
+Server/proxied readiness and the debug endpoint returned HTTP 200.
+`npm run build` and both browser script syntax checks passed before execution.
+An initial terminal geometry probe failed due to PowerShell inline quoting; the
+corrected stdin-module probe printed the actual obstacles and route clearances.
+The source default was restored to Fixed after the failed run. T042 remains open;
+no deployment or capacity run was performed.
+
+## Simple Generated Chrome attempt (2026-11-08)
+
+**Not passed at this checkpoint; changes were left uncommitted.** The first browser assertion failure was
+`AssertionError: reach open y approach` at
+`tests/browser/simple-generated.mjs:90`, called by the initial travel to y=400.
+The attempt stopped there; it was not rerun or treated as a map collision defect.
+Movement/shot blocking, radar placement and screenshot review were not reached.
+
+Windows, Node 24.11.0, npm 11.6.1, visible Chrome 156.0.8078.80; disposable
+SQLite database, fresh Chrome profile and loopback-only services. Server
+`127.0.0.1:18084`, client `127.0.0.1:15175`, proxied readiness and Chrome debugging
+`127.0.0.1:19224` each returned HTTP 200. `npm run build` passed with the documented
+`DEFAULT_MAP_MODE` temporarily set to `"simple-generated"`. Browser harness syntax
+checks passed before execution.
+
+The disposable waiting match `9429a872-4953-43c7-90f3-917865c31ede` was locally
+assigned and read back with **seed 42** before starting. The browser received the
+exact `generateMap(42, "simple-generated")` geometry (generated, first attempt,
+16 obstacles), different from Fixed. It observed the player at (272,272); the
+loader confirmed that point is walkable with a 78-unit radius (player plus margin).
+The northwest cluster's first tile is (544,448), 32 by 32, rather than Fixed's
+(384,384). These are authoritative snapshot/loader observations, not completed
+visual or collision-playtest evidence.
+
+Repeat setup is in the map-mode section of `docs/theme-development.md`, using
+`node tests\browser\default-game.mjs --simple-generated`. The added harness pins
+only its own waiting local room to seed 42 and attempts a clear northern shot,
+blocked shot, movement into the tile and matching world/radar draws. Its approach
+assertion failed in this run, so those later checks remain unverified. The source
+constant was restored to `"fixed"` after the attempt. Local services and disposable
+runtime files were cleaned up. T042 remains open. No deployment or capacity run.
+
+## Dots and Squares map modes (2026-11-08)
+
+At this checkpoint this was an uncommitted follow-up to the Chrome rerun below;
+the later generated-mode resume is recorded above. Fixed remains
+the default Tile Cluster Arena. Simple Generated moves four solid clusters using
+the match seed and validates candidates before selecting one map for the match;
+after four invalid candidates it uses the Fixed arena and increments the
+`default.map.fallback` session metric.
+
+On Windows, Node 24.11.0 and npm 11.6.1, `npm run check` passed. The focused
+seven-file map, runtime, default-theme/skin/combat and lifecycle selection passed
+36 tests. It checks same-seed repeatability, variation between seeds 42 and 43,
+validation over 32 seeds, forced fallback and error propagation. A real session
+startup test substitutes Simple Generated for the shipped Fixed selection and
+verifies that one selection supplies both world and module geometry. The generated
+simulation checks actual NPC pursuit around a cluster, player and projectile
+blocking, navigation, radar footprints and unchanged geometry across waves;
+the skin test checks the generated obstacle rectangles are drawn at their world
+positions. The documented reproduction command for seed 42 returned
+`source: generated`, one attempt and 16 obstacles.
+
+The Chrome rerun below preceded these map edits and exercised the Fixed arena;
+no generated-mode browser, deployment or capacity run is claimed. T042 remains
+open.
+
+## Chrome radar compatibility rerun (2026-11-08)
+
+At `d821956` on `001-multiplayer-engine`, after the spectator snapshot
+compatibility fix, `npm run build` and `npm run test:browser` passed. The
+automated scenario used Node 24.11.0, npm 11.6.1 and three visible Chrome
+156.0.8078.80 windows on Windows, an isolated in-memory server at
+`127.0.0.1:18083`, Vite at `127.0.0.1:15174`, and an isolated Chrome profile
+with loopback debugging at `127.0.0.1:19223`. Server readiness, Vite, proxied
+readiness and the Chrome debug endpoint each returned HTTP 200.
+
+The run covered all four radar filters, assigned player colors, player and
+spectator resize/filter isolation, circular terrain clipping, spectator
+switching and no-input behavior, and both saved-standings page reloads. It also
+completed the existing two-player, two-level match and capacity-slot-release
+scenario. Local processes were stopped afterward. This is not human visual,
+non-Chrome, deployment or capacity-test evidence; T042 remains open.
+
 ## Radar SDK commit and final checks (2026-11-08)
 
 The reviewed radar SDK, default-theme integration, contracts, tests and browser

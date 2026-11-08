@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { defaultSkinFactory } from "@multiplayer-game/default-theme";
+import { defaultSkinFactory, generateMap } from "@multiplayer-game/default-theme";
 import type { SkinHost } from "@multiplayer-game/theme-sdk";
 import {
   DefaultViewSchema, interpolateEntities, worldToScreen, type DefaultView
@@ -46,7 +46,7 @@ class HudElement extends EventTarget {
         this.drawnRects.push({ x, y, width, height, color }),
       beginPath() {}, closePath() {},
       arc: (x: number, y: number, radius: number) => this.drawnArcs.push({ x, y, radius }),
-      fill: () => this.drawnColors.push(color),
+      fill: () => this.drawnColors.push(color), strokeRect() {},
       save() {}, restore() {}, clip() {}, stroke() {}, moveTo() {}, lineTo() {},
       fillText: (text: string, x: number, y: number) => {
         this.drawnText.push(text);
@@ -62,6 +62,45 @@ class HudElement extends EventTarget {
 
 describe("Dots and Squares presentation", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it("draws the generated snapshot's collision rectangles at their world positions", () => {
+    const elements: HudElement[] = [];
+    vi.stubGlobal("document", Object.assign(new EventTarget(), {
+      createTextNode: (text: string) => Object.assign(new HudElement(), { textContent: text }),
+      createElement: () => {
+        const element = new HudElement();
+        elements.push(element);
+        return element;
+      }
+    }));
+    vi.stubGlobal("window", new EventTarget());
+    const host: SkinHost = {
+      slots: new Map(["world", "hud", "controls"].map(name => [name, document.createElement("div")])),
+      selectedTarget: { accountId: "alice", username: "Alice" },
+      cameraAnchor: undefined, setCameraAnchor: () => {},
+      dispatchInput: () => {}, navigate: () => {}
+    };
+    const skin = defaultSkinFactory.mount(host, {
+      image: async () => { throw new Error("No images used."); },
+      audio: async () => { throw new Error("No audio used."); }
+    });
+    const snapshot = view(100);
+    snapshot.map.obstacles = generateMap(42, "simple-generated").map.obstacles.map(rect => ({ ...rect }));
+    try {
+      skin.handleViewport(800, 600, 1);
+      skin.handleSnapshot(snapshot);
+      skin.render(performance.now(), snapshot);
+      const rectangles = elements.flatMap(element => element.drawnRects);
+      for (const obstacle of snapshot.map.obstacles) {
+        const screen = worldToScreen(obstacle, { x: 100, y: 100 }, 800, 600);
+        expect(rectangles).toContainEqual(expect.objectContaining({
+          x: screen.x, y: screen.y, width: obstacle.width, height: obstacle.height
+        }));
+      }
+    } finally {
+      skin.dispose();
+    }
+  });
 
   it.each(["player", "spectator"] as const)("renders wave time in the %s HUD even during respawn", role => {
     const elements: HudElement[] = [];

@@ -614,6 +614,12 @@ try {
     await verifyReconnect({ alice, bob, observer, creator, bobName: `ViewB_${suffix}`,
       cdp, evaluate, waitFor, click, clickSessionButton, state, own, move, shootUntil, delay,
       browser: version.Browser });
+  } else if (process.argv.includes("--simple-generated")) {
+    const { verifySimpleGenerated } = await import("./simple-generated.mjs");
+    await verifySimpleGenerated({
+      alice, creator, cdp, evaluate, waitFor, click, clickSessionButton,
+      state, own, aim, moveAndSample, delay, browser: version.Browser, origin
+    });
   } else if (process.argv.includes("--arena-obstacles")) {
     await evaluate(alice, `document.querySelector('[name=setting-maxPlayers]').value = '1';
       document.querySelector('[name=setting-initialNpcsPerPlayer]').value = '1';

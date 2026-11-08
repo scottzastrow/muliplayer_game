@@ -28,6 +28,9 @@ revision/release. Contract gaps must be proposed to the engine owner, not resolv
 by copying and changing SDK declarations in the themes repo. Keep the default
 reference theme here and maintain an external-consumer conformance fixture.
 
+For Dots and Squares map configuration, seeded reproduction and validation, read
+the map modes section of `docs/theme-development.md`.
+
 Load local `.env` through the application's startup scripts; commit `.env.example`
 only. Production uses systemd EnvironmentFile=/etc/multiplayer-game/game.env.
 No Windows persistent environment variables or production credentials are required
