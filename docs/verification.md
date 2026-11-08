@@ -1,5 +1,110 @@
 # Local verification
 
+## Radar SDK commit and final checks (2026-11-08)
+
+The reviewed radar SDK, default-theme integration, contracts, tests and browser
+harness fix were committed as `600c5e0eebddf7b1b38b82fff7b377cf3b318e1c`.
+The first full-suite run found that an added roster guard rejected the established
+spectator snapshot contract. The guard was removed without changing the engine's
+target-derived spectator projection; that compatibility fix and its test cleanup
+were committed separately as `d02808facd5ed38ed1b52757caed7d50d0587453`.
+
+The external-consumer lock now pins the public SDK contract to the reviewed radar
+commit above. After the compatibility fix, `npm run check` passed and `npm test`
+passed all **43 files and 206 tests**, including the isolated external-consumer
+package/build conformance check against that immutable pin. The initial test failure
+was followed by a clean full-suite rerun. No browser run was repeated during this
+final verification; the Chrome run and earlier reload diagnostics are recorded
+below. T042 remains open. No deployment or capacity run was performed.
+
+## Radar filters and saved-standings synchronization (2026-11-08)
+
+Continued the radar work on `001-multiplayer-engine`. Unrelated changes, including
+`.idea`, were preserved.
+
+The prior `default-game.mjs:1224` null-table failure was a reload synchronization
+race, not evidence that saved standings never render. The old wait checked only
+table presence and could succeed in the outgoing document before the subsequent
+text read ran in the new document. The results skin builds and inserts the
+populated table synchronously; the new page first restores authentication and
+fetches the saved result asynchronously. An isolated real-Chrome diagnostic using
+the actual results renderer and a labeled 300-ms fixture fetch delay observed no
+table during the new-page load and `Saved result loaded.` with a table afterward.
+Twelve further isolated reloads reached the saved table; the original intermittent
+null exception was not reproduced in those diagnostics. One exploratory CDP
+request-interception diagnostic stalled and was stopped. The harness now waits
+for a different per-document probe ID **and** the standings table before retaining
+the original full-text equality and saved-result URL assertions.
+
+The reusable SDK accepts generic categories, marker color overrides, dot/diamond
+styles, clipped rectangular footprints and display-only category selection.
+Dots and Squares authorizes fellow living players, living NPCs, available pickups
+and real map collision geometry in its viewer snapshots. The skin offers four
+independent initially enabled filters, keeps the selected dot/facing centered,
+uses assigned player colors, enemy dots, pickup diamonds and muted terrain, and
+keeps the enemy count below the upper-right north-up circle independently of NPC
+visibility. Spectators receive the followed player's authorized view and own
+their display filters; filters never dispatch gameplay actions.
+
+Final focused selection passed: **8 files, 58 tests** (`radar`, `default-theme`,
+`default-skin`, `default-combat`, `default-respawn`, `spectator-view`,
+`integration/spectators`, `results`). Real combat/claim tests now explicitly check
+radar removal after an NPC kill and a contested health-pickup claim. The skin
+tests check all four filters for players and spectators, unchanged snapshots,
+center/facing, enemy count and disposal. `npm run check`, browser harness syntax
+and `git diff --check` passed. An initial build rejected the inferred optional
+footprint's `undefined` type against `JsonValue`; preserving the concrete
+serializer return type corrected it without a type assertion.
+
+The full `npm run test:browser` scenario ran **once and passed**, using three
+visible Chrome 156.0.8078.80 windows on Windows, Vite at `127.0.0.1:5174`, an
+isolated in-memory SQLite server at `127.0.0.1:8083`, and a session-only Chrome
+profile/debug endpoint at `127.0.0.1:9223`. Readiness and client responses were
+successful before the run. Assertions verified all four filters independently,
+assigned fellow-player radar colors, centered self/facing, NPC count while hidden,
+player and spectator resize with the NPC filter retained, spectator filters not
+changing the followed player's display, and actual Canvas pixel clipping of a
+terrain footprint at the circle. Existing controls, spectator switching/no input,
+two-player two-level completion, saved-result reload and both full page refreshes,
+identical standings and capacity-slot release also passed. The saved standings
+were 300 points/3 kills and 100 points/1 kill, both with zero deaths.
+
+**Gaps at the time of this entry:** no full regression suite, separate
+`--arena-obstacles` encounter, human visual review or non-Chrome check was run in
+this follow-up. External-consumer conformance had not yet run because its immutable
+pin predated these public SDK edits. No pin was fabricated at that point. Local
+browser/test services were stopped. T042 remained open; no deployment or capacity
+run was performed.
+
+## Radar follow-up (2026-11-08)
+
+Resumed the saved radar edits on `001-multiplayer-engine`, preserving unrelated
+`.idea` files. The module selects living NPC `enemy` markers; the public SDK
+validates and renders generic markers; the default skin owns upper-right
+placement and centers `Enemies remaining` below the radar. Older snapshots may
+omit the additive radar field.
+
+Before further edits, `npm run check` and the focused radar/default-skin/default-theme
+selection passed (3 files, 15 tests). After correcting the saved upper-left
+placement and adding player/spectator resize assertions, the same checks passed
+again. Browser harness syntax and `git diff --check` also passed.
+
+One `npm run test:browser` attempt used Node 24.11.0 on Windows, an in-memory
+SQLite server at `127.0.0.1:18083`, Vite at `127.0.0.1:15174`, and a fresh isolated
+Chrome profile with loopback debugging at `127.0.0.1:19223`. Server readiness,
+client, Chrome debugging and proxied readiness all returned HTTP 200.
+The browser reached and passed radar assertions for both players, viewport resize,
+enemy marker selection/count, selected-player anchor and the followed spectator
+view, including upper-right placement with the count below.
+
+The complete browser scenario did **not** pass in that attempt. It later failed during saved-result
+page-reload checks at `tests/browser/default-game.mjs:1224`:
+`TypeError: Cannot read properties of null (reading 'textContent')`.
+No second browser attempt was made and the failure was not repaired in this radar
+slice at that time. The separate `--arena-obstacles` radar encounter, human visual
+review and non-Chrome behavior remain unverified. Local test processes were stopped.
+T042 remained open; no deployment or capacity test was performed.
+
 ## Timer and NPC settings browser exercise (2026-11-08)
 
 Revision `58ad727`, Windows, Node 24.11.0, npm 11.6.1 and Chrome
