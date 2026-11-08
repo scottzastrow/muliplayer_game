@@ -1,4 +1,10 @@
-import type { SkinFactory, SkinHost, SkinInstance, SkinFactoryMetadata } from "@multiplayer-game/theme-sdk";
+import {
+  drawRadar,
+  type SkinFactory,
+  type SkinHost,
+  type SkinInstance,
+  type SkinFactoryMetadata
+} from "@multiplayer-game/theme-sdk";
 import {
   DefaultViewSchema, interpolateEntities, worldToScreen, type DefaultView
 } from "./view.js";
@@ -18,6 +24,16 @@ const TERRAIN_TILE_COLORS = Object.freeze(["#2b3d51", "#2d4155"]);
 const TERRAIN_SEAM_COLOR = "#3b5168";
 const TERRAIN_PATTERN_COLOR = "#344a60";
 const NPC_COLOR = "#ed6b61";
+const RADAR_MARGIN = 12;
+const RADAR_Y = 84;
+const RADAR_RADIUS = 72;
+const RADAR_RANGE = 512;
+const RADAR_FILTERS = Object.freeze([
+  { category: "player", label: "Fellow players" },
+  { category: "enemy", label: "NPCs" },
+  { category: "pickup", label: "Pickups" },
+  { category: "terrain", label: "Terrain" }
+]);
 
 export const defaultSkinFactory: SkinFactory = Object.freeze({
   metadata,
@@ -58,6 +74,29 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     controls.append(help);
     world.append(canvas);
     const listeners = new AbortController();
+    const radarFilters = document.createElement("fieldset");
+    radarFilters.className = "default-radar-filters";
+    radarFilters.setAttribute("aria-label", "Radar filters");
+    radarFilters.style.marginLeft = "auto";
+    const legend = document.createElement("legend");
+    legend.textContent = "Radar filters";
+    radarFilters.append(legend);
+    const enabledCategories = new Set(RADAR_FILTERS.map(filter => filter.category));
+    for (const filter of RADAR_FILTERS) {
+      const label = document.createElement("label");
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.name = `radar-${filter.category}`;
+      input.checked = true;
+      input.setAttribute("aria-label", filter.label);
+      input.addEventListener("change", () => {
+        if (input.checked) enabledCategories.add(filter.category);
+        else enabledCategories.delete(filter.category);
+      }, { signal: listeners.signal });
+      label.append(input, document.createTextNode(filter.label));
+      radarFilters.append(label);
+    }
+    controls.append(radarFilters);
     const keys = new Set<string>();
     let previous: DefaultView | undefined;
     let current: DefaultView | undefined;
@@ -278,6 +317,38 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
             context.fill();
           }
         }
+        if (current.radar) {
+          const radarX = width - RADAR_MARGIN - RADAR_RADIUS;
+          const radarFacing = current.viewerRole === "spectator"
+            ? player.facing
+            : { x: Math.cos(facingAngle), y: Math.sin(facingAngle) };
+          drawRadar(context, current.radar, {
+            x: radarX,
+            y: RADAR_Y,
+            radius: RADAR_RADIUS,
+            range: RADAR_RANGE,
+            center: camera,
+            ...(radarFacing ? { facing: radarFacing } : {}),
+            markerColors: {
+              player: "#f7db76", enemy: NPC_COLOR, pickup: "#ffa64d", terrain: "#344a60"
+            },
+            markerColorOverrides: Object.fromEntries(current.players.map(item =>
+              [`player:${item.accountId}`, item.color ?? "#f7db76"])),
+            markerShapes: { pickup: "diamond", terrain: "footprint" },
+            enabledCategories: [...enabledCategories],
+            anchorColor: player.color ?? "#58d6ff"
+          });
+          context.fillStyle = "#f4f1e8";
+          context.font = "12px sans-serif";
+          context.textAlign = "center";
+          context.textBaseline = "top";
+          context.fillText(
+            `Enemies remaining: ${current.radar.markers.filter((marker) =>
+              marker.category === "enemy").length}`,
+            radarX,
+            RADAR_Y + RADAR_RADIUS + 8
+          );
+        }
         points.textContent = `Points: ${observed?.hud.points ?? player.points}`;
         health.textContent = `Health: ${observed?.hud.health ?? player.health}`;
         waveTime.textContent = current.phase === "active" && current.waveRemainingSeconds !== undefined
@@ -331,6 +402,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
         waveTime.remove();
         life.remove();
         help.remove();
+        radarFilters.remove();
         previous = undefined;
         current = undefined;
       }

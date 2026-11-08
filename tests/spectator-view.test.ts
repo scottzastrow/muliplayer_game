@@ -7,7 +7,10 @@ describe("target-derived spectator views", () => {
     viewerAccountId: "target", viewerRole: "player", tick: 90, level: 1, phase: "active",
     players: [{ accountId: "target", position: { x: 320, y: 480 }, health: alive ? 75 : 0,
       points: 500, alive, ...(alive ? {} : { respawnAtTick: 210, respawnBlocked: false }) }],
-    entities: [], map: { width: 2048, height: 2048, obstacles: [] }
+    entities: [], map: { width: 2048, height: 2048, obstacles: [] },
+    radar: { categories: ["objective"], markers: [
+      { id: "target-only", category: "objective", position: { x: 10, y: 20 } }
+    ] }
   });
 
   it("uses the selected target's position and HUD without mutating the player's snapshot", () => {
@@ -19,6 +22,7 @@ describe("target-derived spectator views", () => {
         hud: { points: 500, health: 75 }, death: { alive: true, remainingSeconds: 0 } }
     });
     expect(original.viewerRole).toBe("player");
+    expect(view.radar).toEqual(original.radar);
     expect(original).not.toHaveProperty("spectatorView");
   });
 

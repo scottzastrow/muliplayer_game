@@ -6,6 +6,14 @@ import {
 } from "@multiplayer-game/protocol";
 export { Countdown } from "./countdown.js";
 export {
+  RadarMarkerSchema,
+  RadarViewSchema,
+  drawRadar,
+  type RadarMarker,
+  type RadarRenderOptions,
+  type RadarView
+} from "./radar.js";
+export {
   MAP_CELL_SIZE,
   MAX_MAP_COLLISIONS,
   MAX_MAP_DIMENSION,

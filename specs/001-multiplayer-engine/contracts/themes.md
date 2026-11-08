@@ -164,6 +164,37 @@ the intermission phase and persists level changes with compare-and-set semantics
 Match requests are accepted only from the complete phase with standings for the
 current persisted level, no higher than the configured maximum; the module owns
 the reason for ending early or after a final clear.
+
+Modules may include the public SDK's optional `radar` view in each viewer-specific
+snapshot. A view declares its game-defined marker categories and the markers selected
+for that viewer; the engine forwards the selected module snapshot without imposing
+combat categories or visibility rules. Spectator snapshots use the followed player's
+module view. `RadarViewSchema` bounds and validates category IDs, marker IDs and
+finite world positions (64 unique categories, 6,400 unique markers). Markers may
+include a positive finite rectangle `footprint: {width, height}` centered on their
+world position. The shared `drawRadar` helper renders a circular, north-up view.
+The skin supplies category colors, optional per-marker color overrides, category
+shapes (`dot`, `diamond`, `footprint`), enabled categories and a center/facing
+indicator. Filtering is render-only and never mutates the authorized module view
+or dispatches an input. Dots/diamonds outside range clamp to the rim; footprints
+keep their world-space extent and are clipped to the circle, not clamped into
+false rim obstacles. Footprints render behind point markers.
+
+Placement, offered filters and their defaults belong to the skin, not the shared
+SDK or engine. Dots and Squares authorizes live fellow players (excluding self),
+living NPCs, available pickups and actual map collision rectangles as `player`,
+`enemy`, `pickup` and `terrain`. Its skin puts the radar in the upper-right with
+four independently selectable filters, initially enabled: Fellow players, NPCs,
+Pickups and Terrain. Fellow dots use their assigned colors, NPC dots the shared
+enemy color, pickups diamonds and terrain muted footprints. Self/facing stays
+centered and `Enemies remaining` stays below the radar even when NPCs are hidden.
+Markers disappear on authoritative death, pickup claim or player departure.
+Spectators receive the followed player's authorized radar and filter only their
+own skin instance. Resize preserves filter selections within a mounted view.
+The optional field is additive: older snapshots without radar remain accepted;
+older skins may ignore it. These uncommitted SDK additions require a reviewed
+immutable engine-contract pin update before external-consumer conformance can pass.
+
 Result persistence, terminal state and slot release happen once. Startup failure or
 termination records the corresponding terminal result and disposes the runner/module.
 Module instances cannot share mutable singleton state. Dispose releases listeners,

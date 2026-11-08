@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_MAP_COLLISIONS } from "@multiplayer-game/theme-sdk";
+import { MAX_MAP_COLLISIONS, RadarViewSchema } from "@multiplayer-game/theme-sdk";
 
 const point = z.object({ x: z.number().finite(), y: z.number().finite() });
 const counter = z.number().int().nonnegative().safe();
@@ -32,6 +32,7 @@ export const DefaultViewSchema = z.object({
   phase: z.enum(["active", "intermission", "complete"]),
   intermissionEndsAtTick: counter.optional(),
   waveRemainingSeconds: z.number().finite().nonnegative().max(300).optional(),
+  radar: RadarViewSchema.optional(),
   map: z.object({
     width: z.number().finite().positive().max(2048),
     height: z.number().finite().positive().max(2048),

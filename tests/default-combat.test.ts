@@ -59,6 +59,8 @@ describe("default combat", () => {
     const { context, module } = simulation;
     removeNpcs(context);
     addNpc(context, "npc:target", { x: 400, y: 272 });
+    expect(module.snapshot({ accountId: "player-a", role: "player" }).radar.markers)
+      .toContainEqual({ id: "npc:target", category: "enemy", position: { x: 400, y: 272 } });
     module.applyInput("player-a", combatInput(400, 272));
 
     for (let tick = 1; tick <= 30; tick += 1) {
@@ -66,6 +68,8 @@ describe("default combat", () => {
     }
 
     expect(context.entities.get("npc:target")).toBeUndefined();
+    expect(module.snapshot({ accountId: "player-a", role: "player" }).radar.markers
+      .some(marker => marker.id === "npc:target")).toBe(false);
     expect(context.entities.get("player:player-a")?.state).toMatchObject({
       kind: "player",
       points: 100,
@@ -84,6 +88,8 @@ describe("default combat", () => {
     setHealth(context, "player:player-b", 50);
     addIdleNpc(context);
     moveEntity(context, "pickup:pickup-health", { x: 272, y: 272 });
+    expect(module.snapshot({ accountId: "player-a", role: "player" }).radar.markers)
+      .toContainEqual({ id: "pickup:pickup-health", category: "pickup", position: { x: 272, y: 272 } });
 
     module.step(0, 1);
 
@@ -96,6 +102,8 @@ describe("default combat", () => {
       health: 50
     });
     expect(context.entities.get("pickup:pickup-health")).toBeUndefined();
+    expect(module.snapshot({ accountId: "player-a", role: "player" }).radar.markers
+      .some(marker => marker.id === "pickup:pickup-health")).toBe(false);
     module.dispose();
   });
 

@@ -2,6 +2,7 @@ import {
   type GameModuleFactory,
   type GameModuleInstance,
   type ModuleContext,
+  type RadarView,
   type RosterMember
 } from "@multiplayer-game/theme-sdk";
 import { JsonValueSchema, type JsonValue } from "@multiplayer-game/protocol";
@@ -36,6 +37,7 @@ export interface DefaultModuleSnapshot extends Record<string, JsonValue> {
   readonly acceptedInputs: number;
   readonly entities: JsonValue[];
   readonly players: JsonValue[];
+  readonly radar: ReturnType<typeof serializeRadar>;
   readonly map: JsonValue;
   readonly tick: number;
   readonly viewerAccountId: string;
@@ -198,11 +200,15 @@ export const defaultModuleFactory: GameModuleFactory<
       },
       snapshot(viewer): DefaultModuleSnapshot {
         assertActive();
+        if (!rosterIds.has(viewer.accountId)) {
+          throw new RangeError("Radar viewers must be part of this session roster.");
+        }
         const progressionState = progression.state;
         return {
           acceptedInputs,
           entities: serializeEntities(_context.entities.values()),
           players: respawn.snapshot(),
+          radar: serializeRadar(_context.entities.values(), viewer.accountId, presentationMap.obstacles),
           map: structuredClone(presentationMap),
           tick: currentTick,
           viewerAccountId: viewer.accountId,
@@ -272,6 +278,30 @@ function serializeEntities(entities: readonly Readonly<DefaultEntity>[]): JsonVa
     radius: entity.radius,
     state: structuredClone(entity.state)
   }));
+}
+
+function serializeRadar(
+  entities: readonly Readonly<DefaultEntity>[],
+  viewerAccountId: string,
+  obstacles: readonly { x: number; y: number; width: number; height: number }[]
+) {
+  return {
+    categories: ["player", "enemy", "pickup", "terrain"],
+    markers: [
+      ...entities.flatMap((entity) => {
+        const state = entity.state;
+        const category = state.kind === "npc" && state.health > 0 ? "enemy"
+          : state.kind === "player" && state.health > 0 && state.accountId !== viewerAccountId ? "player"
+          : state.kind === "pickup" ? "pickup" : undefined;
+        return category ? [{ id: entity.id, category, position: { ...entity.position } }] : [];
+      }),
+      ...obstacles.map((obstacle, index) => ({
+        id: `terrain:${index}`, category: "terrain",
+        position: { x: obstacle.x + obstacle.width / 2, y: obstacle.y + obstacle.height / 2 },
+        footprint: { width: obstacle.width, height: obstacle.height }
+      }))
+    ]
+  } satisfies RadarView;
 }
 
 function collectStandings(

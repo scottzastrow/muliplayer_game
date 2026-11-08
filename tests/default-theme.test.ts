@@ -131,6 +131,71 @@ describe("default theme registration", () => {
     }
   });
 
+  it("authorizes viewer radar markers from live entities and collision geometry", () => {
+    const roster: readonly RosterMember[] = [
+      { accountId: "account-1", username: "host", joinedOrder: 0 },
+      { accountId: "account-2", username: "guest", joinedOrder: 1 }
+    ];
+    const context = createContext();
+    const module = DEFAULT_THEME_REGISTRATION.moduleFactory.create(
+      context,
+      { initialNpcsPerPlayer: 1, baseNpcHealth: 100_000 },
+      roster,
+      42
+    );
+    try {
+      module.initialize();
+      const npcs = context.entities.values().filter((entity) => entity.state.kind === "npc");
+      expect(npcs.length).toBeGreaterThan(0);
+
+      const playerView = DefaultViewSchema.parse(
+        module.snapshot({ accountId: "account-1", role: "player" })
+      );
+      expect(playerView.radar?.categories).toEqual(["player", "enemy", "pickup", "terrain"]);
+      expect(playerView.radar?.markers.filter(marker => marker.category === "enemy")).toEqual(npcs.map((npc) => ({
+        id: npc.id, category: "enemy", position: npc.position
+      })));
+      expect(playerView.radar?.markers.filter(marker => marker.category === "player"))
+        .toEqual([{ id: "player:account-2", category: "player",
+          position: playerView.players[1]!.position }]);
+      const pickups = context.entities.values().filter(entity => entity.state.kind === "pickup");
+      expect(playerView.radar?.markers.filter(marker => marker.category === "pickup"))
+        .toEqual(pickups.map(pickup => ({
+          id: pickup.id, category: "pickup", position: pickup.position
+        })));
+      expect(playerView.radar?.markers.filter(marker => marker.category === "terrain"))
+        .toEqual(playerView.map.obstacles.map((obstacle, index) => ({
+          id: `terrain:${index}`, category: "terrain",
+          position: { x: obstacle.x + obstacle.width / 2, y: obstacle.y + obstacle.height / 2 },
+          footprint: { width: obstacle.width, height: obstacle.height }
+        })));
+
+      const spectatorView = DefaultViewSchema.parse(
+        module.snapshot({ accountId: "account-1", role: "spectator" })
+      );
+      expect(spectatorView.viewerAccountId).toBe("account-1");
+      expect(spectatorView.radar).toEqual(playerView.radar);
+      expect(() => module.snapshot({ accountId: "unauthorized", role: "player" }))
+        .toThrow(/roster/);
+
+      for (const npc of npcs) {
+        context.entities.update(npc.id, (entity) => entity.state.kind === "npc"
+          ? { ...entity, state: { ...entity.state, health: 0 } }
+          : entity);
+      }
+      for (const pickup of pickups) context.entities.remove(pickup.id);
+      module.setPlayerPresence?.("account-2", "disconnected");
+      const removed = DefaultViewSchema.parse(
+        module.snapshot({ accountId: "account-1", role: "player" })
+      ).radar!;
+      expect(removed.markers.filter(marker => marker.category !== "terrain")).toEqual([]);
+      expect(removed.markers.filter(marker => marker.category === "terrain"))
+        .toEqual(playerView.radar!.markers.filter(marker => marker.category === "terrain"));
+    } finally {
+      module.dispose();
+    }
+  });
+
   it("assigns distinct room colors and keeps authoritative facing through death and respawn", () => {
     const roster: readonly RosterMember[] = [
       { accountId: "account-1", username: "host", joinedOrder: 0 },

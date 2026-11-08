@@ -60,6 +60,13 @@ async function waitFor(page, expression) {
   const status = await evaluate(page, "document.querySelector('#status')?.textContent");
   throw new Error(`Browser condition timed out: ${expression}; status: ${status}`);
 }
+async function reloadStandings(page) {
+  const documentId = await evaluate(page, "window.__probe.documentId");
+  await cdp("Page.reload", {}, page.session);
+  await waitFor(page, `window.__probe?.documentId !== undefined &&
+    window.__probe.documentId !== ${JSON.stringify(documentId)} &&
+    document.querySelector('[aria-label="Final standings"]') !== null`);
+}
 async function click(page, label) {
   await waitFor(page, `[...document.querySelectorAll('button')].some(b => b.textContent === ${JSON.stringify(label)} && !b.disabled)`);
   await evaluate(page, `[...document.querySelectorAll('button')].find(b => b.textContent === ${JSON.stringify(label)}).click()`);
@@ -77,7 +84,7 @@ async function clickSessionButton(page, creator, label) {
     button.textContent === ${JSON.stringify(label)} && !button.disabled).click()`);
 }
 const probe = `(() => {
-  window.__probe = { snapshot: null, actions: [] };
+  window.__probe = { documentId: crypto.randomUUID(), snapshot: null, actions: [] };
   const NativeSocket = window.WebSocket;
   window.WebSocket = class extends NativeSocket {
     constructor(...args) {
@@ -101,12 +108,14 @@ const probe = `(() => {
   CanvasRenderingContext2D.prototype.fillRect = function(x, y, w, h) {
     if (!this.canvas.__draw) {
       this.canvas.__draw = {
-        arcs: [], squares: [], terrain: [], boundaries: [], pickups: [], fillStyles: [], strokes: []
+        arcs: [], squares: [], terrain: [], boundaries: [], pickups: [],
+        fillStyles: [], strokes: [], fillTexts: [], radarTerrain: [], diamonds: []
       };
     }
     if (this.fillStyle === '#101824') {
       this.canvas.__draw = {
-        arcs: [], squares: [], terrain: [], boundaries: [], pickups: [], fillStyles: [], strokes: []
+        arcs: [], squares: [], terrain: [], boundaries: [], pickups: [],
+        fillStyles: [], strokes: [], fillTexts: [], radarTerrain: [], diamonds: []
       };
     }
     if (this.canvas.__draw && !this.canvas.__draw.fillStyles.includes(this.fillStyle)) {
@@ -120,6 +129,9 @@ const probe = `(() => {
     }
     if (this.fillStyle === '#718395') {
       this.canvas.__draw?.boundaries.push({ x, y, w, h, color: this.fillStyle });
+    }
+    if (this.fillStyle === '#344a60' && w !== 2) {
+      this.canvas.__draw?.radarTerrain.push({x,y,w,h});
     }
     return nativeRect.call(this, x, y, w, h);
   };
@@ -135,12 +147,32 @@ const probe = `(() => {
     if (this.fillStyle === '#ffa64d') {
       this.canvas.__draw?.pickups.push({ color: this.fillStyle });
     }
+    if (this.fillStyle === '#ffa64d' && this.__path?.length === 4) {
+      this.canvas.__draw?.diamonds.push(this.__path.map(point => ({...point})));
+    }
     return nativeFill.apply(this, args);
   };
+  const nativeBeginPath = CanvasRenderingContext2D.prototype.beginPath;
+  CanvasRenderingContext2D.prototype.beginPath = function(...args) {
+    this.__path = [];
+    return nativeBeginPath.apply(this,args);
+  };
+  for (const method of ['moveTo','lineTo']) {
+    const native = CanvasRenderingContext2D.prototype[method];
+    CanvasRenderingContext2D.prototype[method] = function(x,y) {
+      this.__path?.push({x,y});
+      return native.call(this,x,y);
+    };
+  }
   const nativeArc = CanvasRenderingContext2D.prototype.arc;
   CanvasRenderingContext2D.prototype.arc = function(x, y, r, ...args) {
     this.canvas.__draw?.arcs.push({ x, y, r, color: this.fillStyle });
     return nativeArc.call(this, x, y, r, ...args);
+  };
+  const nativeFillText = CanvasRenderingContext2D.prototype.fillText;
+  CanvasRenderingContext2D.prototype.fillText = function(text, x, y, ...args) {
+    this.canvas.__draw?.fillTexts.push({ text, x, y, color: this.fillStyle });
+    return nativeFillText.call(this, text, x, y, ...args);
   };
 })();`;
 
@@ -183,6 +215,9 @@ async function state(page) {
       pickups: canvas.__draw?.pickups ?? [],
       fillStyles: canvas.__draw?.fillStyles ?? [],
       strokes: canvas.__draw?.strokes ?? [],
+      fillTexts: canvas.__draw?.fillTexts ?? [],
+      radarTerrain: canvas.__draw?.radarTerrain ?? [],
+      diamonds: canvas.__draw?.diamonds ?? [],
       canvasCount: document.querySelectorAll('canvas').length,
       colors: Object.fromEntries(window.__probe.snapshot.players.map(player => {
         const context = document.createElement('canvas').getContext('2d');
@@ -200,9 +235,78 @@ async function state(page) {
   })()`);
 }
 const own = (view) => view.snapshot.players.find(p => p.accountId === view.snapshot.viewerAccountId);
+async function toggleRadarFilter(page, category, checked) {
+  const sentInput = await evaluate(page, `(() => {
+    const before = window.__probe.actions.length;
+    const input = document.querySelector('[name="radar-${category}"]');
+    input.checked = ${checked};
+    input.dispatchEvent(new Event('change',{bubbles:true}));
+    return window.__probe.actions.length !== before;
+  })()`);
+  assert.equal(sentInput, false, "filter changes do not dispatch gameplay input");
+  await delay(100);
+}
+function radarCategoryCounts(view) {
+  const x = view.width - 84;
+  const inside = point => Math.hypot(point.x - x, point.y - 84) <= 72;
+  const friendColors = view.snapshot.players.filter(player =>
+    player.accountId !== view.snapshot.viewerAccountId).map(player => view.colors[player.accountId]);
+  return {
+    player: view.arcs.filter(arc => arc.r === 3 && inside(arc) && friendColors.includes(arc.color)).length,
+    enemy: view.arcs.filter(arc => arc.r === 3 && inside(arc) && arc.color === "#ed6b61").length,
+    pickup: view.diamonds.filter(path => inside(path[0]) &&
+      Math.max(...path.map(point => point.x)) - Math.min(...path.map(point => point.x)) === 6).length,
+    terrain: view.radarTerrain.length
+  };
+}
+async function verifyRadarFilters(page) {
+  const filters = await evaluate(page, `[...document.querySelectorAll('[aria-label="Radar filters"] input')]
+    .map(input => ({name:input.name,checked:input.checked}))`);
+  assert.deepEqual(filters, ["player","enemy","pickup","terrain"].map(category =>
+    ({name:"radar-"+category,checked:true})));
+  const before = await state(page);
+  const markers = before.snapshot.radar.markers.map(marker => marker.id);
+  const counts = radarCategoryCounts(before);
+  for (const count of Object.values(counts)) assert.ok(count > 0, "each default category is rendered");
+  for (const category of ["player","enemy","pickup","terrain"]) {
+    await toggleRadarFilter(page, category, false);
+    const hidden = await state(page);
+    const visible = radarCategoryCounts(hidden);
+    assert.equal(visible[category], 0, `${category} filter hides only its radar category`);
+    for (const other of Object.keys(visible)) {
+      if (other !== category) assert.ok(visible[other] > 0, `${other} remains visible`);
+    }
+    assert.deepEqual(hidden.snapshot.radar.markers.map(marker => marker.id), markers,
+      "filtering does not alter authorized server markers");
+    assert.ok(hidden.arcs.some(arc => arc.x === hidden.width - 84 && arc.y === 84 && arc.r === 4),
+      "own dot stays centered with every filter");
+    assert.ok(hidden.arcs.some(arc => arc.r === 2 &&
+      Math.abs(Math.hypot(arc.x - (hidden.width - 84),arc.y - 84) - 12) < 0.1),
+    "facing stays centered with every filter");
+    assert.ok(hidden.fillTexts.some(label => label.text === `Enemies remaining: ${counts.enemy}`),
+      "enemy count is independent of NPC visibility");
+    await toggleRadarFilter(page, category, true);
+  }
+  return counts;
+}
 function centered(view) {
   const player = own(view);
   const playerColor = view.colors[player.accountId];
+  const livingNpcs = view.snapshot.entities.filter(item =>
+    item.state.kind === "npc" && item.state.health > 0);
+  assert.deepEqual(view.snapshot.radar?.categories, ["player", "enemy", "pickup", "terrain"],
+    "the default module selects all four authorized categories");
+  assert.deepEqual(view.snapshot.radar?.markers.filter(item => item.category === "enemy").map(item => item.id),
+    livingNpcs.map(item => item.id), "the viewer receives each living NPC marker");
+  const radarX = view.width - 84;
+  assert.ok(view.arcs.some(item => Math.abs(item.x - radarX) < 1 &&
+    item.y === 84 && item.r === 72), "the skin places the radar in the upper-right");
+  assert.ok(view.arcs.some(item => Math.abs(item.x - radarX) < 1 && item.y === 84 && item.r === 4 &&
+    item.color === playerColor), "the radar centers on the selected player");
+  assert.ok(view.fillTexts.some(item => item.text ===
+    `Enemies remaining: ${livingNpcs.length}` &&
+    Math.abs(item.x - radarX) < 1 && item.y === 164),
+  "the living enemy count is displayed below the radar");
   const dot = view.arcs.find(item => item.color === playerColor && item.r === 14);
   assert.ok(dot, `own player dot is rendered (${JSON.stringify({
     accountId: player.accountId,
@@ -531,6 +635,18 @@ try {
       `NPC begins at its northwest-cluster encounter spawn (${JSON.stringify(npcAtStart.position)})`);
     assert.ok(segmentHitsObstacles(playerAtStart, npcAtStart.position, arena.obstacles, 3),
       "the player and NPC start across a solid cluster with no direct shot");
+    const radarMarker = initial.arcs.find(item => item.color === "#ed6b61" && item.r === 3);
+    assert.ok(radarMarker, "the NPC radar marker is visible over obstructing terrain");
+    const radarDelta = {
+      x: npcAtStart.position.x - playerAtStart.x,
+      y: npcAtStart.position.y - playerAtStart.y
+    };
+    const radarDistance = Math.hypot(radarDelta.x, radarDelta.y);
+    const radarOffset = Math.min(67, radarDistance / 512 * 67);
+    centered(initial);
+    assert.ok(Math.hypot(radarMarker.x - (initial.width - 84 + radarDelta.x / radarDistance * radarOffset),
+      radarMarker.y - (84 + radarDelta.y / radarDistance * radarOffset)) < 0.1,
+    "the radar plots the NPC at its north-up relative position despite the wall");
 
     const playerDot = initial.arcs.find(item => item.r === 14);
     assert.ok(playerDot, "the player's rendered dot is available as a camera anchor");
@@ -769,6 +885,7 @@ try {
   assert.notEqual(startA.snapshot.viewerAccountId, startB.snapshot.viewerAccountId, "separate authenticated identities");
   centered(startA);
   centered(startB);
+  await verifyRadarFilters(alice);
   const colorA = startA.colors[own(startA).accountId];
   const colorB = startB.colors[own(startB).accountId];
   assert.notEqual(colorA, colorB, "players in a room have distinct colors");
@@ -776,14 +893,18 @@ try {
   assert.notEqual(colorB, "#ed6b61");
   assert.ok(startA.squares.length > 0 && startA.squares.every(square =>
     square.color === "#ed6b61"), "all NPC squares use the shared NPC color");
-  assert.ok(!startA.arcs.some(item => item.color === colorB), "off-viewport Bob is not rendered");
-  assert.ok(!startB.arcs.some(item => item.color === colorA), "off-viewport Alice is not rendered");
+  assert.ok(!startA.arcs.some(item => item.color === colorB && item.r === 14), "off-viewport Bob's world avatar is not rendered");
+  assert.ok(!startB.arcs.some(item => item.color === colorA && item.r === 14), "off-viewport Alice's world avatar is not rendered");
+  await toggleRadarFilter(alice, "enemy", false);
   await cdp("Browser.setWindowBounds", { windowId: aliceWindow.windowId,
     bounds: { width: 800, height: 740 } });
   await delay(300);
   const resized = await state(alice);
   assert.notEqual(resized.width, startA.width);
   centered(resized);
+  assert.equal(radarCategoryCounts(resized).enemy, 0, "NPC filtering survives resize");
+  assert.equal(await evaluate(alice, "document.querySelector('[name=\"radar-enemy\"]').checked"), false);
+  await toggleRadarFilter(alice, "enemy", true);
   assert.equal(resized.pixelWidth, Math.round(resized.width * await evaluate(alice, "devicePixelRatio")));
   assert.equal(resized.status, "");
   const beforeAim = own(resized);
@@ -852,6 +973,9 @@ try {
   const spectatorA = await state(observer);
   const bobAtSpectate = await state(bob);
   assert.equal(spectatorA.snapshot.viewerAccountId, bobAtSpectate.snapshot.viewerAccountId);
+  assert.deepEqual(spectatorA.snapshot.radar.markers.map(item => item.id),
+    bobAtSpectate.snapshot.radar.markers.map(item => item.id),
+    "the spectator radar follows the selected player's module view");
   const spectatorPeerB = spectatorA.snapshot.players.find(
     player => player.accountId === own(bobAtSpectate).accountId);
   assert.equal(spectatorPeerB.color, own(bobAtSpectate).color,
@@ -860,6 +984,20 @@ try {
     "spectator snapshots preserve the player's facing");
   assert.deepEqual(spectatorA.snapshot.spectatorView.cameraAnchor, own(spectatorA).position);
   centered(spectatorA);
+  await verifyRadarFilters(observer);
+  await toggleRadarFilter(observer, "enemy", false);
+  assert.ok(radarCategoryCounts(await state(bob)).enemy > 0,
+    "the spectator's NPC filter does not alter the followed player's display");
+  assert.equal(await evaluate(bob, "document.querySelector('[name=\"radar-enemy\"]').checked"), true);
+  const observerWindow = await cdp("Browser.getWindowForTarget", { targetId: observer.target });
+  await cdp("Browser.setWindowBounds", { windowId: observerWindow.windowId,
+    bounds: { width: 860, height: 780 } });
+  await delay(200);
+  const spectatorResized = await state(observer);
+  centered(spectatorResized);
+  assert.equal(radarCategoryCounts(spectatorResized).enemy, 0);
+  assert.equal(spectatorResized.snapshot.viewerAccountId, bobAtSpectate.snapshot.viewerAccountId);
+  await toggleRadarFilter(observer, "enemy", true);
   await move(observer, "KeyD", 300);
   assert.equal((await state(observer)).actions.length, 0, "spectator skin sends no gameplay actions");
   const spectatorFixture = await evaluate(observer, `(async () => {
@@ -1043,6 +1181,22 @@ try {
   assert.ok(fixtureChecks.compatibilityRejected && fixtureChecks.neutral && fixtureChecks.clean);
   assert.equal(fixtureChecks.deadState, "Respawning in 5s");
   assert.deepEqual(fixtureChecks.errors, []);
+  const radarClip = await evaluate(bob, `(async () => {
+    const { drawRadar } = await import('/@id/@multiplayer-game/theme-sdk');
+    const canvas = document.createElement('canvas');
+    canvas.width = 180; canvas.height = 180;
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#123456';
+    context.fillRect(0,0,180,180);
+    drawRadar(context, {categories:['geometry'],markers:[
+      {id:'wall',category:'geometry',position:{x:100,y:0},footprint:{width:120,height:60}}
+    ]}, {x:80,y:80,radius:60,range:100,center:{x:0,y:0},
+      markerColors:{geometry:'#344a60'},markerShapes:{geometry:'footprint'}});
+    const pixel = (x,y) => [...context.getImageData(x,y,1,1).data];
+    return {inside:pixel(130,85),outside:pixel(150,85)};
+  })()`);
+  assert.deepEqual(radarClip.inside, [52,74,96,255], "collision footprint fills the circle interior");
+  assert.deepEqual(radarClip.outside, [18,52,86,255], "terrain is clipped at the actual circular Canvas boundary");
   await click(observer, "Back to Players");
   await waitFor(observer, "document.querySelector('[aria-label=\"Followable players\"]') !== null");
   await click(observer, `Follow ${bobName}`);
@@ -1177,11 +1331,9 @@ try {
   await click(alice, "Reload saved result");
   await waitFor(alice, "document.querySelector('[aria-label=\"Final standings\"]') !== null");
   assert.equal(await evaluate(alice, "document.querySelector('[aria-label=\"Final standings\"]').textContent"), standings);
-  await cdp("Page.reload", {}, bob.session);
-  await waitFor(bob, "document.querySelector('[aria-label=\"Final standings\"]') !== null");
+  await reloadStandings(bob);
   assert.equal(await evaluate(bob, "document.querySelector('[aria-label=\"Final standings\"]').textContent"), standings);
-  await cdp("Page.reload", {}, alice.session);
-  await waitFor(alice, "document.querySelector('[aria-label=\"Final standings\"]') !== null");
+  await reloadStandings(alice);
   assert.equal(await evaluate(alice, "location.hash"), resultHash);
   assert.equal(await evaluate(alice, "document.querySelector('[aria-label=\"Final standings\"]').textContent"), standings);
   const savedResult = await evaluate(alice, `(async () => {
@@ -1279,6 +1431,8 @@ try {
     spectatorDeathRespawnFixture: true,
     independentMovement: true, nearbyVisibility: true, centeredCameras: true,
     actionEnvelope: true, mouseFireAndRelease: true, pointsAndHealth: true, viewportResize: true,
+    fourIndependentRadarFilters: true, assignedPlayerRadarColors: true,
+    spectatorLocalRadarFiltersAndResize: true, radarTerrainCircularClipping: true,
     fixtureShapesAndDeathHud: true, skinDisposalAndCompatibility: true, boundedOutgoingControls: true,
     savedResultHandoff: true, resultReloadAndPageRefresh: true,
     resultTableAndDisposal: true, missingResultRetry: true, backToLobby: true,
