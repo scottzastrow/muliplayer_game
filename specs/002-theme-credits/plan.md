@@ -22,7 +22,7 @@ or claiming those blocked paths have been implemented.
 **Target Platform**: Local Windows checkout; unchanged Linux production contract.
 **Project Type**: Existing engine/server with operator CLI and external theme consumer.
 **Performance Goals**: Bounded validation under existing 256-KiB manifest limit.
-**Constraints**: No runtime migration, SDK edits, deployment, commits or `.idea` changes.
+**Constraints**: No runtime migration, browser SDK changes, deployment, commits or `.idea` changes.
 **Scale/Scope**: Engine-only implementation. Companion setup/export/header work blocked.
 
 ## Constitution Check
@@ -44,7 +44,7 @@ research, data model, handoff contract, quickstart and tasks.
 
 | Path | Change |
 | --- | --- |
-| `apps/server/src/themes/credits.ts` | Shared import-credit/definition schema |
+| `packages/theme-sdk/src/package.ts` | Shared Node handoff schemas, mapping validation, hashing and limits (T012; replaces server credits helper) |
 | `apps/server/src/themes/packages.ts` | ZIP import schema and runtime field separation |
 | `tools/install-theme-code.ts` | Reviewed-code import requires credits |
 | `tests/theme-packages.test.ts` | ZIP field matrix and preservation |
@@ -61,3 +61,19 @@ setup tool, source generator, SDK fork or new dependencies.
 No constitution exceptions. Separate feature artifacts do not change the original
 task list; T042 stays open. The setup-plan helper reports a feature-derived branch
 name, not evidence of a Git switch; keep the actual checkout branch unchanged.
+
+## Authorized follow-up: T012 public package contract
+
+Move the existing credit/import-definition and package-manifest schemas, SHA-256
+asset hashing, manifest-to-file mapping validation, canonical package digest calculation and limits into the additive
+Node-only `@multiplayer-game/theme-sdk/package` export. The browser-facing root
+entry stays unchanged. ZIP parsing/safety, asset format checks, registered-code
+compatibility and transactional installation remain engine responsibilities.
+The reviewed-code CLI also consumes the public handoff-definition schema.
+
+Verify an isolated consumer of npm-packed protocol/SDK dependencies produces a
+ZIP using the shared manifest/hash API, then feed that exact ZIP to the real engine
+importer. Preserve existing runtime definitions, digests and limits. Document actual
+accepted archive rules, not a proposed exporter. Do not change the immutable
+conformance pin until a reviewed commit exists; its existing drift gate remains
+intentionally unsatisfied by uncommitted public SDK changes.

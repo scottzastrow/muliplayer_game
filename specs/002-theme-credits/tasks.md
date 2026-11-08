@@ -50,6 +50,14 @@ local checkout/tooling is provided. No delegated implementation or worktrees.
 - [ ] T010 Update companion AGENTS.md and docs/developer-guide.md with the canonical credit workflow (no local writable checkout; BLOCKED).
 - [X] T011 Run focused engine import/legacy tests and npm run check, record results and blocked checks in specs/002-theme-credits/tasks.md, preserve the pre-existing docs/verification.md edit and .idea, and leave original T042 open.
 
+## Phase 7: Public theme package contract
+
+- [X] T012 [US1] Publish the Node-only `@multiplayer-game/theme-sdk/package` entry point in packages/theme-sdk/src/package.ts and package.json; move handoff manifest/credit schemas, asset SHA-256 helpers, canonical assetsDigest calculation and package limits there, wiring the real ZIP importer and reviewed-code tool to the same definitions. Document the accepted ZIP methods/flags/path rules in docs/theme-development.md and contracts/credits.md. Add tests/theme-package-contract.test.ts with an isolated npm-packed consumer that builds a fixture ZIP through the public API and imports those exact bytes through the engine, verifying credits, asset bytes/hashes, registry digest and credit-free runtime definitions. Run focused package/import tests and npm run check; preserve unrelated edits, leave the immutable conformance pin intact pending a reviewed commit, keep original T042 open and leave changes uncommitted without push/deployment.
+
+T012 depends on completed T004/T005/T009, not blocked companion tasks or T042.
+It is a separately authorized additive public contract slice, not completion of
+companion export/setup tooling or permission to repin the external consumer.
+
 ## Dependencies & Execution Order
 
 T002 depends on T001. T003 depends on T002; T004 follows the failing T003 checks;
@@ -101,3 +109,42 @@ performed. No runtime SDK/package/pin or installed legacy manifest was changed.
 
 T006-T008 and T010 remain blocked by missing local companion tooling/access;
 they are not completed by the policy documentation.
+
+### T012 public package contract evidence (2026-11-08)
+
+The new public API test first failed at collection because `./package` was not
+exported (no tests ran), confirming the missing entry point. After extraction,
+the final `npm run check` passed and this focused selection passed:
+
+```powershell
+npm test -- tests\theme-package-contract.test.ts tests\theme-packages.test.ts tests\operator-tools.test.ts tests\integration\theme-install.test.ts tests\integration\theme-admin.test.ts
+```
+
+Result: 5 files, 25 tests passed. The public entry owns the former credits helper,
+manifest schemas, manifest-to-file mapping checks, streamed/raw asset hashing,
+canonical digest helper and limits. The importer consumes the shared definitions;
+ZIP/CRC/path/media safety, registered-code compatibility and installation stay
+engine-owned. Public schema checks preserve exact credit diagnostics, strict fields
+and inherited module/skin refinements; digest checks cover key/array order, UTF-8
+and exact credit bytes. Browser-root dependency checks find no Node imports or
+package-entry re-export in the SDK's built relative dependency graph.
+
+The isolated consumer installed offline npm-packed protocol/SDK/Zod artifacts,
+then produced a deflated UTF-8 ZIP with signed data descriptors using the public
+manifest/hash/mapping API and the existing test-only ZIP writer. The real importer
+read that same ZIP, preserved its bytes and manifest credits, installed both
+required and present optional image bytes with their exact SHA-256 hashes, tolerated
+the declared absent optional asset, and registered the canonical digest/asset root.
+Credits and assets were excluded from the runtime definition. Temporary packed
+consumer files were removed by the test.
+
+`git diff --check` passed. The browser SDK root and protocol sources are unchanged.
+The immutable conformance pin retains SHA-256
+`B296A7A33DF3AFB7711CBD425E9F682DDD81457E74E926F8CB435801A83A88E0`;
+the original pinned external-consumer drift test was not run or repinned and
+remains a reviewed-commit gate, not a claimed passing check.
+The pre-existing docs/verification.md hash remains
+`9DA5E05626F69C9EF5E56C954B9FDA41C4CBF7BFC3A416CEF12D5810F5CD1957`,
+and the six existing .idea file hashes are unchanged. Original T042 stays open.
+No companion export/setup/header, browser, capacity or deployment execution is
+claimed. Changes remain uncommitted; no push or deployment was performed.

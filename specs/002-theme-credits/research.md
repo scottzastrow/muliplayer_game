@@ -51,3 +51,18 @@ workflow instead of inspecting/wiring the required existing path.
 Document exact confirmation/header behavior and leave its task/test work open.
 No new technology decisions or unresolved design questions need delegated research;
 existing repository and remote inspection supply the evidence for this small slice.
+
+## T012 follow-up: public Node handoff contract
+
+The user separately authorized exposing the existing engine handoff definitions
+via `@multiplayer-game/theme-sdk/package`. This supersedes the initial no-public-SDK-
+change constraint only for the additive Node entry; it does not change browser
+runtime schemas or legacy loading. Shared code now resides in
+`packages/theme-sdk/src/package.ts`, replacing the server-private credits helper.
+The importer retains archive/media checks, compatibility and installation.
+
+An isolated test consumer installs offline npm-packed protocol/SDK/Zod artifacts
+and builds the fixture ZIP through public schema/hash imports, with the existing
+test-only ZIP writer. No production ZIP writer or companion workflow is invented.
+The immutable conformance pin remains unchanged: the old external-consumer drift
+gate cannot pass uncommitted SDK changes and must wait for a reviewed commit.

@@ -70,6 +70,127 @@ does not trim the stored strings or rewrite existing installed revisions. The
 compiled runtime SDK definition is unchanged: handoff-only credit fields are
 separated before runtime compatibility checks.
 
+## Public Node package contract
+
+Export/build tools use `@multiplayer-game/theme-sdk/package`, not server-private
+source files. This additive entry point is exported only under Node's `node`
+condition. The browser-facing `@multiplayer-game/theme-sdk` root is unchanged and
+does not import or re-export the package entry or its Node crypto dependency.
+
+| Export | Purpose |
+| --- | --- |
+| `ThemeCreditsSchema` | Required nonblank Project/Author and optional string Course, preserving supplied strings |
+| `ThemeImportDefinitionSchema`, `ThemeImportDefinition` | Reviewed-code handoff definition with credits, without asset mappings |
+| `AssetDeclarationSchema`, `PackageAssetsSchema`, `ThemePackageManifestSchema` and inferred types | Strict asset declaration/maps and complete cosmetic ZIP manifest |
+| `calculateThemeAssetHash(bytes)` | Lowercase SHA-256 of raw `Uint8Array`/Buffer asset bytes |
+| `createThemeAssetHash()` | Node incremental SHA-256 Hash for streaming the same bytes |
+| `validateThemePackageAssets(manifest, files)` | Validates asset declarations against a path-to-`{sha256}` map of included files |
+| `calculateThemePackageDigest(manifest)` | Canonical `assetsDigest`; does not validate a manifest or write a ZIP |
+| `runtimeThemeDefinition(definition)` | Removes credits from a handoff definition; remove ZIP `assets` first |
+
+The manifest schema retains the runtime definition's field, module/skin and
+state-schema checks. Both asset maps are required (use `{}` for empty maps); IDs
+match `^[a-z0-9][a-z0-9._-]{0,63}$`, hashes are 64 lowercase hex characters,
+and declaration paths are nonempty strings of at most 512 JavaScript string
+units. The schema does not replace ZIP path/safety or asset-content checks.
+The shared `validateThemePackageAssets` helper used by the importer additionally
+rejects IDs repeated across maps, reserved/duplicate asset paths, undeclared files,
+missing required assets and incorrect file hashes. It consumes hashes, not file
+contents; callers must hash the actual bytes with the shared helpers.
+Optional assets may be absent; present optional assets are validated identically.
+
+For export, hash each asset's exact bytes, put those hashes in the mappings, set
+`assetsDigest` using the canonical helper, then validate before writing the ZIP:
+
+```typescript
+import {
+  calculateThemeAssetHash,
+  calculateThemePackageDigest,
+  ThemePackageManifestSchema
+} from "@multiplayer-game/theme-sdk/package";
+
+// definition and confirmedCredits are supplied by the developer's existing tooling.
+const manifest = {
+  ...definition,
+  ...confirmedCredits,
+  assets: {
+    required: { logo: { path: "images/logo.png", sha256: calculateThemeAssetHash(logoBytes) } },
+    optional: {}
+  }
+};
+manifest.assetsDigest = calculateThemePackageDigest(manifest);
+ThemePackageManifestSchema.parse(manifest);
+// Write root theme.json and the declared asset bytes with a compatible ZIP writer.
+```
+
+Use `validateThemePackageAssets` with the validated manifest and a map of the
+actual included paths/hashes before writing; `theme.json` need not be in that map.
+This checks mapping consistency, not filesystem or archive safety.
+
+Canonical JSON omits only the top-level `assetsDigest`, recursively sorts object
+keys using JavaScript's default string sort, preserves array order, and uses
+`JSON.stringify` for keys and scalar values, with no formatting whitespace.
+SHA-256 hashes its UTF-8 bytes. This binds credits (without trimming), all other
+manifest fields and all required/optional declarations, including absent optional
+assets. It is not a hash of ZIP bytes or formatted `theme.json` bytes. Non-JSON
+values are not supported; validate the manifest rather than passing arbitrary objects.
+
+### Accepted ZIP formats, flags and paths
+
+The engine importer accepts classic **single-disk, non-ZIP64 ZIP** archives with
+stored (method `0`) or raw DEFLATE (method `8`) entries. Each entry may use only
+general-purpose bits `1`/`2` (compression options, mask `0x0006`), bit `3` (data
+descriptor, `0x0008`) and bit `11` (UTF-8 names, `0x0800`); every other bit,
+including encryption bits, is rejected. With bit 3, either a 12-byte unsigned or
+16-byte signature-prefixed (`0x08074b50`) descriptor must agree with the central
+CRC-32 and sizes. Without it, local CRC and sizes must agree directly. Local and
+central name bytes, flags and compression method must always agree.
+
+The end record must terminate the archive (a declared archive comment is allowed).
+The central directory must end exactly at that record, contain exactly the declared
+entries, and have no trailing records. Local entry/data/descriptor ranges cannot
+overlap each other or the central directory. Well-formed extra fields and per-entry
+comments are accepted, except ZIP64 (`0x0001`), Unicode path override (`0x7075`)
+and Unicode comment override (`0x6375`) extra fields. ZIP64 sentinel sizes/offsets,
+multi-disk entries and unsupported compression methods are rejected. Actual
+streamed sizes and CRC-32 must match declarations.
+
+ZIP names are relative, forward-slash-separated paths of **1-512 UTF-8 bytes**.
+With bit 11 clear, all name bytes must be ASCII; with bit 11 set, non-ASCII names
+must decode as valid UTF-8. A single trailing slash marks a directory and is removed
+for collision checking; directories must declare zero compressed/uncompressed
+bytes. No leading slash, initial drive-letter prefix (`C:`), backslash, NUL,
+ASCII control character, empty segment, `.` or `..` segment is accepted.
+Normalized names must be unique, including case-insensitive collisions using
+`toLocaleLowerCase("en-US")`. Asset mappings match file paths exactly, including
+case; the root manifest must be exactly `theme.json`. A wrapper directory around
+the theme is not accepted. Unix-host entries must be regular files/directories
+(or have unspecified type); symlinks and other special types are rejected.
+Extraction also enforces containment using the host filesystem's path rules.
+
+All included non-manifest files must have lowercase extensions `.png`, `.jpg`,
+`.jpeg`, `.webp`, `.woff2`, `.ogg`, `.mp3` or `.wav` and pass the engine's existing
+format/header and image-dimension checks. No uploaded module/renderer code,
+HTML, SVG, nested ZIP or other file type is allowed. This is not a general-purpose
+ZIP extraction or a complete media decoder.
+
+| Public limit | Value enforced by the importer |
+| --- | --- |
+| `MAX_THEME_ARCHIVE_BYTES` | 10 MiB; archive must also be at least 22 bytes |
+| `MAX_THEME_EXTRACTED_BYTES` | 40 MiB across file entries, including the manifest |
+| `MAX_THEME_ARCHIVE_ENTRIES` | 256, including directory entries |
+| `MAX_THEME_MANIFEST_BYTES` | 256 KiB |
+| `MAX_THEME_PATH_BYTES` | 512 UTF-8 bytes per ZIP name (schema string limit described above) |
+| `MAX_THEME_IMAGE_EDGE` | 4096 pixels per edge |
+| `MAX_THEME_IMAGE_PIXELS` | 32,000,000 image pixels across included assets |
+
+ZIP safety/CRC, media checks, registered-code/engine compatibility, staging,
+promotion, registry transactions and rollback remain in the engine. The shared
+API is not an installer and does not accept executable code. The isolated
+`tests/theme-package-contract.test.ts` consumer builds a ZIP using npm-packed
+public dependencies and sends that exact ZIP through the real importer; it does
+not implement or verify the unavailable companion export/setup tool.
+
 ### Setup and generated-source policy
 
 Setup tooling must suggest credits found in existing manifest/package metadata
@@ -97,8 +218,9 @@ as executed functionality or create a duplicate workflow to bypass missing acces
 
 ## Extension points and compatibility
 
-Import only `@multiplayer-game/theme-sdk` for module, skin, capability, map, and
-host contracts. The default package is the working end-to-end example:
+Import `@multiplayer-game/theme-sdk` for browser/runtime module, skin, capability,
+map and host contracts; use its Node-only `/package` entry for handoff tooling.
+The default package is the working end-to-end example:
 
 - A `GameModuleFactory` declares its module ID, version, and state schema, validates
   settings, and creates isolated mutable state from the supplied scoped context,

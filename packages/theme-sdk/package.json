@@ -17,6 +17,12 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./package": {
+      "node": {
+        "types": "./dist/package.d.ts",
+        "import": "./dist/package.js"
+      }
     }
   },
   "dependencies": {

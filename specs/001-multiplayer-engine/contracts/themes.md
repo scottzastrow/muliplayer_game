@@ -204,6 +204,16 @@ validation.
 
 ## Package upload/install
 
+The Node-only `@multiplayer-game/theme-sdk/package` public entry owns handoff
+manifest/credit/asset schemas, raw and streamed asset SHA-256 helpers, canonical
+package digest calculation and package limits. Export tools and the real importer
+use the same definitions, without importing engine-private validation. The browser
+SDK root remains unchanged and free of Node dependencies. ZIP safety, media
+validation, registered-code compatibility and installation remain engine-owned.
+See `docs/theme-development.md` for the actual accepted ZIP methods, flags,
+descriptors, extra fields and path rules. This additive uncommitted export does
+not authorize updating the immutable conformance pin before a reviewed commit.
+
 Theme Credits adds handoff-only required `project` and `author` nonblank strings
 to new export/import manifests; Author is a developer-confirmed public person or
 team. Optional `course` is a string. Missing, empty, whitespace-only or non-string

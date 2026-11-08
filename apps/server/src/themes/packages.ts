@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   createReadStream,
   createWriteStream,
@@ -15,7 +14,6 @@ import { dirname, extname, isAbsolute, relative, resolve, sep } from "node:path"
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createInflateRaw } from "node:zlib";
-import { z } from "zod";
 import {
   isThemeCompatible,
   validateThemeRevision,
@@ -25,31 +23,34 @@ import {
   type ThemePackageRevision
 } from "@multiplayer-game/theme-sdk";
 import type { SqliteDatabase } from "../storage/database.js";
-import { runtimeThemeDefinition, ThemeImportDefinitionSchema } from "./credits.js";
+import {
+  calculateThemePackageDigest,
+  createThemeAssetHash,
+  MAX_THEME_ARCHIVE_BYTES,
+  MAX_THEME_EXTRACTED_BYTES,
+  MAX_THEME_ARCHIVE_ENTRIES,
+  MAX_THEME_IMAGE_EDGE,
+  MAX_THEME_IMAGE_PIXELS,
+  MAX_THEME_MANIFEST_BYTES,
+  MAX_THEME_PATH_BYTES,
+  runtimeThemeDefinition,
+  ThemePackageManifestSchema,
+  validateThemePackageAssets,
+  type ThemePackageManifest
+} from "@multiplayer-game/theme-sdk/package";
 
-export const MAX_THEME_ARCHIVE_BYTES = 10 * 1024 * 1024;
-export const MAX_THEME_EXTRACTED_BYTES = 40 * 1024 * 1024;
-export const MAX_THEME_ARCHIVE_ENTRIES = 256;
-export const MAX_THEME_IMAGE_EDGE = 4096;
-export const MAX_THEME_IMAGE_PIXELS = 32_000_000;
-const MAX_MANIFEST_BYTES = 256 * 1024;
-const MAX_PATH_BYTES = 512;
+export {
+  calculateThemePackageDigest,
+  MAX_THEME_ARCHIVE_BYTES,
+  MAX_THEME_EXTRACTED_BYTES,
+  MAX_THEME_ARCHIVE_ENTRIES,
+  MAX_THEME_IMAGE_EDGE,
+  MAX_THEME_IMAGE_PIXELS,
+  ThemePackageManifestSchema,
+  type ThemePackageManifest
+} from "@multiplayer-game/theme-sdk/package";
+
 const ENGINE_API_MAJOR = 1;
-
-const AssetDeclarationSchema = z.object({
-  path: z.string().min(1).max(MAX_PATH_BYTES),
-  sha256: z.string().regex(/^[a-f0-9]{64}$/)
-}).strict();
-const PackageAssetsSchema = z.object({
-  required: z.record(z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/), AssetDeclarationSchema),
-  optional: z.record(z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/), AssetDeclarationSchema)
-}).strict();
-
-export const ThemePackageManifestSchema = ThemeImportDefinitionSchema.safeExtend({
-  assets: PackageAssetsSchema
-}).strict();
-
-export type ThemePackageManifest = z.infer<typeof ThemePackageManifestSchema>;
 export type RegisteredThemeModules = ReadonlyMap<string, ModuleMetadata>;
 export type RegisteredThemeRenderers = ReadonlyMap<string, SkinFactoryMetadata>;
 
@@ -139,7 +140,7 @@ function decodeZipPath(bytes: Buffer, flags: number): string {
   const segments = normalized.split("/");
   if (
     bytes.length === 0 ||
-    bytes.length > MAX_PATH_BYTES ||
+    bytes.length > MAX_THEME_PATH_BYTES ||
     value.includes("\\") ||
     value.includes("\0") ||
     /[\u0000-\u001f\u007f]/.test(value) ||
@@ -353,7 +354,7 @@ async function extractEntry(
   remainingBytes: number
 ): Promise<ExtractedFile> {
   mkdirSync(dirname(targetPath), { recursive: true });
-  const hash = createHash("sha256");
+  const hash = createThemeAssetHash();
   let byteCount = 0;
   let crc = 0xffffffff;
   const validate = new Transform({
@@ -384,27 +385,6 @@ async function extractEntry(
     throw new Error(`ZIP entry ${entry.path} failed size or CRC validation.`);
   }
   return { path: entry.path, sha256: hash.digest("hex"), bytes: byteCount };
-}
-
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (value !== null && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    return `{${Object.keys(record).sort().map((key) =>
-      `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(",")}}`;
-  }
-  const serialized = JSON.stringify(value);
-  if (serialized === undefined) throw new Error("Theme package metadata is not JSON serializable.");
-  return serialized;
-}
-
-export function calculateThemePackageDigest(
-  manifest: Readonly<Record<string, unknown>>
-): string {
-  const content = Object.fromEntries(
-    Object.entries(manifest).filter(([key]) => key !== "assetsDigest")
-  );
-  return createHash("sha256").update(canonicalJson(content), "utf8").digest("hex");
 }
 
 function validatePng(path: string, bytes: Buffer): { readonly width: number; readonly height: number } {
@@ -613,47 +593,6 @@ function validateCodeReferences(
   return revision;
 }
 
-function validateManifestFiles(
-  manifest: ThemePackageManifest,
-  files: ReadonlyMap<string, ExtractedFile>
-): void {
-  const declared = new Set<string>(["theme.json"]);
-  const mappings = [
-    ...Object.values(manifest.assets.required),
-    ...Object.values(manifest.assets.optional)
-  ];
-  const mappingPaths = new Set<string>();
-  const assetIds = new Set<string>();
-  for (const id of [
-    ...Object.keys(manifest.assets.required),
-    ...Object.keys(manifest.assets.optional)
-  ]) {
-    if (assetIds.has(id)) throw new Error(`Theme asset ID ${id} is declared more than once.`);
-    assetIds.add(id);
-  }
-  for (const mapping of mappings) {
-    const key = mapping.path.toLocaleLowerCase("en-US");
-    if (mapping.path === "theme.json" || mappingPaths.has(key)) {
-      throw new Error(`Theme asset path ${mapping.path} is declared more than once or reserved.`);
-    }
-    mappingPaths.add(key);
-    const file = files.get(mapping.path);
-    if (!file) {
-      if (Object.values(manifest.assets.optional).includes(mapping)) continue;
-      throw new Error(`Required theme asset ${mapping.path} is missing.`);
-    }
-    if (file.sha256 !== mapping.sha256) {
-      throw new Error(`Theme asset ${mapping.path} does not match its declared SHA-256 hash.`);
-    }
-    declared.add(mapping.path);
-  }
-  for (const path of files.keys()) {
-    if (path !== "theme.json" && !declared.has(path)) {
-      throw new Error(`Theme package contains undeclared asset ${path}.`);
-    }
-  }
-}
-
 function assertSafeRelativePath(root: string, entryPath: string): string {
   const target = resolve(root, ...entryPath.split("/"));
   const pathFromRoot = relative(root, target);
@@ -730,8 +669,8 @@ export async function validateAndInstallThemePackage(
         if (imagePixels > MAX_THEME_IMAGE_PIXELS) {
           throw new Error(`Theme images exceed the ${MAX_THEME_IMAGE_PIXELS}-pixel decoded limit.`);
         }
-      } else if (extracted.bytes > MAX_MANIFEST_BYTES) {
-        throw new Error(`theme.json exceeds the ${MAX_MANIFEST_BYTES}-byte manifest limit.`);
+      } else if (extracted.bytes > MAX_THEME_MANIFEST_BYTES) {
+        throw new Error(`theme.json exceeds the ${MAX_THEME_MANIFEST_BYTES}-byte manifest limit.`);
       }
       files.set(entry.path, extracted);
     }
@@ -743,7 +682,7 @@ export async function validateAndInstallThemePackage(
       throw new Error("Theme package has an invalid JSON manifest.", { cause: error });
     }
     const manifest = ThemePackageManifestSchema.parse(manifestInput);
-    validateManifestFiles(manifest, files);
+    validateThemePackageAssets(manifest, files);
     const normalizedManifest: ThemePackageManifest = {
       ...manifest,
       assets: {

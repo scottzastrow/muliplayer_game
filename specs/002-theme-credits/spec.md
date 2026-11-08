@@ -105,6 +105,15 @@ Python, and verify JSON remains comment-free.
   exchange boundaries and the required header languages, without fabricated evidence.
 - **FR-010**: Inaccessible paths MUST be reported explicitly; blocked companion
   work MUST remain open rather than be replaced by an invented parallel tool.
+- **FR-011**: The additive Node-only `@multiplayer-game/theme-sdk/package` entry
+  MUST own the existing handoff manifest/credit validation, asset SHA-256 hashing,
+  canonical assetsDigest calculation and package limits. The real importer MUST
+  use these definitions. The browser SDK root MUST remain free of Node dependencies.
+- **FR-012**: Document the ZIP formats, flags and path rules the importer accepts.
+  ZIP safety, registered-code compatibility and installation MUST stay in the engine.
+  An isolated packaged public API consumer MUST build a fixture ZIP that the real
+  importer accepts unchanged, verifying credits, bytes/hashes, registry digest and
+  exclusion of credits from the runtime definition.
 
 ### Key Entities
 

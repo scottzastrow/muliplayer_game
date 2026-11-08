@@ -12,7 +12,7 @@ import {
   runtimeThemeDefinition,
   ThemeImportDefinitionSchema,
   type ThemeImportDefinition
-} from "../apps/server/src/themes/credits.js";
+} from "@multiplayer-game/theme-sdk/package";
 
 const reviewedModules = new Map([
   [`${defaultModuleFactory.metadata.id}@${defaultModuleFactory.metadata.version}`, defaultModuleFactory]
