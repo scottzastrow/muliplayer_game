@@ -34,6 +34,10 @@ export {
 export {
   DefaultProgression,
   LEVEL_INTERMISSION_TICKS,
+  calculateWaveDurationSeconds,
+  WAVE_BASE_DURATION_SECONDS,
+  WAVE_SECONDS_PER_NPC,
+  WAVE_MAX_DURATION_SECONDS,
   resolveDefaultSettings,
   type DefaultLevelPhase,
   type DefaultProgressionState

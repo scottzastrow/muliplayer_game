@@ -126,8 +126,7 @@ export const MatchResultSchema = z.object({
   themeDigest: z.string().regex(/^[a-f0-9]{64}$/),
   finalizedAt: z.iso.datetime()
 }).strict().superRefine((result, context) => {
-  if (result.finalLevel > result.settings.maxLevels ||
-      (result.status === "finished" && result.finalLevel !== result.settings.maxLevels)) {
+  if (result.finalLevel > result.settings.maxLevels) {
     context.addIssue({ code: "custom", message: "Final level does not match result settings." });
   }
   if (result.status !== "finished" && result.standings.length !== 0) {

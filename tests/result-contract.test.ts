@@ -16,6 +16,10 @@ describe("saved-result public contract", () => {
     expect(MatchResultSchema.parse(result)).toEqual(result);
     expect(MatchResultSchema.safeParse({ ...result, passwordHash: "not-public" }).success).toBe(false);
   });
+  it("accepts module-ended matches with standings before the configured maximum level", () => {
+    const timedOut = { ...result, settings: { ...result.settings, maxLevels: 5 } };
+    expect(MatchResultSchema.parse(timedOut)).toEqual(timedOut);
+  });
   it("rejects missing scores, duplicate accounts, unordered ranks and invalid completion", () => {
     expect(MatchResultSchema.safeParse({ ...result, standings: [] }).success).toBe(false);
     expect(MatchResultSchema.safeParse({

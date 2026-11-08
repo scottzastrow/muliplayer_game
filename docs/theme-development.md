@@ -60,6 +60,18 @@ host contracts. The default package is the working end-to-end example:
   host-dispatched directional input. It demonstrates that a gameplay/presentation
   override does not need edits to engine runtime code.
 
+For timed phases, import `Countdown` from the public SDK and create
+`new Countdown(context.clock, durationSeconds)` when the phase starts. Read
+`remainingSeconds` for snapshots and check `expired` from the module's `step`;
+the helper does not schedule callbacks or decide gameplay outcomes. The default
+progression uses provisional `min(300, 60 + 3 * starting NPC count)` wave budgets,
+continues timing through respawns, and requests match completion once on expiry.
+Other modules may choose a different expiry policy. Core still validates the
+complete phase/current level and saves full standings atomically, including
+module-ended matches below the configured maximum. The default schema-v4 HUD
+uses the additive optional `waveRemainingSeconds` field for both player and
+spectator views; existing v4 consumers may ignore it.
+
 The definition in `theme.json` binds theme, module, renderer, engine API major,
 state schema, settings, and the canonical manifest digest. A compatibility change
 must be proposed in this engine repository, versioned, and checked against both

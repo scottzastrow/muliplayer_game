@@ -29,6 +29,7 @@ export interface DefaultModuleState extends Record<string, JsonValue> {
   readonly level: number;
   readonly phase: DefaultLevelPhase;
   readonly intermissionEndsAtTick?: number;
+  readonly waveRemainingSeconds?: number;
 }
 
 export interface DefaultModuleSnapshot extends Record<string, JsonValue> {
@@ -42,6 +43,7 @@ export interface DefaultModuleSnapshot extends Record<string, JsonValue> {
   readonly level: number;
   readonly phase: DefaultLevelPhase;
   readonly intermissionEndsAtTick?: number;
+  readonly waveRemainingSeconds?: number;
 }
 
 export interface DefaultModuleResults extends Record<string, JsonValue> {
@@ -134,6 +136,9 @@ export const defaultModuleFactory: GameModuleFactory<
           tick: currentTick,
           level: progressionState.level,
           phase: progressionState.phase,
+          ...(progressionState.waveRemainingSeconds === undefined
+            ? {}
+            : { waveRemainingSeconds: progressionState.waveRemainingSeconds }),
           ...(progressionState.intermissionEndsAtTick === undefined
             ? {}
             : { intermissionEndsAtTick: progressionState.intermissionEndsAtTick })
@@ -164,6 +169,7 @@ export const defaultModuleFactory: GameModuleFactory<
       step(dtSeconds: number, tick: number): void {
         assertActive();
         currentTick = tick;
+        progression.checkExpiry();
         if (progression.state.phase !== "complete") {
           respawn.removeDefeated(tick);
           respawn.respawnEligible(tick);
@@ -199,6 +205,9 @@ export const defaultModuleFactory: GameModuleFactory<
           viewerRole: viewer.role,
           level: progressionState.level,
           phase: progressionState.phase,
+          ...(progressionState.waveRemainingSeconds === undefined
+            ? {}
+            : { waveRemainingSeconds: progressionState.waveRemainingSeconds }),
           ...(progressionState.intermissionEndsAtTick === undefined
             ? {}
             : { intermissionEndsAtTick: progressionState.intermissionEndsAtTick })
@@ -242,6 +251,10 @@ export { DefaultRespawnSimulator } from "./respawn.js";
 export {
   DefaultProgression,
   LEVEL_INTERMISSION_TICKS,
+  calculateWaveDurationSeconds,
+  WAVE_BASE_DURATION_SECONDS,
+  WAVE_SECONDS_PER_NPC,
+  WAVE_MAX_DURATION_SECONDS,
   resolveDefaultSettings,
   type DefaultLevelPhase,
   type DefaultProgressionState

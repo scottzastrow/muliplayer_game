@@ -6,10 +6,23 @@ import {
   type GameSettings,
   type LevelDifficulty
 } from "@multiplayer-game/protocol";
-import type { ModuleContext } from "@multiplayer-game/theme-sdk";
+import { Countdown, type ModuleContext } from "@multiplayer-game/theme-sdk";
 import type { DefaultEntity } from "./types.js";
 
 export const LEVEL_INTERMISSION_TICKS = 5 * 30;
+export const WAVE_BASE_DURATION_SECONDS = 60;
+export const WAVE_SECONDS_PER_NPC = 3;
+export const WAVE_MAX_DURATION_SECONDS = 300;
+
+export function calculateWaveDurationSeconds(startingNpcCount: number): number {
+  if (!Number.isSafeInteger(startingNpcCount) || startingNpcCount < 0) {
+    throw new RangeError("Starting NPC count must be a nonnegative safe integer.");
+  }
+  return Math.min(
+    WAVE_MAX_DURATION_SECONDS,
+    WAVE_BASE_DURATION_SECONDS + WAVE_SECONDS_PER_NPC * startingNpcCount
+  );
+}
 
 export type DefaultLevelPhase = "active" | "intermission" | "complete";
 
@@ -17,6 +30,7 @@ export interface DefaultProgressionState {
   readonly level: number;
   readonly phase: DefaultLevelPhase;
   readonly intermissionEndsAtTick?: number;
+  readonly waveRemainingSeconds?: number;
 }
 
 export class DefaultProgression {
@@ -25,6 +39,7 @@ export class DefaultProgression {
   #intermissionEndsAtTick: number | undefined;
   #lastTick = -1;
   #initialized = false;
+  #waveCountdown: Countdown | undefined;
 
   constructor(
     readonly context: ModuleContext<DefaultEntity>,
@@ -39,6 +54,9 @@ export class DefaultProgression {
     return Object.freeze({
       level: this.#level,
       phase: this.#phase,
+      ...(this.#waveCountdown === undefined
+        ? {}
+        : { waveRemainingSeconds: this.#waveCountdown.remainingSeconds }),
       ...(this.#intermissionEndsAtTick === undefined
         ? {}
         : { intermissionEndsAtTick: this.#intermissionEndsAtTick })
@@ -67,6 +85,7 @@ export class DefaultProgression {
       throw new RangeError("Progression tick and remaining NPC count must be valid.");
     }
     this.#lastTick = tick;
+    this.checkExpiry();
     if (this.#phase === "complete") {
       return;
     }
@@ -82,16 +101,25 @@ export class DefaultProgression {
 
     if (this.#level >= this.settings.maxLevels) {
       this.#phase = "complete";
+      this.#waveCountdown = undefined;
       this.context.requestCompletion({ kind: "match", reason: "maximum-level-cleared" });
       return;
     }
 
     this.#phase = "intermission";
+    this.#waveCountdown = undefined;
     this.#intermissionEndsAtTick = tick + LEVEL_INTERMISSION_TICKS;
     this.context.requestCompletion({
       kind: "level",
       reason: `level-${this.#level}-cleared`
     });
+  }
+
+  checkExpiry(): void {
+    if (this.#phase === "active" && this.#waveCountdown?.expired) {
+      this.#phase = "complete";
+      this.context.requestCompletion({ kind: "match", reason: "wave-timeout" });
+    }
   }
 
   #beginLevel(level: number): void {
@@ -100,6 +128,9 @@ export class DefaultProgression {
     this.#level = level;
     this.#phase = "active";
     this.#intermissionEndsAtTick = undefined;
+    this.#waveCountdown = new Countdown(
+      this.context.clock, calculateWaveDurationSeconds(difficulty.npcCount)
+    );
   }
 }
 

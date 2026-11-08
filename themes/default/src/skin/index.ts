@@ -37,7 +37,9 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     const life = document.createElement("div");
     life.className = "default-life";
     life.setAttribute("role", "status");
-    hud.append(points, health, life);
+    const waveTime = document.createElement("div");
+    waveTime.className = "default-wave-time";
+    hud.append(points, health, waveTime, life);
     const help = document.createElement("p");
     help.textContent = "Click the game to focus. WASD: move. Mouse: aim. Hold left mouse button: fire.";
     controls.append(help);
@@ -193,6 +195,8 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
         }
         points.textContent = `Points: ${observed?.hud.points ?? player.points}`;
         health.textContent = `Health: ${observed?.hud.health ?? player.health}`;
+        waveTime.textContent = current.phase === "active" && current.waveRemainingSeconds !== undefined
+          ? `Wave time remaining: ${Math.ceil(current.waveRemainingSeconds)}s` : "";
         const remaining = observed ? Math.ceil(observed.death.remainingSeconds)
           : Math.max(0, Math.ceil(((player.respawnAtTick ?? current.tick) - current.tick) / 30));
         life.textContent = current.phase === "complete" ? "Match complete."
@@ -224,6 +228,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
         canvas.remove();
         points.remove();
         health.remove();
+        waveTime.remove();
         life.remove();
         help.remove();
         previous = undefined;

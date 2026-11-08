@@ -28,6 +28,7 @@ export const DefaultViewSchema = z.object({
   level: z.number().int().positive(),
   phase: z.enum(["active", "intermission", "complete"]),
   intermissionEndsAtTick: counter.optional(),
+  waveRemainingSeconds: z.number().finite().nonnegative().max(300).optional(),
   map: z.object({
     width: z.number().finite().positive().max(2048),
     height: z.number().finite().positive().max(2048),

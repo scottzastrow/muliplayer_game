@@ -40,3 +40,10 @@ projectiles have bounded lifetime (2 seconds). Health packs restore 25 up to 100
 rapid-fire pickups double fire rate for 10 seconds; weapon pickups equip a three-shot
 spread for 10 seconds. Repeated same-effect pickups refresh duration, do not stack.
 These are module data, never assumptions in the core engine.
+
+Provisional Dots and Squares wave tuning is 60 seconds plus 3 seconds per NPC
+present at wave start, capped at 300 seconds. Each wave recomputes its budget from
+its full starting count, using the unchanged frozen-roster growth formula.
+This is module tuning, not a new lobby setting or a change to NPC health/capacity.
+The deadline continues during respawns and ends the match with saved standings
+on expiry; clearing strictly before expiry follows normal progression.

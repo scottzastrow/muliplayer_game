@@ -137,7 +137,14 @@ Snapshots include protocol and module state schema versions; an unsupported clie
 must fail with a clear compatibility error before receiving malformed state.
 Module payloads are validated on both boundaries and scoped to the pinned module.
 
-On normal match completion, Core commits final standings and terminal state,
+Dots and Squares schema v4 adds optional `waveRemainingSeconds` (finite, 0-300)
+at the snapshot root. Player and selected-target spectator views retain the same
+authoritative wave time, independent of player death countdowns. It is omitted
+during intermission/successful completion and reaches zero on timeout. Clients
+display it without sending timer authority back to the server. Older v4 snapshots
+and renderers remain compatible because this field is additive/optional.
+
+On module-requested match completion (including wave timeout), Core commits final standings and terminal state,
 releases the runner, then sends `server.lifecycle` with
 `{status:"finished",resultId:<session UUID>}` to that session's connected players
 and spectators.

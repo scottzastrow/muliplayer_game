@@ -118,16 +118,16 @@ describe("persistent match progression and results", () => {
       .toEqual(["Charlie", "Bob", "Alice"]);
   });
 
-  it("rejects completion before the configured maximum level", () => {
+  it("rejects a final level that does not match persisted progression", () => {
     const matchId = createRunningMatch();
     expect(() =>
       finalizeMatchResult(database!, {
         matchId,
         status: "finished",
-        finalLevel: 1,
+        finalLevel: 2,
         standings: [{ accountId: "account-a", points: 0, kills: 0, deaths: 0 }]
       })
-    ).toThrow("configured maximum level");
+    ).toThrow("persisted match progression");
     expect(
       (database!.prepare("SELECT state FROM matches WHERE id = ?").get(matchId) as {
         state: string;

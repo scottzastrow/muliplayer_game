@@ -1,5 +1,54 @@
 # Local verification
 
+## Focused Dots and Squares wave countdown (2026-11-07)
+
+Implemented on `001-multiplayer-engine` as an uncommitted follow-up to
+T005/T021/T023/T027 and FR-021, not a capacity/deployment slice.
+Windows, Node 24.11.0, npm 11.6.1; in-memory SQLite and injected monotonic time.
+
+| Check | Observed result |
+| --- | --- |
+| `npm run check` | All workspace checks and tools type-check passed after the final source changes |
+| Focused Vitest selection below | 11 files, 56 tests passed |
+| `git diff --check` | Passed |
+
+Executed focused command:
+
+```powershell
+npm test -- tests\wave-countdown.test.ts tests\integration\wave-timeout.test.ts tests\default-skin.test.ts tests\default-respawn.test.ts tests\results.test.ts tests\result-contract.test.ts tests\integration\session-lifecycle.test.ts tests\integration\gameplay.test.ts tests\spectator-view.test.ts tests\default-theme.test.ts tests\fixture-theme.test.ts
+```
+
+Coverage checks the provisional duration formula at/below/above the 300-second
+cap; fresh budgets after wave clear/intermission; strict deadline precedence;
+continued time through death, safe respawn and disconnection; no respawn at
+expiry; and identical player/spectator wave time. Synthetic DOM tests mount the
+real default skin for both roles, verify the timer alongside the respawn HUD,
+hide it during intermission and dispose its element. These are not browser runs.
+
+The timeout integration uses the real module, runner, lobby and finalization
+path with fake interval scheduling and injected `performance.now`. A long clock
+jump exercises expiry independent of dropped simulation ticks. It verifies one
+completion request, one result/standings transaction, one disposal/notification,
+released reconnect/session slots and creation of a replacement room. A second
+case deliberately duplicates the completion request to verify once-only core
+finalization. Both cases save the actual reached level below `maxLevels` and
+reload the same standings twice through the authenticated HTTP result endpoint,
+including public-schema validation. Existing normal two-level completion,
+growth, health, respawn and fixture regressions remain covered.
+
+The first focused run had three new fixture failures: the HUD helper was
+accidentally scoped inside another test, and the timeout fixture's second clock
+advance was only one millisecond, insufficient for another fixed simulation
+step. The helper was moved to file scope and the fixture advances a full step
+while reaching the exact deadline. The first 10-file rerun passed (50 tests);
+after adding public-result reload/contract coverage the 11-file selection passed
+(55 tests), then the final duplicate-completion selection passed (56 tests).
+`npm run check` passed both times it was executed.
+
+NPC growth, health, configured entity/session capacities and production settings
+are unchanged. No browser, full-suite, deployment or separate-host capacity
+scenario was executed. T042 remains unchecked.
+
 ## T023 - Dots and Squares browser view (2026-11-06)
 
 T022 was committed as `f0ce5b8` on `001-multiplayer-engine` before this slice.

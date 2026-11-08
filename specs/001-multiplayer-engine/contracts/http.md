@@ -68,6 +68,12 @@ and failed results have empty standings and must not appear as zero-score victor
 The public protocol validates the result shape and excludes credentials. Reloading
 is a read-only request and cannot finalize the match again.
 
+A finished result may end below `settings.maxLevels` when its module requests
+completion, for example Dots and Squares wave timeout. `finalLevel` is the level
+actually reached, not a claim that the remaining waves were cleared. It must
+remain within the configured maximum; finished standings are still complete,
+ranked and persisted through the same finalization path.
+
 Session summary: id, name, creator display name, status, level/maxLevels,
 playerCount/maxPlayers, spectatorCount/maxSpectators, theme name/revision, settingsRevision,
 canJoin/canSpectate/canRejoin/canPlay for this account. `canPlay` is true only for

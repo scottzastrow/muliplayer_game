@@ -4,6 +4,7 @@ import {
   RequestIdSchema,
   type JsonValue
 } from "@multiplayer-game/protocol";
+export { Countdown } from "./countdown.js";
 export {
   MAP_CELL_SIZE,
   MAX_MAP_COLLISIONS,

@@ -318,6 +318,7 @@ export class SessionLifecycle {
 
     const requests = active.completionRequests.splice(0);
     for (const request of requests) {
+      if (this.#sessions.get(active.id) !== active) return;
       if (request.kind === "level") {
         this.#advanceLevel(active);
       } else {
@@ -344,11 +345,12 @@ export class SessionLifecycle {
     const results = active.module.results();
     if (
       state?.phase !== "complete" ||
+      state.level !== active.currentLevel ||
       results.status !== "finished" ||
       results.finalLevel !== active.currentLevel ||
-      results.finalLevel !== active.settings.maxLevels
+      results.finalLevel > active.settings.maxLevels
     ) {
-      throw new Error("Module requested match completion before the configured final level.");
+      throw new Error("Module requested match completion with an invalid phase or final level.");
     }
     if (tick % SNAPSHOT_INTERVAL_TICKS !== 0) {
       this.#publish(active, tick);

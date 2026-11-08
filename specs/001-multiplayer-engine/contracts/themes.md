@@ -31,6 +31,13 @@ Implement TypeScript interfaces and runtime schemas in `packages/theme-sdk/src/`
 | SkinHost | Canvas/DOM slots, input dispatch, camera anchor, selected target data, safe navigation callbacks, bounded asset loader/audio services |
 | MapDefinition | validated, versioned map document shared by authored maps and seeded generators; includes stable objects, explicit collision shapes and typed spawn points |
 
+The public additive `Countdown` helper accepts `(clock: MonotonicClock,
+durationSeconds: number)` and exposes `deadlineMs`, nonnegative `remainingSeconds`
+and `expired`. It creates no timers and performs no completion, respawn or gameplay
+action. Modules create it per timed phase and check it from their authoritative
+step; each module decides what expiry means. Durations must be positive/finite and
+clock/deadline values finite.
+
 T029 adds the optional TypeScript `setPlayerPresence` hook; the running-session
 host requires it and fails explicitly if a pinned module lacks reconnect support.
 Only the engine calls it after authenticated admission, matching-generation detach,
@@ -121,6 +128,21 @@ match completion once and returns deterministic score/kills/deaths standings. Co
 persists final standings and terminal state together, with compare-and-set level
 updates and one result row per match.
 
+Dots and Squares starts a new countdown after spawning each wave, provisionally
+`min(300, 60 + 3 * starting NPC count)` seconds. The monotonic deadline keeps running
+through death, blocked respawn and disconnection, without depending on accumulated
+simulation ticks or resetting as NPCs die. Clearing before expiry cancels the
+countdown during the existing five-second intermission. At or after expiry, the
+module enters `complete` and requests `{kind:"match", reason:"wave-timeout"}` once,
+before any further combat or respawn work. This produces saved standings at the
+current level, not an abandoned result or an artificial maximum-level clear.
+The additive optional schema-v4 `waveRemainingSeconds` snapshot/state field is
+present during active waves (and zero after timeout), absent during intermission
+or successful completion. Both default HUD modes display its rounded-up seconds,
+including while the selected player is dead. Existing schema-v4 renderers may
+ignore the field; updated renderers accept older v4 snapshots without it. No
+protocol envelope, required SDK method or manifest schema changes are needed.
+
 Realtime input uses a shared versioned envelope with an opaque module-defined JSON
 `action`; the protocol does not require movement, aim, fire, or any other gameplay
 fields. Each module validates its own action shape in `validateInput`. For example,
@@ -132,8 +154,10 @@ module with session-scoped services, and owns its fixed-step runner. Core reject
 actions that fail the active module's validator and publishes viewer-scoped snapshots
 with protocol and module state schema versions. It consumes level requests only from
 the intermission phase and persists level changes with compare-and-set semantics.
-Match requests are accepted only from the complete phase with final-level standings;
-result persistence, terminal state and slot release happen once. Startup failure or
+Match requests are accepted only from the complete phase with standings for the
+current persisted level, no higher than the configured maximum; the module owns
+the reason for ending early or after a final clear.
+Result persistence, terminal state and slot release happen once. Startup failure or
 termination records the corresponding terminal result and disposes the runner/module.
 Module instances cannot share mutable singleton state. Dispose releases listeners,
 entities, audio and timers. Context supplies deterministic time; modules must not

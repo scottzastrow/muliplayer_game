@@ -77,9 +77,6 @@ export function finalizeMatchResult(
     if (input.finalLevel > settings.maxLevels) {
       throw new RangeError("Final level exceeds the match's configured maximum.");
     }
-    if (input.status === "finished" && input.finalLevel !== settings.maxLevels) {
-      throw new RangeError("A finished match must complete its configured maximum level.");
-    }
     if (input.finalLevel !== match.current_level) {
       throw new RangeError("Final level does not match the persisted match progression.");
     }
