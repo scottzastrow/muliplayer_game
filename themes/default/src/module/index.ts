@@ -97,7 +97,11 @@ export const defaultModuleFactory: GameModuleFactory<
     let currentTick = 0;
     let disposed = false;
     const gameSettings = resolveDefaultSettings(settings, roster.length);
-    const simulator = new DefaultEntitySimulator(_context);
+    const simulator = new DefaultEntitySimulator(
+      _context,
+      gameSettings.npcMovementSpeed,
+      gameSettings.npcDetectionRange
+    );
     const map = generateMap(seed).map;
     const presentationMap = {
       width: map.definition.bounds.width,

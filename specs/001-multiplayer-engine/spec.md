@@ -44,7 +44,7 @@ respawn, complete two levels, and compare final scores.
 **Acceptance Scenarios**:
 
 1. **Given** two players, **When** they travel apart and then meet, **Then** each remains at their own screen center and sees the other only within their viewport.
-2. **Given** enemies outside attraction range, **When** a player approaches one group, **Then** that group pursues reachable targets around obstacles without activating every enemy on the map.
+2. **Given** enemies outside the configured NPC detection range, **When** a player enters the range, **Then** those enemies pursue reachable targets at the configured movement speed and navigate around obstacles; a zero range disables automatic pursuit.
 3. **Given** a player at zero health, **When** death occurs, **Then** their avatar and combat input disappear for the configured delay (five seconds by default), their score persists, and they return at a random safe position without damage immunity.
 4. **Given** a level with enemies, **When** the last enemy dies, **Then** the next map and configured increases apply once; after the configured final level, the match finishes instead.
 5. **Given** a running match, **When** points or health change, **Then** the top HUD updates with points visually dominant; the final leaderboard ranks total points and includes kills and deaths.
@@ -123,7 +123,7 @@ players, enemies, and spectators; produce a reproducible measured report.
 - **FR-002**: Any logged-in player MUST be able to create a session and, as its creator, configure/start it with at least one player. All player/spectator membership mutations MUST be authorized.
 - **FR-003**: The server MUST atomically enforce a five-session cap across waiting/running sessions. Finished/abandoned/failed sessions MUST release their slot once.
 - **FR-004**: The lobby MUST show session state, creator, theme, current/max level, players/max players, spectators/max spectators, and state-appropriate Join/Spectate controls.
-- **FR-005**: Session settings MUST include maximum players/spectators, starting NPCs per player (default 10), population increase rate, base NPC health, health increase rate, respawn delay (default 5 seconds), maximum levels, and selected Game Theme. Invalid values MUST fail before start; settings lock on start.
+- **FR-005**: Session settings MUST include maximum players/spectators, starting NPCs per player (default 10), population increase rate, base NPC health, health increase rate, NPC movement speed (Dots and Squares: default 67.5 world units/second, finite 0–180 with fractions allowed), NPC detection range (default 512 world units, finite 0–700; zero disables automatic pursuit), respawn delay (default 5 seconds), maximum levels, and selected Game Theme. Invalid values MUST fail before start; settings lock on start. Older configs omitting either NPC setting MUST load with its new default; zero movement speed keeps NPCs stationary without disabling contact damage.
 - **FR-006**: A running match MUST reject new participants but allow eligible authenticated reconnects and spectators within capacity. It MUST isolate state from other sessions.
 - **FR-007**: Players MUST traverse one shared generated map with independent centered cameras, collision with simple obstacles, and consistent nearby player visibility.
 - **FR-008**: The default game module MUST provide range-triggered enemy pursuit, obstacle navigation, weapons, projectiles, damage, health/power/weapon pickups, and authoritative scoring.
@@ -208,7 +208,7 @@ explicit conversation decisions are user-confirmed.
   authoritative; no early respawn due to a level transition.
 - Control mode is an account preference. Legacy accounts are migrated without a
   selection and must complete the first-sign-in prompt before entering the lobby.
-- Provisional wave duration is `min(300, 60 + 3 * starting NPC count)` seconds,
+- Provisional wave duration is `min(360, 120 + 6 * starting NPC count)` seconds,
   recalculated at each wave start from that wave's full roster-based NPC count.
   A monotonic server deadline continues through death, blocked respawn and reconnect.
   No wave countdown runs during intermission. Expiry wins a clear at the exact

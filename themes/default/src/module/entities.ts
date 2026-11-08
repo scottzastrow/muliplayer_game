@@ -7,6 +7,7 @@ import type {
 import { MAP_CELL_SIZE } from "@multiplayer-game/theme-sdk";
 import {
   DEFAULT_RUNTIME_LIMITS,
+  GameSettingsSchema,
   type JsonValue
 } from "@multiplayer-game/protocol";
 import {
@@ -70,7 +71,14 @@ export class DefaultEntitySimulator {
   #initialized = false;
   #disposed = false;
 
-  constructor(readonly context: ModuleContext<DefaultEntity>) {}
+  constructor(
+    readonly context: ModuleContext<DefaultEntity>,
+    readonly npcMovementSpeed = NPC_SPEED,
+    readonly npcDetectionRange = NPC_ATTRACTION_RADIUS
+  ) {
+    GameSettingsSchema.shape.npcMovementSpeed.parse(npcMovementSpeed);
+    GameSettingsSchema.shape.npcDetectionRange.parse(npcDetectionRange);
+  }
 
   initialize(
     map: LoadedMap,
@@ -350,7 +358,7 @@ export class DefaultEntitySimulator {
       this.#pollPath(navigation);
 
       const nearbyPlayers = this.context.entities
-        .queryRadius(npc.position, NPC_ATTRACTION_RADIUS, MAX_ATTRACTION_QUERY_CELLS)
+        .queryRadius(npc.position, this.npcDetectionRange, MAX_ATTRACTION_QUERY_CELLS)
         .filter(
           (entity): entity is DefaultEntity =>
             entity.typeId === "player" &&
@@ -379,13 +387,13 @@ export class DefaultEntitySimulator {
       const pathPoint = currentPath?.[navigation.nextPathPoint];
       if (pathPoint) {
         destination = pathPoint;
-        if (distance(npc.position, pathPoint) <= NPC_SPEED * dtSeconds) {
+        if (distance(npc.position, pathPoint) <= this.npcMovementSpeed * dtSeconds) {
           navigation.nextPathPoint += 1;
           destination = currentPath[navigation.nextPathPoint] ?? target.position;
         }
       }
 
-      const delta = normalizedDelta(npc.position, destination, NPC_SPEED * dtSeconds);
+      const delta = normalizedDelta(npc.position, destination, this.npcMovementSpeed * dtSeconds);
       const desired = { x: npc.position.x + delta.x, y: npc.position.y + delta.y };
       const blocked = !isWalkable(this.context, desired, npc.radius);
       if (

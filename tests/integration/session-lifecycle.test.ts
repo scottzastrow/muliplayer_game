@@ -1,8 +1,12 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket, type RawData } from "ws";
+import { z } from "zod";
 import { DEFAULT_GAME_SETTINGS } from "@multiplayer-game/protocol";
+import { WorldGeometry } from "@multiplayer-game/engine";
+import { PROJECTILE_RADIUS } from "@multiplayer-game/default-theme";
 import { createApp } from "../../apps/server/src/app.js";
 import { readConfig } from "../../apps/server/src/config.js";
+import { ThemeLoader } from "../../apps/server/src/themes/builtins.js";
 import {
   getMatchResult
 } from "../../apps/server/src/storage/results.js";
@@ -28,11 +32,43 @@ describe("session simulation lifecycle", () => {
     }
     sockets.clear();
     await app.close();
+    vi.restoreAllMocks();
   });
 
   it(
     "starts the isolated module, routes actions, completes levels, saves results and releases the slot",
     async () => {
+      const createModule = ThemeLoader.prototype.createModuleInstance;
+      vi.spyOn(ThemeLoader.prototype, "createModuleInstance").mockImplementation(function (
+        this: ThemeLoader, ...args
+      ) {
+        const module = createModule.apply(this, args);
+        const context = args[1];
+        const placedNpcs = new Set<string>();
+        // Stage each wave once without replacing terrain, combat or progression.
+        const placeEncounter = () => {
+          if (module.state.phase !== "active") return;
+          const npcs = context.entities.values().filter(entity => entity.state.kind === "npc");
+          expect(npcs).toHaveLength(1);
+          const npc = npcs[0]!;
+          if (placedNpcs.has(npc.id)) return;
+          const position = { x: 400, y: 272 };
+          expect(context.geometry.isWalkable(position.x, position.y, npc.radius)).toBe(true);
+          context.entities.update(npc.id, entity => ({ ...entity, position }));
+          placedNpcs.add(npc.id);
+        };
+        const initialize = module.initialize.bind(module);
+        module.initialize = async () => {
+          await initialize();
+          placeEncounter();
+        };
+        const step = module.step.bind(module);
+        module.step = (dt, tick) => {
+          step(dt, tick);
+          placeEncounter();
+        };
+        return module;
+      });
       const cookie = await registerLogin("LifecyclePlayer");
       const created = await app.inject({
         method: "POST",
@@ -47,6 +83,7 @@ describe("session simulation lifecycle", () => {
             npcPopulationGrowthPercent: 0,
             baseNpcHealth: 1,
             npcHealthGrowthPercent: 0,
+            npcMovementSpeed: 0,
             maxLevels: 2
           }
         }
@@ -86,7 +123,7 @@ describe("session simulation lifecycle", () => {
         level: 1,
         phase: "active"
       });
-      socket.send(JSON.stringify(inputMessage(0, aimAtNpc(firstSnapshot))));
+      socket.send(JSON.stringify(inputMessage(0, aimAtStationaryNpc(firstSnapshot))));
 
       await waitUntil(
         () =>
@@ -102,7 +139,11 @@ describe("session simulation lifecycle", () => {
         (snapshot) => snapshot.level === 2 && snapshot.phase === "active",
         7_000
       );
-      socket.send(JSON.stringify(inputMessage(1, aimAtNpc(secondLevel))));
+      expect(secondLevel.acceptedInputs).toBe(1);
+      expect(secondLevel.players).toEqual([
+        expect.objectContaining({ points: 100, kills: 1 })
+      ]);
+      socket.send(JSON.stringify(inputMessage(1, aimAtStationaryNpc(secondLevel))));
 
       await waitUntil(
         () =>
@@ -301,30 +342,31 @@ function inputMessage(sequence: number, aim: { readonly x: number; readonly y: n
   };
 }
 
-function aimAtNpc(snapshot: Record<string, unknown>): { x: number; y: number } {
-  const entities = snapshot.entities;
-  if (!Array.isArray(entities)) {
-    throw new Error("Snapshot has no entity list.");
+function aimAtStationaryNpc(snapshot: Record<string, unknown>): { x: number; y: number } {
+  const { entities, map } = z.object({
+    entities: z.array(z.object({
+      typeId: z.string(),
+      position: z.object({ x: z.number().finite(), y: z.number().finite() })
+    })),
+    map: z.object({
+      width: z.number().positive(),
+      height: z.number().positive(),
+      obstacles: z.array(z.object({
+        x: z.number(), y: z.number(), width: z.number(), height: z.number()
+      }))
+    })
+  }).parse(snapshot);
+  const player = entities.find(entity => entity.typeId === "player");
+  const npcs = entities.filter(entity => entity.typeId === "npc");
+  expect(player?.position).toEqual({ x: 272, y: 272 });
+  expect(npcs).toHaveLength(1);
+  const npc = npcs[0]!;
+  expect(npc.position).toEqual({ x: 400, y: 272 });
+  const geometry = new WorldGeometry(map, map.obstacles);
+  for (let x = 272; x <= 400; x += 1) {
+    expect(geometry.isCircleWalkable({ x, y: 272 }, PROJECTILE_RADIUS)).toBe(true);
   }
-  const npc = entities.find((value) => {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      return false;
-    }
-    const entity = value as Record<string, unknown>;
-    return entity.typeId === "npc";
-  });
-  if (typeof npc !== "object" || npc === null || Array.isArray(npc)) {
-    throw new Error("Snapshot does not contain a live NPC.");
-  }
-  const position = (npc as Record<string, unknown>).position;
-  if (typeof position !== "object" || position === null || Array.isArray(position)) {
-    throw new Error("NPC snapshot has no position.");
-  }
-  const { x, y } = position as { x?: unknown; y?: unknown };
-  if (typeof x !== "number" || typeof y !== "number") {
-    throw new Error("NPC snapshot position is invalid.");
-  }
-  return { x, y };
+  return npc.position;
 }
 
 async function waitUntil(condition: () => boolean, timeoutMs: number): Promise<void> {

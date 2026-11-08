@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { GameSettings } from "@multiplayer-game/protocol";
 import {
   BoundedNavigation,
   SpatialGrid,
@@ -15,9 +16,7 @@ import type {
 import {
   defaultModuleFactory,
   MAX_NPC_PATH_REQUESTS_PER_TICK,
-  NPC_ATTRACTION_RADIUS,
   NPC_CONTACT_COOLDOWN_TICKS,
-  NPC_SPEED,
   PLAYER_SPEED,
   type DefaultEntity,
   type DefaultPlayerAction
@@ -61,38 +60,90 @@ describe("default entity movement and pursuit", () => {
     simulation.module.dispose();
   });
 
-  it("does not attract NPCs beyond range and pursues players inside range", () => {
-    const simulation = createSimulation();
-    const npc = simulation.context.entities.get("npc:npc-northwest")!;
-    const player = simulation.context.entities.get("player:player-a")!;
-    simulation.context.entities.update(npc.id, (entity) => ({
-      ...entity,
-      position: { x: 700, y: 700 }
-    }));
-    simulation.context.entities.update(player.id, (entity) => ({
-      ...entity,
-      position: { x: 700 + NPC_ATTRACTION_RADIUS + 1, y: 700 }
-    }));
+  it.each([400, 700])(
+    "stays idle outside the %i-unit range and pursues at its configured speed inside it",
+    npcDetectionRange => {
+      const npcMovementSpeed = 33.75;
+      const simulation = createSimulation([], { npcMovementSpeed, npcDetectionRange });
+      try {
+        const npc = simulation.context.entities.get("npc:npc-northwest")!;
+        const player = simulation.context.entities.get("player:player-a")!;
+        simulation.context.entities.update(npc.id, entity => ({
+          ...entity, position: { x: 700, y: 700 }
+        }));
+        simulation.context.entities.update(player.id, entity => ({
+          ...entity, position: { x: 700 + npcDetectionRange + 1, y: 700 }
+        }));
 
-    simulation.module.step(1 / 30, 1);
-    expect(simulation.context.entities.get(npc.id)?.position).toEqual({ x: 700, y: 700 });
+        simulation.module.step(1 / 30, 1);
+        expect(simulation.context.entities.get(npc.id)?.position).toEqual({ x: 700, y: 700 });
 
-    simulation.context.entities.update(player.id, (entity) => ({
-      ...entity,
-      position: { x: 1_100, y: 700 }
-    }));
-    simulation.module.step(1 / 30, 2);
+        simulation.context.entities.update(player.id, entity => ({
+          ...entity, position: { x: 700 + npcDetectionRange, y: 700 }
+        }));
+        simulation.module.step(1 / 30, 2);
 
-    expect(simulation.context.entities.get(npc.id)!.position.x).toBeCloseTo(
-      700 + NPC_SPEED / 30,
-      6
-    );
-    simulation.module.dispose();
+        expect(simulation.context.entities.get(npc.id)!.position.x).toBeCloseTo(
+          700 + npcMovementSpeed / 30,
+          6
+        );
+      } finally { simulation.module.dispose(); }
+    }
+  );
+
+  it("disables automatic pursuit when NPC detection range is zero", () => {
+    const simulation = createSimulation([], { npcDetectionRange: 0 });
+    try {
+      const npcId = "npc:npc-northwest";
+      simulation.context.entities.update(npcId, entity => ({
+        ...entity, position: { x: 700, y: 700 }
+      }));
+      simulation.context.entities.update("player:player-a", entity => ({
+        ...entity, position: { x: 710, y: 700 }
+      }));
+      simulation.module.step(1 / 30, 1);
+      expect(simulation.context.entities.get(npcId)!.position).toEqual({ x: 700, y: 700 });
+      expect(simulation.navigation.requestsSubmitted).toBe(0);
+    } finally { simulation.module.dispose(); }
   });
 
-  it("routes an attracted NPC around an obstacle using bounded navigation", () => {
+  it.each([0, 33.75, 67.5, 90, 180])("travels at %s units/second during direct pursuit", npcMovementSpeed => {
+    const simulation = createSimulation([], { npcMovementSpeed });
+    const npcId = "npc:npc-northwest";
+    try {
+      simulation.context.entities.update(npcId, entity => ({
+        ...entity, position: { x: 700, y: 700 }
+      }));
+      simulation.context.entities.update("player:player-a", entity => ({
+        ...entity, position: { x: 1_100, y: 700 }
+      }));
+      for (let tick = 1; tick <= 30; tick += 1) simulation.module.step(1 / 30, tick);
+      expect(simulation.context.entities.get(npcId)!.position.x - 700)
+        .toBeCloseTo(npcMovementSpeed, 6);
+      expect(simulation.context.entities.get(npcId)!.position.y).toBe(700);
+    } finally { simulation.module.dispose(); }
+  });
+
+  it("keeps zero-speed NPCs stationary without disabling contact damage", () => {
+    const simulation = createSimulation([], { npcMovementSpeed: 0 });
+    try {
+      const npcId = "npc:npc-northwest";
+      simulation.context.entities.update(npcId, entity => ({
+        ...entity, position: { x: 700, y: 700 }
+      }));
+      simulation.context.entities.update("player:player-a", entity => ({
+        ...entity, position: { x: 710, y: 700 }
+      }));
+      simulation.module.step(1 / 30, 1);
+      expect(simulation.context.entities.get(npcId)!.position).toEqual({ x: 700, y: 700 });
+      expect(simulation.context.entities.get("player:player-a")!.state).toMatchObject({ health: 90 });
+      expect(simulation.navigation.requestsSubmitted).toBe(0);
+    } finally { simulation.module.dispose(); }
+  });
+
+  it.each([33.75, 67.5, 90, 180])("routes an attracted NPC around an obstacle at %s units/second", npcMovementSpeed => {
     const wall: Rect = { x: 1_000, y: 800, width: 32, height: 400 };
-    const simulation = createSimulation([wall]);
+    const simulation = createSimulation([wall], { npcMovementSpeed });
     const npcId = "npc:npc-northwest";
     const playerId = "player:player-a";
     simulation.context.entities.update(npcId, (entity) => ({
@@ -104,14 +155,25 @@ describe("default entity movement and pursuit", () => {
       position: { x: 1_100, y: 1_000 }
     }));
 
-    simulation.module.step(1 / 30, 1);
+    let requestTick = 0;
+    do {
+      requestTick += 1;
+      simulation.module.step(1 / 30, requestTick);
+    } while (simulation.navigation.outstandingRequests === 0 && requestTick < 10);
     expect(simulation.navigation.outstandingRequests).toBeGreaterThan(0);
     expect(simulation.navigation.stats.nodesProcessed).toBeLessThanOrEqual(2_048);
 
-    for (let tick = 2; tick < 240; tick += 1) {
+    let travelled = 0;
+    for (let tick = requestTick + 1; tick <= Math.ceil(600 / npcMovementSpeed * 30); tick += 1) {
       simulation.navigation.processTick();
+      const previous = simulation.context.entities.get(npcId)!.position;
       simulation.module.step(1 / 30, tick);
       const position = simulation.context.entities.get(npcId)!.position;
+      const distance = Math.hypot(position.x - previous.x, position.y - previous.y);
+      expect(distance).toBeLessThanOrEqual(npcMovementSpeed / 30 + 1e-8);
+      expect(simulation.context.geometry.isWalkable(position.x, position.y, 8)).toBe(true);
+      travelled += distance;
+      if (tick === requestTick + 30) expect(travelled).toBeCloseTo(npcMovementSpeed, 6);
       if (position.x > wall.x + wall.width && Math.abs(position.y - 1_000) > wall.height / 2) {
         break;
       }
@@ -183,7 +245,7 @@ describe("default entity movement and pursuit", () => {
   });
 });
 
-function createSimulation(obstacles: readonly Rect[] = []) {
+function createSimulation(obstacles: readonly Rect[] = [], settings: Partial<GameSettings> = {}) {
   const entities = new Map<string, DefaultEntity>();
   const spatialGrid = new SpatialGrid(32);
   const store: EntityStore<DefaultEntity> = {
@@ -252,7 +314,7 @@ function createSimulation(obstacles: readonly Rect[] = []) {
       gauge: () => {}
     }
   };
-  const module = defaultModuleFactory.create(context, {}, roster, 42);
+  const module = defaultModuleFactory.create(context, settings, roster, 42);
   module.initialize();
   return {
     context,

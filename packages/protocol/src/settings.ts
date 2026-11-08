@@ -8,6 +8,8 @@ export const GameSettingsSchema = z
     npcPopulationGrowthPercent: z.number().finite().min(0).max(100),
     baseNpcHealth: z.number().int().min(1).max(100_000),
     npcHealthGrowthPercent: z.number().finite().min(0).max(100),
+    npcMovementSpeed: z.number().finite().min(0).max(180).default(67.5),
+    npcDetectionRange: z.number().finite().min(0).max(700).default(512),
     respawnDelaySeconds: z.number().finite().min(0).max(60),
     maxLevels: z.number().int().min(1).max(100),
     themeRevision: z.string().regex(/^[a-z0-9][a-z0-9._-]*@[0-9]+\.[0-9]+\.[0-9]+$/)
@@ -23,6 +25,8 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = Object.freeze({
   npcPopulationGrowthPercent: 20,
   baseNpcHealth: 100,
   npcHealthGrowthPercent: 10,
+  npcMovementSpeed: 67.5,
+  npcDetectionRange: 512,
   respawnDelaySeconds: 5,
   maxLevels: 5,
   themeRevision: "default@1.0.0"

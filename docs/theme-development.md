@@ -64,13 +64,27 @@ For timed phases, import `Countdown` from the public SDK and create
 `new Countdown(context.clock, durationSeconds)` when the phase starts. Read
 `remainingSeconds` for snapshots and check `expired` from the module's `step`;
 the helper does not schedule callbacks or decide gameplay outcomes. The default
-progression uses provisional `min(300, 60 + 3 * starting NPC count)` wave budgets,
+progression uses provisional `min(360, 120 + 6 * starting NPC count)` wave budgets,
 continues timing through respawns, and requests match completion once on expiry.
 Other modules may choose a different expiry policy. Core still validates the
 complete phase/current level and saves full standings atomically, including
 module-ended matches below the configured maximum. The default schema-v4 HUD
 uses the additive optional `waveRemainingSeconds` field for both player and
 spectator views; existing v4 consumers may ignore it.
+
+Dots and Squares reads `npcMovementSpeed` from the public session settings:
+finite 0-180 world units/second, including fractions, default 67.5. This is a
+playtesting default of 75% of the former 90 units/second. Direct pursuit and
+navigation use the same travel budget (speed multiplied by step seconds);
+32 world units equal one navigation cell. Zero stops travel but preserves contact
+damage. The host exposes "NPC movement speed" on create/edit; values lock on start.
+The additive v1 schema supplies 67.5 for older rooms/results that omit the field.
+
+`npcDetectionRange` is a separate finite 0-700 world-unit setting, default 512,
+matching the previous fixed attraction distance. The default theme acquires living
+targets only within this radius and still uses bounded spatial queries. Zero disables
+automatic pursuit. The host exposes it on create/edit; values lock on start, and the
+additive v1 schema supplies 512 for older rooms/results that omit it.
 
 The definition in `theme.json` binds theme, module, renderer, engine API major,
 state schema, settings, and the canonical manifest digest. A compatibility change

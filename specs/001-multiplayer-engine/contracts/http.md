@@ -92,6 +92,15 @@ name, followed by ` — ` and the authenticated creator's username. The display 
 at most 91 characters (64-character theme name, separator, 24-character username).
 It is not unique; the session UUID `id` is the unique identifier, so one creator may
 have multiple sessions with the same display name. GETs never create membership.
+Session create/settings requests and `GET /sessions/:id` settings include the
+additive v1 `npcMovementSpeed` field: finite 0–180 world units/second with fractions
+allowed, default 67.5 when omitted. `npcDetectionRange` is finite 0–700 world units,
+defaults to the former fixed 512-unit distance, and zero disables automatic pursuit.
+Dots and Squares uses it as the maximum player-acquisition radius; both settings are
+exposed in the host create/edit UI and frozen on start. Invalid values return 422
+`INVALID_SETTINGS`; only the waiting-room creator may update them, with the existing
+settings revision check. Older stored rooms and result settings are normalized on
+read without rewriting saved data.
 Idempotent leave/logout remain safe on retries. Retried create is not implicitly
 idempotent; use requestId as an idempotency key scoped to account for 60 seconds to
 avoid duplicate rooms.

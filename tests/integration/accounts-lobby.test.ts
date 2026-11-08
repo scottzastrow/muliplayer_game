@@ -210,6 +210,57 @@ describe("accounts and lobby integration", () => {
     ).toBe(409);
   });
 
+  it("loads legacy NPC settings, saves host updates, rejects invalid values and freezes on start", async () => {
+    const creator = await registerLogin("NpcSettingsHost");
+    const { npcMovementSpeed: _speed, npcDetectionRange: _range, ...legacySettings } =
+      DEFAULT_GAME_SETTINGS;
+    const created = await createSession(creator.cookie, legacySettings);
+    expect(created.statusCode).toBe(201);
+    const id = created.json().session.id as string;
+    database.prepare("UPDATE matches SET settings_json = ? WHERE id = ?")
+      .run(JSON.stringify(legacySettings), id);
+    const read = () => app.inject({
+      url: `/api/v1/sessions/${id}`, headers: { cookie: creator.cookie }
+    });
+    expect((await read()).json().settings.npcMovementSpeed).toBe(67.5);
+    expect((await read()).json().settings.npcDetectionRange).toBe(512);
+    for (const npcMovementSpeed of [-1, 181, "90", null]) {
+      const response = await patchSettings(creator.cookie, id, 0, {
+        ...legacySettings, npcMovementSpeed
+      });
+      expect(response.statusCode).toBe(422);
+      expect(response.json().error.code).toBe("INVALID_SETTINGS");
+      expect((await read()).json().settings.npcMovementSpeed).toBe(67.5);
+      expect((await read()).json().settings.npcDetectionRange).toBe(512);
+      expect((await read()).json().session.settingsRevision).toBe(0);
+    }
+    for (const npcDetectionRange of [-1, 701, "512", null]) {
+      const response = await patchSettings(creator.cookie, id, 0, {
+        ...legacySettings, npcDetectionRange
+      });
+      expect(response.statusCode).toBe(422);
+      expect(response.json().error.code).toBe("INVALID_SETTINGS");
+      expect((await read()).json().settings.npcDetectionRange).toBe(512);
+      expect((await read()).json().session.settingsRevision).toBe(0);
+    }
+    for (const [expectedRevision, [npcMovementSpeed, npcDetectionRange]] of [
+      [33.75, 0], [180, 700], [0, 320]
+    ].entries()) {
+      const update = await patchSettings(creator.cookie, id, expectedRevision, {
+        ...legacySettings, npcMovementSpeed, npcDetectionRange
+      });
+      expect(update.statusCode).toBe(200);
+      expect((await read()).json().settings.npcMovementSpeed).toBe(npcMovementSpeed);
+      expect((await read()).json().settings.npcDetectionRange).toBe(npcDetectionRange);
+    }
+    expect((await startSession(creator.cookie, id, 3)).statusCode).toBe(200);
+    expect((await patchSettings(creator.cookie, id, 3, {
+      ...legacySettings, npcMovementSpeed: 90, npcDetectionRange: 400
+    })).statusCode).toBe(409);
+    expect((await read()).json().settings.npcMovementSpeed).toBe(0);
+    expect((await read()).json().settings.npcDetectionRange).toBe(320);
+  });
+
   it("admits exactly five concurrently-created active sessions and rejects overflow", async () => {
     const creator = await registerLogin("RoomMaker");
     const attempts = await Promise.all(

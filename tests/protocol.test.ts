@@ -14,6 +14,27 @@ import { CapacityValidationError } from "../packages/protocol/src/settings.js";
 import { DefaultPlayerActionSchema } from "../themes/default/module/actions.js";
 
 describe("protocol v1 validation", () => {
+  it("defaults legacy NPC settings and validates their bounded world-unit values", () => {
+    const { npcMovementSpeed: _speed, npcDetectionRange: _range, ...legacy } = DEFAULT_GAME_SETTINGS;
+    expect(GameSettingsSchema.parse(legacy)).toMatchObject({
+      npcMovementSpeed: 67.5, npcDetectionRange: 512
+    });
+    for (const npcMovementSpeed of [0, 0.5, 67.5, 90, 180]) {
+      expect(GameSettingsSchema.parse({ ...legacy, npcMovementSpeed }).npcMovementSpeed)
+        .toBe(npcMovementSpeed);
+    }
+    for (const npcMovementSpeed of [-0.1, 180.1, NaN, Infinity, -Infinity, "90", null]) {
+      expect(GameSettingsSchema.safeParse({ ...legacy, npcMovementSpeed }).success).toBe(false);
+    }
+    for (const npcDetectionRange of [0, 0.5, 512, 700]) {
+      expect(GameSettingsSchema.parse({ ...legacy, npcDetectionRange }).npcDetectionRange)
+        .toBe(npcDetectionRange);
+    }
+    for (const npcDetectionRange of [-0.1, 700.1, NaN, Infinity, -Infinity, "512", null]) {
+      expect(GameSettingsSchema.safeParse({ ...legacy, npcDetectionRange }).success).toBe(false);
+    }
+  });
+
   it("accepts defaults and rejects unknown, nonfinite, and out-of-range settings", () => {
     expect(GameSettingsSchema.parse(DEFAULT_GAME_SETTINGS)).toEqual(DEFAULT_GAME_SETTINGS);
     expect(

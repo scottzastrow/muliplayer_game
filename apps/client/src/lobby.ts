@@ -1,3 +1,4 @@
+import { DEFAULT_GAME_SETTINGS, type GameSettings } from "@multiplayer-game/protocol";
 import {
   createControlModeFieldset,
   saveControlMode,
@@ -7,18 +8,6 @@ import {
 import { showStatus } from "./ui.js";
 import { mountAdminThemes } from "./admin-themes.js";
 import { mountAdminMetrics } from "./admin-metrics.js";
-
-interface GameSettings {
-  maxPlayers: number;
-  maxSpectators: number;
-  initialNpcsPerPlayer: number;
-  npcPopulationGrowthPercent: number;
-  baseNpcHealth: number;
-  npcHealthGrowthPercent: number;
-  respawnDelaySeconds: number;
-  maxLevels: number;
-  themeRevision: string;
-}
 
 interface SessionSummary {
   id: string;
@@ -40,24 +29,13 @@ interface SessionSummary {
   canPlay: boolean;
 }
 
-const DEFAULT_SETTINGS: GameSettings = {
-  maxPlayers: 4,
-  maxSpectators: 8,
-  initialNpcsPerPlayer: 10,
-  npcPopulationGrowthPercent: 20,
-  baseNpcHealth: 100,
-  npcHealthGrowthPercent: 10,
-  respawnDelaySeconds: 5,
-  maxLevels: 5,
-  themeRevision: "default@1.0.0"
-};
-
 const NUMBER_FIELDS: ReadonlyArray<{
   key: Exclude<keyof GameSettings, "themeRevision">;
   label: string;
   min: number;
   max: number;
-  step: number;
+  step: number | "any";
+  help?: string;
 }> = [
   { key: "maxPlayers", label: "Maximum players", min: 1, max: 32, step: 1 },
   { key: "maxSpectators", label: "Maximum spectators", min: 0, max: 64, step: 1 },
@@ -65,6 +43,10 @@ const NUMBER_FIELDS: ReadonlyArray<{
   { key: "npcPopulationGrowthPercent", label: "NPC growth percent", min: 0, max: 100, step: 1 },
   { key: "baseNpcHealth", label: "Base NPC health", min: 1, max: 100_000, step: 1 },
   { key: "npcHealthGrowthPercent", label: "NPC health growth percent", min: 0, max: 100, step: 1 },
+  { key: "npcMovementSpeed", label: "NPC movement speed", min: 0, max: 180, step: "any",
+    help: "0-180 world units/second; default 67.5. Zero keeps NPCs stationary. One navigation cell is 32 units." },
+  { key: "npcDetectionRange", label: "NPC detection range", min: 0, max: 700, step: "any",
+    help: "0-700 world units; default 512. Zero disables automatic pursuit." },
   { key: "respawnDelaySeconds", label: "Respawn delay (seconds)", min: 0, max: 60, step: 1 },
   { key: "maxLevels", label: "Maximum levels", min: 1, max: 100, step: 1 }
 ];
@@ -116,7 +98,7 @@ export function mountLobby(
   const createHeading = document.createElement("h2");
   createHeading.textContent = "Create a session";
   const createForm = document.createElement("form");
-  const createSettings = buildSettingsForm(DEFAULT_SETTINGS);
+  const createSettings = buildSettingsForm(DEFAULT_GAME_SETTINGS);
   const createButton = document.createElement("button");
   createButton.type = "submit";
   createButton.textContent = "Create session";
@@ -377,6 +359,13 @@ function buildSettingsForm(settings: GameSettings): HTMLFieldSetElement {
     control.input.step = String(field.step);
     control.input.required = true;
     fieldset.append(control.label, control.input);
+    if (field.help) {
+      const help = document.createElement("p");
+      help.id = `${control.input.id}-help`;
+      help.textContent = field.help;
+      control.input.setAttribute("aria-describedby", help.id);
+      fieldset.append(help);
+    }
   }
   const theme = inputField(
     "Theme revision",
@@ -393,6 +382,12 @@ function buildSettingsForm(settings: GameSettings): HTMLFieldSetElement {
 function readSettings(fieldset: HTMLFieldSetElement): GameSettings {
   const value = (key: keyof GameSettings): string =>
     fieldset.querySelector<HTMLInputElement>(`[name="setting-${key}"]`)?.value ?? "";
+  if (value("npcMovementSpeed").trim() === "") {
+    throw new Error("NPC movement speed is required.");
+  }
+  if (value("npcDetectionRange").trim() === "") {
+    throw new Error("NPC detection range is required.");
+  }
   return {
     maxPlayers: Number(value("maxPlayers")),
     maxSpectators: Number(value("maxSpectators")),
@@ -400,6 +395,8 @@ function readSettings(fieldset: HTMLFieldSetElement): GameSettings {
     npcPopulationGrowthPercent: Number(value("npcPopulationGrowthPercent")),
     baseNpcHealth: Number(value("baseNpcHealth")),
     npcHealthGrowthPercent: Number(value("npcHealthGrowthPercent")),
+    npcMovementSpeed: Number(value("npcMovementSpeed")),
+    npcDetectionRange: Number(value("npcDetectionRange")),
     respawnDelaySeconds: Number(value("respawnDelaySeconds")),
     maxLevels: Number(value("maxLevels")),
     themeRevision: value("themeRevision")

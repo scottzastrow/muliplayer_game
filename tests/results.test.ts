@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_GAME_SETTINGS,
+  MatchResultSchema,
   type GameSettings
 } from "@multiplayer-game/protocol";
 import { LobbyRegistry } from "../apps/server/src/lobby/registry.js";
@@ -34,6 +35,32 @@ describe("persistent match progression and results", () => {
         current_level: number;
       }).current_level
       ).toBe(5);
+  });
+
+  it("normalizes legacy saved-result NPC settings without rewriting them", () => {
+    const matchId = createRunningMatch(1, 1);
+    const { npcMovementSpeed: _speed, npcDetectionRange: _range, ...legacySettings } = {
+      ...DEFAULT_GAME_SETTINGS, maxLevels: 1
+    };
+    database!.prepare("UPDATE matches SET settings_json = ? WHERE id = ?")
+      .run(JSON.stringify(legacySettings), matchId);
+    expect(finalizeMatchResult(database!, {
+      matchId, status: "finished", finalLevel: 1,
+      standings: [{ accountId: "account-a", points: 100, kills: 1, deaths: 0 }]
+    })).toBe(true);
+    expect(MatchResultSchema.shape.settings.parse(getMatchResult(database!, matchId)?.settings).npcMovementSpeed)
+      .toBe(67.5);
+    expect(MatchResultSchema.shape.settings.parse(getMatchResult(database!, matchId)?.settings).npcDetectionRange)
+      .toBe(512);
+    const legacyJson = JSON.stringify(legacySettings);
+    database!.prepare("UPDATE match_results SET settings_summary_json = ? WHERE match_id = ?")
+      .run(legacyJson, matchId);
+    expect(MatchResultSchema.shape.settings.parse(getMatchResult(database!, matchId)?.settings).npcMovementSpeed)
+      .toBe(67.5);
+    expect(MatchResultSchema.shape.settings.parse(getMatchResult(database!, matchId)?.settings).npcDetectionRange)
+      .toBe(512);
+    expect(database!.prepare("SELECT settings_summary_json FROM match_results WHERE match_id = ?")
+      .get(matchId)).toEqual({ settings_summary_json: legacyJson });
   });
 
   it("persists ranked standings and finalizes duplicate completion requests once", () => {

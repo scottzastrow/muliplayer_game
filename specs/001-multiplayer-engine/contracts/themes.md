@@ -136,7 +136,7 @@ persists final standings and terminal state together, with compare-and-set level
 updates and one result row per match.
 
 Dots and Squares starts a new countdown after spawning each wave, provisionally
-`min(300, 60 + 3 * starting NPC count)` seconds. The monotonic deadline keeps running
+`min(360, 120 + 6 * starting NPC count)` seconds. The monotonic deadline keeps running
 through death, blocked respawn and disconnection, without depending on accumulated
 simulation ticks or resetting as NPCs die. Clearing before expiry cancels the
 countdown during the existing five-second intermission. At or after expiry, the
