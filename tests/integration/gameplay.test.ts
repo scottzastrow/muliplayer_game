@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { BoundedNavigation, SeededRandom, SessionWorld, type Rect } from "@multiplayer-game/engine";
 import type { ModuleContext, NavigationPathResult, Point2 } from "@multiplayer-game/theme-sdk";
-import { defaultModuleFactory, generateMap, type DefaultEntity } from "@multiplayer-game/default-theme";
+import {
+  defaultModuleFactory,
+  generateMap,
+  PROJECTILE_RADIUS,
+  type DefaultEntity
+} from "@multiplayer-game/default-theme";
 
 describe("integrated default gameplay", () => {
   it("keeps five simultaneous worlds, inputs, scores, death clocks and completion isolated", () => {
-    const sessions = Array.from({ length: 5 }, (_, index) => simulation(`room-${index}`));
+    const sessions = Array.from({ length: 5 }, (_, index) =>
+      simulation(`room-${index}`, [], index === 2 ? { npcMovementSpeed: 0 } : {})
+    );
     try {
       const before = sessions.map(({ module }) => module.snapshot({ accountId: "alice", role: "player" }));
       sessions[0]!.module.applyInput("alice", {
@@ -78,7 +85,8 @@ describe("integrated default gameplay", () => {
 
   it("single-claims pickups and grows frozen-roster waves; simultaneous last hits complete once", () => {
     const session = simulation("growth", [], {
-      npcPopulationGrowthPercent: 100, npcHealthGrowthPercent: 100, baseNpcHealth: 25
+      npcPopulationGrowthPercent: 100, npcHealthGrowthPercent: 100, baseNpcHealth: 25,
+      npcMovementSpeed: 0
     });
     try {
       for (const id of ["player:alice", "player:bob"]) {
@@ -218,7 +226,11 @@ function simulation(
     step(tick: number, dt = 1 / 30) { navigation.processTick(); module.step(dt, tick); },
     killWave(tick: number) {
       world.entities().filter((entity) => entity.state.kind === "npc").forEach((entity, index) => {
-        const position = { x: 400 + index * 64, y: 400 };
+        const position = { x: 400 + index * 64, y: 272 };
+        expect(world.geometry.isCircleWalkable(position, PROJECTILE_RADIUS)).toBe(true);
+        for (let x = 272; x <= position.x; x += 1) {
+          expect(world.geometry.isCircleWalkable({ x, y: 272 }, PROJECTILE_RADIUS)).toBe(true);
+        }
         update(entity.id, (npc) => {
           if (npc.state.kind !== "npc") throw new Error("Expected NPC.");
           return { ...npc, position, state: { ...npc.state, health: 25 } };
