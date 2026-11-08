@@ -157,7 +157,11 @@ describe("Dots and Squares presentation", () => {
       expect(elements.flatMap(element => element.drawnLabels))
         .toContainEqual({ text: "Enemies remaining: 1", x: 916, y: 164 });
       expect(timer.textContent).toBe("Wave time remaining: 41s");
-      const cleared = { ...next, tick: 6, phase: "intermission" };
+      const maximumBudget = { ...next, tick: 5, waveRemainingSeconds: 360 };
+      skin.handleSnapshot(maximumBudget);
+      skin.render(performance.now(), maximumBudget);
+      expect(timer.textContent).toBe("Wave time remaining: 360s");
+      const cleared = { ...maximumBudget, tick: 6, phase: "intermission" };
       skin.handleSnapshot(cleared);
       skin.render(performance.now(), cleared);
       expect(timer.textContent).toBe("");
@@ -284,9 +288,10 @@ describe("Dots and Squares presentation", () => {
   });
 
   it("rejects malformed/nonfinite snapshots and preserves dead HUD state", () => {
-    for (const seconds of [-1, 301, Infinity, NaN]) {
+    for (const seconds of [-1, 361, Infinity, NaN]) {
       expect(DefaultViewSchema.safeParse({ ...view(100), waveRemainingSeconds: seconds }).success).toBe(false);
     }
+    expect(DefaultViewSchema.safeParse({ ...view(100), waveRemainingSeconds: 360 }).success).toBe(true);
     expect(DefaultViewSchema.safeParse({ ...view(100), map: undefined }).success).toBe(false);
     const invalid = view(100);
     invalid.entities[0]!.position.x = Infinity;

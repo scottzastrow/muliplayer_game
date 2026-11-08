@@ -13,6 +13,15 @@ describe("wave countdown", () => {
     expect(calculateWaveDurationSeconds(npcs)).toBe(seconds);
   });
 
+  it("projects a capped 360-second countdown to player and spectator snapshots", () => {
+    const simulation = createSimulation(40);
+    try {
+      const playerSnapshot = simulation.module.snapshot({ accountId: "alice", role: "player" });
+      expect(playerSnapshot.waveRemainingSeconds).toBe(360);
+      expect(createSpectatorView("alice", playerSnapshot).waveRemainingSeconds).toBe(360);
+    } finally { simulation.module.dispose(); }
+  });
+
   it("rejects invalid counts, durations and clocks", () => {
     for (const count of [-1, 0.5, Infinity, NaN]) {
       expect(() => calculateWaveDurationSeconds(count)).toThrow(RangeError);
@@ -130,7 +139,7 @@ describe("wave countdown", () => {
   });
 });
 
-function createSimulation() {
+function createSimulation(initialNpcsPerPlayer = 1) {
   let now = 0;
   const map = generateMap(42).map;
   const world = new SessionWorld<DefaultEntity>("wave-test", map.definition.bounds, map.obstacles);
@@ -157,7 +166,7 @@ function createSimulation() {
     metrics: { increment: () => {}, gauge: () => {} }
   };
   const module = defaultModuleFactory.create(context, {
-    initialNpcsPerPlayer: 1, npcPopulationGrowthPercent: 100, maxLevels: 2
+    initialNpcsPerPlayer, npcPopulationGrowthPercent: 100, maxLevels: 2
   }, [{ accountId: "alice", username: "Alice", joinedOrder: 0 }], 42);
   module.initialize();
   return {

@@ -31,7 +31,7 @@ export const DefaultViewSchema = z.object({
   level: z.number().int().positive(),
   phase: z.enum(["active", "intermission", "complete"]),
   intermissionEndsAtTick: counter.optional(),
-  waveRemainingSeconds: z.number().finite().nonnegative().max(300).optional(),
+  waveRemainingSeconds: z.number().finite().nonnegative().max(360).optional(),
   radar: RadarViewSchema.optional(),
   map: z.object({
     width: z.number().finite().positive().max(2048),
