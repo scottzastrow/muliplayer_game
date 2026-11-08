@@ -92,6 +92,44 @@ docs/verification.md. T026 was not started.
 
 Checkpoint: US1+US2 is the first playable multiplayer slice, already using default theme interfaces.
 
+Focused wave-countdown follow-up (2026-11-07): FR-021 extends the existing
+T005/T021/T023/T027 paths with a reusable monotonic countdown, initially using
+60 + 3 seconds per starting NPC (300-second cap; retuned below), unchanged respawn/progression
+rules, player/spectator HUD time and once-only timeout standings finalization.
+`npm run check` passed; the final focused selection passed (11 files, 56 tests).
+Actual conditions and initial fixture failures are in docs/verification.md.
+This focused change does not complete T042 or the polish tasks;
+no browser, deployment or separate-host capacity run was performed.
+
+Separate timer-retuning follow-up (2026-11-08), T021/FR-021: Dots and Squares
+now uses `min(360, 120 + 6 * starting NPC count)` seconds. Shared countdown API,
+growth and timeout standings behavior are unchanged. Before speed edits,
+`npm run check` and the focused timer selection passed (5 files, 37 tests).
+An initial lifecycle test failed waiting for the first NPC kill; the follow-up
+clear-lane fixture below resolved the failure and passed in the final suite.
+
+Separate NPC-settings follow-up (2026-11-08), T004/T013/T019 and FR-005:
+validated `npcMovementSpeed` and `npcDetectionRange` are exposed in host
+create/edit settings. Movement defaults to 67.5 units/second; detection defaults
+to the previous 512-world-unit distance and accepts 0–700, with zero disabling
+automatic pursuit. Older settings resolve both defaults without a migration.
+The public consumer pin was advanced after commit
+`8c1238c9e4d11a08bba306c89e03b89dd3de6290`. Final `npm run check` passed and
+`npm test` passed (42 files, 198 tests). No browser, deployment or capacity
+result is claimed; T042 remains open. Actual checks and the initial fixture
+failure are recorded in docs/verification.md.
+
+Lifecycle fixture follow-up (2026-11-08), T021: terminal diagnostics resolved the
+outstanding first-kill failure as a terrain-blocked fixed shot at a moving NPC.
+The test now stages a stationary NPC in a verified open lane for each wave,
+retaining real WebSocket input, projectile combat, both kills, progression,
+saved results and slot release without increasing any timeout. The corrected
+lifecycle reruns passed; the fixture was committed with the NPC settings change.
+The full suite also required the integrated gameplay fixture to use the same
+verified open lane; that correction is in
+`47addd0c5af35a9dd1f67724f29e6b3654076f09`. Details are in
+docs/verification.md. T042 remains open.
+
 ## Phase 5: User Story 3 - Spectating and Reconnect (Priority: P2)
 
 **Goal**: Observe active games and resume reserved identities without reopening the roster.
@@ -244,8 +282,9 @@ started.
 
 ## Phase 8: Polish and Cross-Cutting Concerns
 
-- [ ] T043 Run actual build/check/test and quickstart.md browser scenarios, review contracts/settings for drift and resolve findings in docs/verification.md; do not claim runtime checks for planning-only artifacts.
+- [X] T043 Run actual build/check/test and quickstart.md browser scenarios, review contracts/settings for drift and resolve findings in docs/verification.md; do not claim runtime checks for planning-only artifacts.
 - [ ] T044 Update README.md with actual install/start commands and shipped state, add agent work evidence to docs/agent-work-log.md and a separate unfilled student reflection guide at docs/student-reflection.md; never fabricate the student's own-word reflections.
+- [X] T045 Add account-saved Dots and Squares control selection, existing-account first-sign-in prompt and lobby editing; implement keyboard-only and keyboard+mouse input, persistent per-player colors and aim-facing indicators, with account, theme, spectator and real-browser coverage.
 
 ## Dependencies & Execution Order
 

@@ -1,5 +1,106 @@
 # Local verification
 
+## NPC settings and final suite (2026-11-08)
+
+The timer retune was committed separately as `afc44e45379bba8b3a79fb0abde373af667bbd3e`.
+NPC movement speed and the new NPC detection range were committed as
+`8c1238c9e4d11a08bba306c89e03b89dd3de6290`; the public setting defaults to 512
+world units, accepts 0–700, and 0 disables automatic pursuit. Its tests verify idle
+behavior one unit outside the configured range, pursuit at configured speed at both
+400 and the maximum range, and zero-range idle behavior. API, legacy-config, saved
+result and host create/edit coverage passed. The clear-lane session lifecycle fixture
+was included with the NPC settings commit.
+
+The full suite first exposed two integrated gameplay cases placing NPCs in blocked
+cells after the generated arena changed. Commit
+`47addd0c5af35a9dd1f67724f29e6b3654076f09` puts those simulated encounters in a
+verified open lane, confirms projectile clearance, and holds NPCs stationary while
+the fixture performs its scripted combat.
+
+The external-theme consumer pin now targets the immutable settings commit above.
+After the pin update and fixture correction:
+
+| Check | Result |
+| --- | --- |
+| `npm run check` | Passed; protocol, SDK, engine, themes, server, client and tools checks. |
+| `npm test` | Passed; 42 files, 198 tests, including external-consumer conformance. |
+| `npm test -- tests/integration/gameplay.test.ts` | Passed; 1 file, 4 tests after the clear-lane fixture correction. |
+
+No browser, deployment, load or capacity test was run for this follow-up.
+T042 remains open pending its authorized separate-host capacity run.
+
+## Dots and Squares wave timer retuning (2026-11-08)
+
+Base revision: `9728949`; local Windows, Node 24.11.0, npm 11.6.1.
+Changed only module timer tuning to `min(360, 120 + 6 * starting NPC count)`
+seconds: 10 NPCs = 180 seconds, 20 = 240, 39 = 354, 40 or more = 360.
+The shared `Countdown` implementation/API and timeout finalization remain unchanged.
+Updated duration/cap and monotonic deadline fixtures, plus the browser harness's
+starting-budget bound and wait budget (syntax checked, not browser executed).
+
+Before the speed work, `npm run check` passed and the timer-focused selection
+passed (5 files, 37 tests): wave-countdown, wave-timeout, default-respawn,
+default-skin and spectator-view. Separately, wave-countdown and wave-timeout
+passed with verbose output (2 files, 16 tests), including exact-deadline
+precedence, no respawn at expiry, duplicate completion, persisted/reloaded standings
+and slot release. The attempted `default-progression.test.ts` selector names no
+existing file; it is not additional evidence.
+
+An additional `session-lifecycle.test.ts` run initially failed twice waiting for
+the first NPC kill/current-level advancement (line 91, 2.5-second wait), before
+any wave expiry or NPC speed edits. The later clear-lane lifecycle fixture below
+resolved that observation and passed in the final focused/full-suite runs above.
+
+## Configurable Dots and Squares NPC speed (2026-11-08)
+
+Separate follow-up on the same worktree. The original trace was
+`themes/default/src/module/tuning.ts` (`NPC_SPEED = 90`) into
+`entities.ts` pursuit: waypoint arrival and normalized movement both multiply
+speed by `dtSeconds`. At 30 Hz this was 3 world units per tick; map/navigation
+cells are 32 units. New playtesting default: 67.5 world units/second (75%),
+or 2.25 units/tick. The selected allowed range is finite 0-180, with fractions;
+zero stops movement but does not disable contact damage.
+
+The public v1 settings schema validates `npcMovementSpeed`, supplies the default
+when omitted, and reaches server create/update/read/start, stored settings and
+result settings through existing schema boundaries. No database migration or
+saved-data rewrite is needed. The host create/edit UI uses the public defaults,
+labels the field "NPC movement speed", documents units/range, accepts fractions
+and reports an empty value rather than converting it to zero. Dots and Squares
+uses the validated setting for both direct pursuit and navigation movement;
+the timer calculation is independent of speed.
+
+Pre-pin speed-only checks:
+
+| Check | Result |
+| --- | --- |
+| `npm run check` | Passed after implementation; protocol/SDK/default/fixture builds and all configured workspace/tools checks. |
+| `npm test -- lobby-settings.test.ts protocol.test.ts default-entities.test.ts accounts-lobby.test.ts fixture-theme.test.ts movement-collision.test.ts wave-countdown.test.ts wave-timeout.test.ts default-respawn.test.ts default-skin.test.ts spectator-view.test.ts results.test.ts` | Passed: 13 files, 85 tests. |
+| `node --check tests\browser\wave-timeout.mjs` | Passed; syntax only, not browser execution. |
+| `git diff --check` | Passed. |
+| `npm test -- themes.test.ts -t 'builds and loads an isolated external consumer'` | Failed at the immutable no-contract-drift gate, as the pin predates `npcMovementSpeed`. |
+
+Movement tests measure one-second direct travel at 0, 33.75, 67.5, 90 and 180
+units/second. Detour tests at every nonzero listed speed verify one second of
+path travel, per-step distance bounds, walkability, passage around the wall and
+navigation budgets. Coverage also verifies zero-speed contact damage, server
+rejection/no revision change, creator updates, frozen running settings, omitted
+legacy room fields, normalized legacy result settings without rewriting them,
+and actual host create/edit request payloads using DOM stubs.
+
+Initial new tests failed before implementation because the speed field was
+unknown/missing. A detour fixture initially placed the NPC at x=992, on a blocked
+navigation-cell boundary; placing it at the original x=990 and waiting for the
+bounded request fixes the fixture without changing navigation. A legacy-result
+test initially parsed the entire synthetic result with non-UUID fixture IDs;
+it now checks the public result settings schema, the subject of that test.
+
+This was the pre-pin consumer check: it failed because the lock revision preceded
+the committed public protocol settings. The pin was subsequently advanced to the
+settings commit, and the final full-suite result is recorded above. Existing task
+edits and `.idea/` were left untouched. No real-browser playtest, deployment,
+live-server changes or load/capacity run was performed.
+
 ## T043 - Build, contracts and browser verification (2026-11-07)
 
 Verified locally on Windows at commit `aeddbf6bb0896a75c9a4275e283a280491898967`
@@ -651,3 +752,36 @@ server still owned port 8082. After stopping that specific listener and starting
 a fresh in-memory server, the dedicated encounter passed as recorded above.
 All browser services and data were local. No deployment or capacity result is
 claimed; T042 remains open.
+
+## Lifecycle encounter fixture correction (2026-11-08)
+
+Terminal `npm exec -- vitest run tests\integration\session-lifecycle.test.ts`
+reproduced the first-kill timeout. A second run with temporary test-only
+diagnostics confirmed accepted input and real projectiles, not a broken gameplay
+path. At tick 2 the player was `(272, 272)` and the NPC was
+`(526.4090, 526.4090)`, with normalized shot direction `(0.7071, 0.7071)`.
+The radius-3 projectile lane first intersected terrain near `(382.2439,
+382.2439)`, beside the northwest T cluster starting at `(384, 384)`.
+At tick 30, acceptedInputs was 1, projectile damage was 25 and velocity was
+`(424.2641, 424.2641)`, while NPC health remained 1. By tick 60 the moving NPC
+had reached `(449.6508, 463.5538)`, off the original fixed aim line.
+
+The lifecycle fixture now requests `npcMovementSpeed: 0` through the real
+session settings API and relocates only each newly spawned NPC to `(400, 272)`
+through a test-only module wrapper. It does not remove terrain, truncate NPCs,
+inject damage/kills/scores or replace combat/progression. Both waves assert the
+player at `(272, 272)`, the single NPC at `(400, 272)` and an unobstructed
+projectile-radius lane. Passing diagnostics recorded direction `(1, 0)` and no
+terrain blockage at ticks 2 and 158. The second wave also checks one accepted
+input, 100 points and one kill from the first wave. Existing WebSocket combat,
+five-second intermission, two kills/200 points, saved standings, once-only
+finalization, spectator cleanup and replacement-session creation remain covered.
+All timeouts are unchanged; temporary diagnostics were removed.
+
+The corrected lifecycle test passed, including its verbose diagnostic rerun.
+After `npm run check` passed and rebuilt protocol/SDK/theme dependencies, the
+final focused selection passed: **5 files, 25 tests** (`session-lifecycle`,
+`default-combat`, `maps`, `integration/wave-timeout`, `results`). This was local
+terminal verification only, using an in-memory database and ephemeral loopback
+WebSocket server. No browser, deployment or capacity run was performed.
+The lifecycle fixture is committed with the NPC settings change; T042 remains open.
