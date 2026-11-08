@@ -26,6 +26,7 @@ import {
 import type { DefaultPlayerAction } from "./actions.js";
 import type {
   DefaultEntity,
+  DefaultFacing,
   DefaultNpcState,
   DefaultPlayerState
 } from "./types.js";
@@ -53,6 +54,10 @@ interface NpcNavigationState {
 }
 
 const EMPTY_MOVEMENT = Object.freeze({ x: 0, y: 0 });
+const PLAYER_COLORS = Object.freeze(Array.from({ length: 32 }, (_, index) =>
+  `hsl(${Math.round((25 + (index * 360) / 32) % 360)} 78% 58%)`
+));
+const DEFAULT_FACING: DefaultFacing = Object.freeze({ x: 1, y: 0 });
 
 export class DefaultEntitySimulator {
   readonly #movementByAccount = new Map<string, Point2>();
@@ -82,6 +87,9 @@ export class DefaultEntitySimulator {
     if (roster.length > playerSpawns.length) {
       throw new RangeError("Map does not provide enough player spawns for the session roster.");
     }
+    if (roster.length > PLAYER_COLORS.length) {
+      throw new RangeError("The default theme supports at most 32 distinct player colors.");
+    }
     for (const [index, member] of roster.entries()) {
       const spawn = playerSpawns[index]!;
       const id = `player:${member.accountId}`;
@@ -91,7 +99,9 @@ export class DefaultEntitySimulator {
         health: PLAYER_HEALTH,
         points: 0,
         kills: 0,
-        deaths: 0
+        deaths: 0,
+        color: PLAYER_COLORS[index]!,
+        facing: DEFAULT_FACING
       };
       this.context.entities.add({
         id,
@@ -159,6 +169,19 @@ export class DefaultEntitySimulator {
     }
     if (action.type === "combat") {
       this.#movementByAccount.set(accountId, normalizeMovement(action.moveX, action.moveY));
+      const id = this.#playerIds.get(accountId);
+      const player = id ? this.context.entities.get(id) : undefined;
+      if (id && player?.state.kind === "player") {
+        const facing = normalizedFacing({
+          x: action.aimX - player.position.x,
+          y: action.aimY - player.position.y
+        });
+        if (facing) {
+          this.context.entities.update(id, (current) => current.state.kind === "player"
+            ? { ...current, state: { ...current.state, facing } }
+            : current);
+        }
+      }
     }
   }
 
@@ -515,4 +538,10 @@ function normalizedDelta(from: Point2, to: Point2, distanceToMove: number): Poin
 
 function distance(from: Point2, to: Point2): number {
   return Math.hypot(to.x - from.x, to.y - from.y);
+}
+
+function normalizedFacing(vector: Point2): DefaultFacing | undefined {
+  const magnitude = Math.hypot(vector.x, vector.y);
+  if (magnitude === 0 || !Number.isFinite(magnitude)) return undefined;
+  return Object.freeze({ x: vector.x / magnitude, y: vector.y / magnitude });
 }

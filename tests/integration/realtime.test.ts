@@ -216,7 +216,9 @@ describe("realtime transport", () => {
       await delay(30);
       expect(await rejectedStatus(memberCookie)).toBe(403);
       const newLogin = await app.inject({ method: "POST", url: "/api/v1/auth/login",
-        headers: BASE_HEADERS, payload: { username: "SocketMember", password: "correct horse battery staple 123" } });
+        headers: BASE_HEADERS, payload: {
+          username: "SocketMember", password: "correct horse battery staple 123"
+        } });
       expect(newLogin.statusCode).toBe(200);
       const cookie = String(newLogin.headers["set-cookie"]).split(";")[0]!;
       const outsider = await app.inject({ method: "POST", url: `/api/v1/sessions/${sessionId}/rejoin`,
@@ -318,7 +320,7 @@ describe("realtime transport", () => {
       method: "POST",
       url: "/api/v1/auth/register",
       headers: BASE_HEADERS,
-      payload: { username, password: "correct horse battery staple 123" }
+      payload: { username, password: "correct horse battery staple 123", controlMode: "keyboard-mouse" }
     });
     expect(registration.statusCode).toBe(201);
     const login = await app.inject({

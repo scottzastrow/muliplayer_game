@@ -103,8 +103,15 @@ interpolation across respawns/level changes. It centers its own interpolated
 avatar, retains the death anchor while absent, and culls off-viewport entities.
 Players are dots, NPCs squares; projectiles, pickups and map obstacles are also
 visible. Points are visually largest, with current health and life/level status.
-WASD and mouse aim/hold-to-fire dispatch only module-defined `combat` intent
-through the shared action envelope, at no more than 30 scheduled sends/second.
+The host sets `controls.dataset.controlMode` to the authenticated account preference.
+Keyboard Only maps WASD to movement, left/right arrows to stationary turning and
+Space to firing. Keyboard + Mouse maps all arrows to movement, the mouse to aim and
+left click to firing. Inputs dispatch only module-defined `combat` intent through
+the shared action envelope, at no more than 30 scheduled sends/second. Each room
+assigns distinct player colors and one separate NPC-square color; player facing is
+serialized with player state and rendered as a small same-color dot beyond the
+player dot's front edge. Both color and facing remain in the roster view through
+respawn and are included in spectator snapshots.
 Blur, hidden tabs, death and disposal clear controls; release stops firing.
 The host cancels frames/observers and the skin removes event listeners on disposal.
 Shapes need no assets; undeclared asset requests fail explicitly. Asset package

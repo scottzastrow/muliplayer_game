@@ -8,6 +8,7 @@ import {
   type DefaultEntity,
   type DefaultPlayerAction
 } from "@multiplayer-game/default-theme";
+import { DefaultViewSchema } from "../themes/default/src/skin/view.js";
 import {
   createThemeLoader,
   DEFAULT_THEME_REGISTRATION,
@@ -102,6 +103,58 @@ describe("default theme registration", () => {
     expect(first.state?.acceptedInputs).toBe(1);
     expect(second.state?.acceptedInputs).toBe(0);
     expect(first.snapshot({ accountId: "account-1", role: "player" }).acceptedInputs).toBe(1);
+  });
+
+  it("assigns distinct room colors and keeps authoritative facing through death and respawn", () => {
+    const roster: readonly RosterMember[] = [
+      { accountId: "account-1", username: "host", joinedOrder: 0 },
+      { accountId: "account-2", username: "guest", joinedOrder: 1 }
+    ];
+    const context = createContext();
+    const module = DEFAULT_THEME_REGISTRATION.moduleFactory.create(
+      context,
+      { initialNpcsPerPlayer: 1, baseNpcHealth: 100_000 },
+      roster,
+      42
+    );
+    try {
+      module.initialize();
+      const snapshot = () => DefaultViewSchema.parse(
+        module.snapshot({ accountId: "account-1", role: "player" })
+      );
+      const initial = snapshot();
+      const first = initial.players.find((item) => item.accountId === "account-1")!;
+      const second = initial.players.find((item) => item.accountId === "account-2")!;
+      expect(first.color).not.toBe(second.color);
+      expect(first.facing).toEqual({ x: 1, y: 0 });
+
+      module.applyInput("account-1", {
+        type: "combat", moveX: 0, moveY: 0,
+        aimX: first.position.x, aimY: first.position.y - 100, fire: false
+      });
+      module.step(0, 1);
+      expect(snapshot().players.find((item) => item.accountId === "account-1")?.facing)
+        .toMatchObject({ x: 0, y: -1 });
+      context.entities.update("player:account-1", (entity) => entity.state.kind === "player"
+        ? { ...entity, state: { ...entity.state, health: 0 } }
+        : entity);
+      module.step(0, 2);
+      module.step(0, 152);
+      const returned = snapshot().players.find((item) => item.accountId === "account-1")!;
+      expect(returned.color).toBe(first.color);
+      expect(returned.facing).toMatchObject({ x: 0, y: -1 });
+      expect(returned.alive).toBe(true);
+
+      const spectatorSnapshot = DefaultViewSchema.parse(
+        module.snapshot({ accountId: "account-2", role: "spectator" })
+      );
+      const observed = spectatorSnapshot.players.find((item) => item.accountId === "account-1")!;
+      expect(spectatorSnapshot.viewerRole).toBe("spectator");
+      expect(observed.color).toBe(first.color);
+      expect(observed.facing).toMatchObject({ x: 0, y: -1 });
+    } finally {
+      module.dispose();
+    }
   });
 
   it("requires the exact pinned digest and compatible engine, module, and renderer versions", () => {

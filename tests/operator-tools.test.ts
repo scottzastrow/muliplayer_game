@@ -33,7 +33,7 @@ describe("local operator and reviewed theme-code tools", () => {
       await expect(
         bootstrapOperator(database, "Second", "another-secure-password")
       ).rejects.toThrow("An operator account already exists");
-      await createAccount(database, "Player", "player-secure-password");
+      await createAccount(database, "Player", "player-secure-password", "keyboard-mouse");
 
       expect(
         database.prepare("SELECT username, role FROM accounts ORDER BY username").all()
@@ -53,7 +53,7 @@ describe("local operator and reviewed theme-code tools", () => {
   it("rejects username collisions and reads a password without command-line arguments", async () => {
     const database = createTestDatabase();
     try {
-      await createAccount(database, "Existing", "player-secure-password");
+      await createAccount(database, "Existing", "player-secure-password", "keyboard-mouse");
       await expect(
         bootstrapOperator(database, "Existing", "operator-secure-password")
       ).rejects.toThrow("That username is already in use");

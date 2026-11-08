@@ -79,7 +79,8 @@ describe("operator metrics API", () => {
     async function registerLogin(username: string, operator: boolean): Promise<string> {
       const password = "test-only metrics password 123";
       const registered = await app.inject({
-        method: "POST", url: "/api/v1/auth/register", headers: HEADERS, payload: { username, password }
+        method: "POST", url: "/api/v1/auth/register", headers: HEADERS,
+        payload: { username, password, controlMode: "keyboard-mouse" }
       });
       expect(registered.statusCode).toBe(201);
       if (operator) database.prepare("UPDATE accounts SET role = 'operator' WHERE id = ?")

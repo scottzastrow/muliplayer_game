@@ -79,7 +79,10 @@ describe("fixture theme session integration", () => {
       method: "POST",
       url: "/api/v1/auth/register",
       headers: BASE_HEADERS,
-      payload: { username: "FixtureOperator", password: "correct horse battery staple 123" }
+      payload: {
+        username: "FixtureOperator", password: "correct horse battery staple 123",
+        controlMode: "keyboard-mouse"
+      }
     });
     expect(registration.statusCode).toBe(201);
     const login = await app.inject({

@@ -31,7 +31,11 @@ describe("accounts and lobby integration", () => {
       method: "POST",
       url: "/api/v1/auth/register",
       headers: BASE_HEADERS,
-      payload: { username: "ShortPass", password: "12345678" }
+      payload: {
+        username: "ShortPass",
+        password: "12345678",
+        controlMode: "keyboard-only"
+      }
     });
     expect(tooShort.statusCode).toBe(400);
     expect(tooShort.json().error.message).toBe("Password must be 9–128 characters long.");
@@ -40,7 +44,7 @@ describe("accounts and lobby integration", () => {
       method: "POST",
       url: "/api/v1/auth/register",
       headers: BASE_HEADERS,
-      payload: { username: "NineChars", password: "123456789" }
+      payload: { username: "NineChars", password: "123456789", controlMode: "keyboard-mouse" }
     });
     expect(validRegistration.statusCode).toBe(201);
     expect((await login("NineChars", "123456789")).statusCode).toBe(200);
@@ -49,7 +53,7 @@ describe("accounts and lobby integration", () => {
       method: "POST",
       url: "/api/v1/auth/register",
       headers: BASE_HEADERS,
-      payload: { username: "MaxPass128", password: "a".repeat(128) }
+      payload: { username: "MaxPass128", password: "a".repeat(128), controlMode: "keyboard-mouse" }
     });
     expect(maximumLength.statusCode).toBe(201);
 
@@ -64,7 +68,8 @@ describe("accounts and lobby integration", () => {
 
   it("uses generic login failures, normalized unique usernames, non-public credentials, rotation and logout", async () => {
     const account = await register("Pilot_One");
-    expect(Object.keys(account)).toEqual(["id", "username", "role"]);
+    expect(Object.keys(account)).toEqual(["id", "username", "role", "controlMode"]);
+    expect(account.controlMode).toBe("keyboard-mouse");
     expect(account).not.toHaveProperty("passwordHash");
     expect(account).not.toHaveProperty("passwordSalt");
 
@@ -72,7 +77,7 @@ describe("accounts and lobby integration", () => {
       method: "POST",
       url: "/api/v1/auth/register",
       headers: BASE_HEADERS,
-      payload: { username: "pilot_one", password: "a secure password 123" }
+      payload: { username: "pilot_one", password: "a secure password 123", controlMode: "keyboard-only" }
     });
     expect(duplicate.statusCode).toBe(409);
     expect(duplicate.json().error.code).toBe("USERNAME_TAKEN");
@@ -81,7 +86,10 @@ describe("accounts and lobby integration", () => {
       method: "POST",
       url: "/api/v1/auth/register",
       headers: BASE_HEADERS,
-      payload: { username: "PilotTwo", password: "a secure password 123", role: "operator" }
+      payload: {
+        username: "PilotTwo", password: "a secure password 123",
+        controlMode: "keyboard-mouse", role: "operator"
+      }
     });
     expect(forgedRole.statusCode).toBe(400);
 
@@ -354,12 +362,72 @@ describe("accounts and lobby integration", () => {
     );
   });
 
-  async function register(username: string): Promise<Record<string, unknown>> {
+  it("requires a signup control choice and saves legacy accounts across sign-out and sign-in", async () => {
+    const missingChoice = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/register",
+      headers: BASE_HEADERS,
+      payload: { username: "NoControl", password: "correct horse battery staple 123" }
+    });
+    expect(missingChoice.statusCode).toBe(400);
+
+    const account = await register("LegacyChoice", "keyboard-only");
+    expect(account.controlMode).toBe("keyboard-only");
+    database.prepare("UPDATE accounts SET control_mode = NULL WHERE id = ?").run(account.id);
+
+    const loginResponse = await login("LegacyChoice", "correct horse battery staple 123");
+    const cookie = cookieFrom(loginResponse);
+    expect(loginResponse.statusCode).toBe(200);
+    const me = await app.inject({ url: "/api/v1/me", headers: { cookie } });
+    expect(me.json().account.controlMode).toBeNull();
+
+    const saved = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/me/control-mode",
+      headers: { ...BASE_HEADERS, cookie },
+      payload: { controlMode: "keyboard-mouse" }
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().account.controlMode).toBe("keyboard-mouse");
+    expect(
+      (database.prepare("SELECT control_mode FROM accounts WHERE id = ?").get(account.id) as
+        { control_mode: string }).control_mode
+    ).toBe("keyboard-mouse");
+
+    const logout = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/logout",
+      headers: { origin: ORIGIN, cookie }
+    });
+    expect(logout.statusCode).toBe(204);
+    const secondLogin = await login("LegacyChoice", "correct horse battery staple 123");
+    expect(secondLogin.statusCode).toBe(200);
+    expect(secondLogin.json().account.controlMode).toBe("keyboard-mouse");
+    const secondCookie = cookieFrom(secondLogin);
+    const afterSignIn = await app.inject({
+      url: "/api/v1/me",
+      headers: { cookie: secondCookie }
+    });
+    expect(afterSignIn.json().account.controlMode).toBe("keyboard-mouse");
+
+    const invalid = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/me/control-mode",
+      headers: { ...BASE_HEADERS, cookie: secondCookie },
+      payload: { controlMode: "gamepad" }
+    });
+    expect(invalid.statusCode).toBe(400);
+  });
+
+  async function register(
+    username: string,
+    controlMode: "keyboard-only" | "keyboard-mouse" = "keyboard-mouse"
+  ): Promise<Record<string, unknown>> {
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/auth/register",
       headers: BASE_HEADERS,
-      payload: { username, password: "correct horse battery staple 123" }
+      payload: { username, password: "correct horse battery staple 123", controlMode }
     });
     expect(response.statusCode).toBe(201);
     return response.json().account as Record<string, unknown>;

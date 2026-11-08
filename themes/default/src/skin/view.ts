@@ -8,7 +8,10 @@ const entity = z.object({
   position: point,
   radius: z.number().finite().positive().max(64),
   state: z.discriminatedUnion("kind", [
-    z.object({ kind: z.literal("player"), accountId: z.string(), deaths: counter }),
+    z.object({
+      kind: z.literal("player"), accountId: z.string(), deaths: counter,
+      color: z.string().min(1).optional(), facing: point.optional()
+    }),
     z.object({ kind: z.literal("npc"), health: z.number().finite().nonnegative() }),
     z.object({ kind: z.literal("projectile") }),
     z.object({ kind: z.literal("pickup"), pickupType: z.enum(["health", "rapid-fire", "spread"]) })
@@ -41,6 +44,8 @@ export const DefaultViewSchema = z.object({
   players: z.array(z.object({
     accountId: z.string().min(1),
     position: point,
+    color: z.string().min(1).optional(),
+    facing: point.optional(),
     health: z.number().finite().nonnegative(),
     points: counter,
     deaths: counter,

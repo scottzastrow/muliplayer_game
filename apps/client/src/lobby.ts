@@ -1,4 +1,9 @@
-import type { ClientAccount } from "./auth.js";
+import {
+  createControlModeFieldset,
+  saveControlMode,
+  selectedControlMode,
+  type ClientAccount
+} from "./auth.js";
 import { showStatus } from "./ui.js";
 import { mountAdminThemes } from "./admin-themes.js";
 import { mountAdminMetrics } from "./admin-metrics.js";
@@ -69,6 +74,7 @@ export function mountLobby(
   status: HTMLElement,
   account: ClientAccount,
   onLogout: () => void,
+  onAccountUpdate: (account: ClientAccount) => void,
   onPlay: (sessionId: string) => void,
   onSpectate: (sessionId: string) => void
 ): void {
@@ -80,6 +86,32 @@ export function mountLobby(
   logout.textContent = "Sign out";
   logout.addEventListener("click", () => void signOut());
   header.append(greeting, logout);
+
+  const controlHeading = document.createElement("h2");
+  controlHeading.textContent = "Controls";
+  const controlForm = document.createElement("form");
+  const controlChoices = createControlModeFieldset(account.controlMode ?? undefined);
+  const saveControls = document.createElement("button");
+  saveControls.type = "submit";
+  saveControls.textContent = "Save controls";
+  controlForm.append(controlChoices, saveControls);
+  controlForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const controlMode = selectedControlMode(controlChoices);
+    if (!controlMode) {
+      showStatus(status, "Choose a control mode before saving.", true);
+      return;
+    }
+    saveControls.disabled = true;
+    try {
+      onAccountUpdate(await saveControlMode(controlMode));
+      showStatus(status, "Controls updated.");
+    } catch (error) {
+      showStatus(status, messageOf(error), true);
+    } finally {
+      saveControls.disabled = false;
+    }
+  });
 
   const createHeading = document.createElement("h2");
   createHeading.textContent = "Create a session";
@@ -134,6 +166,8 @@ export function mountLobby(
   refresh.addEventListener("click", () => void refreshSessions());
   root.replaceChildren(
     header,
+    controlHeading,
+    controlForm,
     createHeading,
     createForm,
     listHeading,

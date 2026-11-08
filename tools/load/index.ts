@@ -257,7 +257,9 @@ export async function runLoad(input: unknown, signal?: AbortSignal) {
     const username = `Load_${runId}_${accounts.length}`;
     const password = randomBytes(24).toString("hex");
     nextRegistrationAt = performance.now() + config.registrationIntervalMs;
-    await api("/auth/register", undefined, { username, password });
+    await api("/auth/register", undefined, {
+      username, password, controlMode: "keyboard-mouse"
+    });
     const response = await fetch(new URL("/api/v1/auth/login", config.target), {
       method: "POST", headers: {
         origin: config.origin ?? new URL(config.target).origin, "content-type": "application/json"

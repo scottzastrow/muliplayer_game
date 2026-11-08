@@ -147,7 +147,7 @@ describe("operator theme management API", () => {
       method: "POST",
       url: "/api/v1/auth/register",
       headers: BASE_HEADERS,
-      payload: { username, password: PASSWORD }
+      payload: { username, password: PASSWORD, controlMode: "keyboard-mouse" }
     });
     expect(response.statusCode).toBe(201);
     return response.json().account as { id: string };

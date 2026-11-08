@@ -11,6 +11,8 @@ const metadata: SkinFactoryMetadata = Object.freeze({
 });
 const INPUT_INTERVAL_MS = 1000 / 30;
 const SNAPSHOT_INTERVAL_MS = 1000 / 15;
+const FACING_DOT_RADIUS = 3;
+const TURN_RADIANS_PER_SECOND = Math.PI;
 
 export const defaultSkinFactory: SkinFactory = Object.freeze({
   metadata,
@@ -21,7 +23,11 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     if (!world || !hud || !controls) throw new Error("The default skin requires world, hud and controls slots.");
     const canvas = document.createElement("canvas");
     canvas.tabIndex = 0;
-    canvas.setAttribute("aria-label", "Dots and Squares game. WASD to move, mouse to aim, hold left button to fire.");
+    const controlMode = controls.dataset.controlMode === "keyboard-only"
+      ? "keyboard-only" : "keyboard-mouse";
+    canvas.setAttribute("aria-label", controlMode === "keyboard-only"
+      ? "Dots and Squares game. WASD to move, left and right arrows to turn, Space to fire."
+      : "Dots and Squares game. Arrow keys to move, mouse to aim, left click to fire.");
     canvas.style.display = "block";
     canvas.style.width = "100%";
     canvas.style.height = "100%";
@@ -41,7 +47,9 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     waveTime.className = "default-wave-time";
     hud.append(points, health, waveTime, life);
     const help = document.createElement("p");
-    help.textContent = "Click the game to focus. WASD: move. Mouse: aim. Hold left mouse button: fire.";
+    help.textContent = controlMode === "keyboard-only"
+      ? "Click the game to focus. WASD: move. Left/Right arrows: turn in place. Space: fire."
+      : "Click the game to focus. Arrow keys: move. Mouse: aim. Left click: fire.";
     controls.append(help);
     world.append(canvas);
     const listeners = new AbortController();
@@ -59,12 +67,18 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     let disposed = false;
     let lastInputAt = -Infinity;
     let pointer = { x: 0, y: 0 };
+    let facingAngle = 0;
+    let facingInitialized = false;
+    let lastRenderAt: number | undefined;
+    let pointerMoved = false;
 
     function sendNeutral(): void {
       if (!sending) return;
       sending = false;
+      const player = current?.players.find((item) => item.accountId === current?.viewerAccountId);
+      const aim = player ? aimPoint(player) : { x: host.cameraAnchor?.x ?? 0, y: host.cameraAnchor?.y ?? 0 };
       host.dispatchInput({ type: "combat", moveX: 0, moveY: 0,
-        aimX: host.cameraAnchor?.x ?? 0, aimY: host.cameraAnchor?.y ?? 0, fire: false });
+        aimX: aim.x, aimY: aim.y, fire: false });
     }
     function clearControls(): void {
       keys.clear();
@@ -81,13 +95,13 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     listen(canvas, "focus", () => { focused = true; });
     listen(canvas, "blur", () => { focused = false; clearControls(); });
     listen(canvas, "keydown", (event) => {
-      if (!(event instanceof KeyboardEvent) || !["KeyW", "KeyA", "KeyS", "KeyD"].includes(event.code)) return;
+      if (!(event instanceof KeyboardEvent) || !isControlKey(event.code)) return;
       event.preventDefault();
-      keys.add(event.code);
+      if (!event.repeat) keys.add(event.code);
     });
     listen(canvas, "keyup", (event) => {
       if (!(event instanceof KeyboardEvent)) return;
-      if (keys.delete(event.code)) event.preventDefault();
+      if (isControlKey(event.code) && keys.delete(event.code)) event.preventDefault();
     });
     function updatePointer(event: PointerEvent): void {
       const rect = canvas.getBoundingClientRect();
@@ -95,19 +109,23 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
         x: (event.clientX - rect.left) * width / rect.width,
         y: (event.clientY - rect.top) * height / rect.height
       };
+      pointerMoved = true;
     }
     listen(canvas, "pointermove", (event) => {
       if (event instanceof PointerEvent) updatePointer(event);
     });
     listen(canvas, "pointerdown", (event) => {
-      if (!(event instanceof PointerEvent) || event.button !== 0) return;
-      event.preventDefault();
+      if (!(event instanceof PointerEvent)) return;
       canvas.focus();
       focused = true;
+      if (event.button !== 0 || controlMode !== "keyboard-mouse") return;
+      event.preventDefault();
       updatePointer(event);
       fire = true;
     });
-    listen(window, "pointerup", () => { fire = false; });
+    listen(window, "pointerup", () => {
+      if (controlMode === "keyboard-mouse") fire = false;
+    });
     listen(canvas, "pointercancel", () => { fire = false; });
     listen(window, "blur", () => { focused = false; clearControls(); });
     listen(window, "focus", () => { focused = document.activeElement === canvas; });
@@ -115,6 +133,38 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
       if (document.hidden) { focused = false; clearControls(); }
       else focused = document.activeElement === canvas;
     });
+
+    function aimPoint(target: DefaultView["players"][number]): { x: number; y: number } {
+      const camera = host.cameraAnchor ?? target.position;
+      const pointerTarget = {
+        x: camera.x + pointer.x - width / 2,
+        y: camera.y + pointer.y - height / 2
+      };
+      if (controlMode === "keyboard-mouse" && pointerMoved) {
+        const dx = pointerTarget.x - target.position.x;
+        const dy = pointerTarget.y - target.position.y;
+        if (Math.hypot(dx, dy) > 0) {
+          facingAngle = Math.atan2(dy, dx);
+          facingInitialized = true;
+          return pointerTarget;
+        }
+      }
+      return {
+        x: target.position.x + Math.cos(facingAngle) * 100,
+        y: target.position.y + Math.sin(facingAngle) * 100
+      };
+    }
+
+    function isTurning(): boolean {
+      return controlMode === "keyboard-only" &&
+        (keys.has("ArrowLeft") || keys.has("ArrowRight"));
+    }
+
+    function isControlKey(code: string): boolean {
+      return controlMode === "keyboard-only"
+        ? ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowLeft", "ArrowRight", "Space"].includes(code)
+        : ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(code);
+    }
 
     return {
       handleSnapshot(snapshot) {
@@ -140,6 +190,10 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
         receivedAt = performance.now();
         const player = current.players.find((item) => item.accountId === current?.viewerAccountId);
         if (!player) throw new Error("The snapshot is missing this player's life state.");
+        if (player.facing && !isTurning()) {
+          facingAngle = Math.atan2(player.facing.y, player.facing.x);
+          facingInitialized = true;
+        }
         if (!player.alive || current.phase !== "active") clearControls();
       },
       handleEvents() {},
@@ -156,12 +210,27 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
       },
       render(time) {
         if (disposed || !current) return;
+        const elapsed = lastRenderAt === undefined
+          ? 0
+          : Math.min(0.1, Math.max(0, (time - lastRenderAt) / 1000));
+        lastRenderAt = time;
         const entities = interpolateEntities(previous, current, (time - receivedAt) / interval);
         const player = current.players.find((item) => item.accountId === current?.viewerAccountId)!;
         const avatar = entities.find((item) =>
           item.state.kind === "player" && item.state.accountId === player.accountId);
         const observed = current.viewerRole === "spectator" ? current.spectatorView : undefined;
         const camera = observed?.cameraAnchor ?? avatar?.position ?? player.position;
+        const turnDirection = controlMode === "keyboard-only"
+          ? Number(keys.has("ArrowRight")) - Number(keys.has("ArrowLeft"))
+          : 0;
+        if (focused && turnDirection !== 0 && current.phase === "active" &&
+            current.viewerRole === "player" && player.alive) {
+          facingAngle += turnDirection * TURN_RADIANS_PER_SECOND * elapsed;
+          facingInitialized = true;
+        } else if (!facingInitialized && player.facing) {
+          facingAngle = Math.atan2(player.facing.y, player.facing.x);
+          facingInitialized = true;
+        }
         host.setCameraAnchor(camera);
         context.setTransform(dpr, 0, 0, dpr, 0, 0);
         context.fillStyle = "#101824";
@@ -182,10 +251,28 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
           if (entity.state.kind === "npc") {
             context.fillStyle = "#ed6b61";
             context.fillRect(screen.x - radius, screen.y - radius, radius * 2, radius * 2);
+          } else if (entity.state.kind === "player") {
+            const accountId = entity.state.accountId;
+            const playerState = current.players.find((item) => item.accountId === accountId);
+            context.fillStyle = playerState?.color ?? entity.state.color ??
+              (accountId === player.accountId ? "#58d6ff" : "#f7db76");
+            context.beginPath();
+            context.arc(screen.x, screen.y, radius, 0, Math.PI * 2);
+            context.fill();
+            const facing = playerState?.facing ?? entity.state.facing;
+            const angle = facing ? Math.atan2(facing.y, facing.x) :
+              accountId === player.accountId ? facingAngle : 0;
+            context.beginPath();
+            context.arc(
+              screen.x + Math.cos(angle) * (radius + 2),
+              screen.y + Math.sin(angle) * (radius + 2),
+              FACING_DOT_RADIUS,
+              0,
+              Math.PI * 2
+            );
+            context.fill();
           } else {
-            context.fillStyle = entity.state.kind === "player"
-              ? entity.state.accountId === player.accountId ? "#58d6ff" : "#f7db76"
-              : entity.state.kind === "projectile" ? "#ffffff"
+            context.fillStyle = entity.state.kind === "projectile" ? "#ffffff"
               : entity.state.pickupType === "health" ? "#66df8a"
               : entity.state.pickupType === "rapid-fire" ? "#b892ff" : "#ffa64d";
             context.beginPath();
@@ -207,17 +294,23 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
           : `Level ${current.level}`;
         if (focused && player.alive && current.phase === "active" && current.viewerRole === "player" &&
             time - lastInputAt >= INPUT_INTERVAL_MS) {
-          const aimX = Math.max(0, Math.min(current.map.width, camera.x + pointer.x - width / 2));
-          const aimY = Math.max(0, Math.min(current.map.height, camera.y + pointer.y - height / 2));
+          const movement = controlMode === "keyboard-only"
+            ? { x: Number(keys.has("KeyD")) - Number(keys.has("KeyA")),
+                y: Number(keys.has("KeyS")) - Number(keys.has("KeyW")) }
+            : { x: Number(keys.has("ArrowRight")) - Number(keys.has("ArrowLeft")),
+                y: Number(keys.has("ArrowDown")) - Number(keys.has("ArrowUp")) };
+          const aim = aimPoint(player);
           lastInputAt = time;
           sending = true;
           host.dispatchInput({
             type: "combat",
-            moveX: Number(keys.has("KeyD")) - Number(keys.has("KeyA")),
-            moveY: Number(keys.has("KeyS")) - Number(keys.has("KeyW")),
-            aimX, aimY, fire
+            moveX: movement.x, moveY: movement.y,
+            aimX: Math.max(0, Math.min(current.map.width, aim.x)),
+            aimY: Math.max(0, Math.min(current.map.height, aim.y)),
+            fire: controlMode === "keyboard-only" ? keys.has("Space") : fire
           });
         }
+
       },
       dispose() {
         if (disposed) return;

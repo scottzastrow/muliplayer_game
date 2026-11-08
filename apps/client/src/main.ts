@@ -1,4 +1,9 @@
-import { loadCurrentAccount, mountAuth, type ClientAccount } from "./auth.js";
+import {
+  loadCurrentAccount,
+  mountAuth,
+  mountControlModePrompt,
+  type ClientAccount
+} from "./auth.js";
 import { mountLobby } from "./lobby.js";
 import { showStatus } from "./ui.js";
 import { mountGame } from "./game.js";
@@ -44,6 +49,12 @@ function showAuth(): void {
 
 function showAccountView(account: ClientAccount): void {
   activeAccount = account;
+  if (!account.controlMode) {
+    if (root && status) {
+      mountControlModePrompt(root, status, account, showAccountView);
+    }
+    return;
+  }
   const resultId = resultIdFromHash(window.location.hash);
   if (resultId) showResults(account, resultId);
   else showLobby(account);
@@ -60,18 +71,23 @@ function showLobby(account: ClientAccount): void {
   if (!root || !status) {
     return;
   }
+  if (!account.controlMode) {
+    showAccountView(account);
+    return;
+  }
+  const controlMode = account.controlMode;
   disposeGame?.();
   disposeGame = undefined;
   activeAccount = account;
   history.replaceState(null, "", window.location.pathname + window.location.search);
   showStatus(status, "");
-  mountLobby(root, status, account, showAuth, (sessionId) => {
+  mountLobby(root, status, account, showAuth, showLobby, (sessionId) => {
     if (!root || !status) return;
     disposeGame = mountGame(root, status, account, sessionId, (action) => {
       if (action === "lobby") showLobby(account);
       else if (action === "results") showResults(account, sessionId);
       else showStatus(status, "That view is not available yet.", true);
-    });
+    }, controlMode);
   }, (sessionId) => {
     if (!root || !status) return;
     disposeGame = mountSpectate(root, status, account, sessionId, (action) => {

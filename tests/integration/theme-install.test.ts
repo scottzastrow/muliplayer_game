@@ -236,7 +236,7 @@ describe("theme installation conformance", () => {
   async function registerLogin(username: string, operator: boolean): Promise<string> {
     const registered = await app.inject({
       method: "POST", url: "/api/v1/auth/register", headers: JSON_HEADERS,
-      payload: { username, password: PASSWORD }
+      payload: { username, password: PASSWORD, controlMode: "keyboard-mouse" }
     });
     expect(registered.statusCode).toBe(201);
     if (operator) {

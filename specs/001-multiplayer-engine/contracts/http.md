@@ -8,10 +8,11 @@ HTTPS; local HTTP development is the only Secure-cookie exception.
 
 | Method/path | Request | Success | Access |
 | --- | --- | --- | --- |
-| POST /auth/register | username, password | 201 public account; login still required | Public, throttled |
+| POST /auth/register | username, password, controlMode | 201 public account; login still required | Public, throttled |
 | POST /auth/login | username, password | 200 account and Set-Cookie | Public, throttled |
 | POST /auth/logout | Empty | 204 and cleared cookie | Logged in |
 | GET /me | None | Account id/display name/role | Logged in |
+| PATCH /me/control-mode | controlMode (`keyboard-only` or `keyboard-mouse`) | Updated public account preference | Logged in |
 | GET /sessions | None | Active session summaries | Logged in |
 | POST /sessions | settings, optional requestId | 201 session; creator joins as player | Logged in |
 | PATCH /sessions/:id/settings | Full validated settings, expectedRevision | Updated waiting session | Creator |
@@ -51,11 +52,18 @@ The operator lobby provides manual refresh and a JSON download; no capacity
 claim or load-harness execution is implied.
 
 Error body: `{error:{code,message,requestId,details?}}`; no stack traces or secrets.
-400 malformed/schema, 401 unauthenticated, 403 forbidden/origin, 404 unknown,
+400 malformed/schema/control mode, 401 unauthenticated, 403 forbidden/origin, 404 unknown,
 409 SESSION_CAPACITY/PLAYER_CAPACITY/SPECTATOR_CAPACITY/ALREADY_STARTED/
 REVISION_CONFLICT/REJOIN_EXPIRED/USERNAME_TAKEN, 413 payload too large, 422 invalid
 settings/package compatibility, 429 throttled, 503 not ready. Login failure uses a
 generic message regardless of whether the username exists.
+
+`controlMode` is saved on the account and returned by registration, login and
+`GET /me`. Signup requires a valid value. Existing accounts receive `null` until
+they choose one; the client blocks lobby access with a first-sign-in prompt. The
+authenticated same-origin update endpoint allows a player to change the value from
+the lobby. The preference does not alter server authority or the module's opaque
+action envelope.
 
 `GET /matches/:id/results` requires a valid login but does not create membership.
 It returns `{result:{matchId,status,finalLevel,standings,settings,themeDigest,

@@ -11,8 +11,11 @@ export function mountGame(
   status: HTMLElement,
   account: ClientAccount,
   sessionId: string,
-  navigate: (action: "lobby" | "players" | "results") => void
+  navigate: (action: "lobby" | "players" | "results") => void,
+  controlMode = account.controlMode
 ): () => void {
+  if (!controlMode) throw new Error("Choose a control mode before opening a game.");
+  const selectedControlMode = controlMode;
   let mounted: MountedSkinHost | undefined;
   let connection: RealtimeClient | undefined;
   let disposed = false;
@@ -59,6 +62,7 @@ export function mountGame(
         mounted?.dispose();
         mounted = mountSkinHost(view, renderer.factory, {
           target: { accountId: account.id, username: account.username },
+          controlMode: selectedControlMode,
           dispatchInput(action: JsonValue) {
             if (!connection?.sendAction(action)) {
               fail("The game connection is unavailable. Refresh the lobby to reopen the view.");

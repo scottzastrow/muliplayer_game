@@ -1,9 +1,12 @@
 import { showStatus } from "./ui.js";
 
+export type ControlMode = "keyboard-only" | "keyboard-mouse";
+
 export interface ClientAccount {
   id: string;
   username: string;
   role: "player" | "operator";
+  controlMode: ControlMode | null;
 }
 
 export async function mountAuth(
@@ -22,6 +25,7 @@ export async function mountAuth(
   const passwordField = makeInput("Password", "password", "password", "new-password");
   passwordField.input.required = true;
   passwordField.input.maxLength = 128;
+  const controlModes = createControlModeFieldset();
   const submit = document.createElement("button");
   submit.type = "submit";
   const toggle = document.createElement("button");
@@ -32,6 +36,10 @@ export async function mountAuth(
   const updateMode = (): void => {
     title.textContent = registering ? "Create an account" : "Sign in";
     submit.textContent = registering ? "Register" : "Sign in";
+    controlModes.hidden = !registering;
+    for (const input of controlModes.querySelectorAll<HTMLInputElement>("input")) {
+      input.disabled = !registering;
+    }
     toggle.textContent = registering ? "Have an account? Sign in" : "Need an account? Register";
     passwordField.input.autocomplete = registering ? "new-password" : "current-password";
     passwordField.input.minLength = registering ? 9 : 0;
@@ -46,13 +54,19 @@ export async function mountAuth(
     submit.disabled = true;
     showStatus(status, "");
     try {
+      const controlMode = registering ? selectedControlMode(controlModes) : undefined;
+      if (registering && !controlMode) {
+        showStatus(status, "Choose a control mode before creating your account.", true);
+        return;
+      }
       const response = await fetch(`/api/v1/auth/${registering ? "register" : "login"}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "same-origin",
         body: JSON.stringify({
           username: usernameField.input.value,
-          password: passwordField.input.value
+          password: passwordField.input.value,
+          ...(controlMode ? { controlMode } : {})
         })
       });
       const result = await readResponse<{ account: ClientAccount }>(response);
@@ -76,11 +90,87 @@ export async function mountAuth(
     usernameField.input,
     passwordField.label,
     passwordField.input,
+    controlModes,
     submit,
     toggle
   );
   root.replaceChildren(form);
   updateMode();
+}
+
+export function createControlModeFieldset(selected?: ControlMode): HTMLFieldSetElement {
+  const fieldset = document.createElement("fieldset");
+  fieldset.setAttribute("aria-label", "Control mode");
+  const legend = document.createElement("legend");
+  legend.textContent = "Choose your controls";
+  fieldset.append(legend);
+  for (const [value, labelText] of [
+    ["keyboard-only", "Keyboard Only — WASD to move, left/right arrows to turn, Space to fire"],
+    ["keyboard-mouse", "Keyboard + Mouse — all four arrow keys to move, mouse to aim, left click to fire"]
+  ] as const) {
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "controlMode";
+    input.value = value;
+    input.required = true;
+    input.checked = value === selected;
+    label.append(input, document.createTextNode(labelText));
+    fieldset.append(label);
+  }
+  return fieldset;
+}
+
+export function selectedControlMode(fieldset: HTMLFieldSetElement): ControlMode | undefined {
+  const value = fieldset.querySelector<HTMLInputElement>('input[name="controlMode"]:checked')?.value;
+  return value === "keyboard-only" || value === "keyboard-mouse" ? value : undefined;
+}
+
+export async function saveControlMode(controlMode: ControlMode): Promise<ClientAccount> {
+  const response = await fetch("/api/v1/me/control-mode", {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ controlMode })
+  });
+  return (await readResponse<{ account: ClientAccount }>(response)).account;
+}
+
+export function mountControlModePrompt(
+  root: HTMLElement,
+  status: HTMLElement,
+  account: ClientAccount,
+  onSaved: (account: ClientAccount) => void
+): void {
+  const form = document.createElement("form");
+  form.className = "auth-form";
+  const title = document.createElement("h2");
+  title.textContent = "Choose your controls";
+  const explanation = document.createElement("p");
+  explanation.textContent = `${account.username}, choose a control mode to continue to the lobby.`;
+  const choices = createControlModeFieldset();
+  const submit = document.createElement("button");
+  submit.type = "submit";
+  submit.textContent = "Save controls";
+  form.append(title, explanation, choices, submit);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const controlMode = selectedControlMode(choices);
+    if (!controlMode) {
+      showStatus(status, "Choose a control mode to continue.", true);
+      return;
+    }
+    submit.disabled = true;
+    showStatus(status, "");
+    try {
+      onSaved(await saveControlMode(controlMode));
+    } catch (error) {
+      showStatus(status, error instanceof Error ? error.message : "The request failed.", true);
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  root.replaceChildren(form);
 }
 
 export async function loadCurrentAccount(): Promise<ClientAccount | undefined> {

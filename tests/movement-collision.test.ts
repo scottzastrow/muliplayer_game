@@ -92,10 +92,13 @@ describe("rejected entity updates", () => {
     });
     try {
       placePlayer(world, CORNER_APPROACH);
-      const before = world.getEntity("player:alice");
+      const before = world.getEntity("player:alice")!;
       module.applyInput("alice", { type: "combat", moveX: 1, moveY: 1, aimX: 0, aimY: 0, fire: false });
       expect(() => module.step(TICK_SECONDS, 1)).toThrow(/outside walkable world geometry/);
-      expect(world.getEntity("player:alice")).toEqual(before);
+      expect(world.getEntity("player:alice")).toMatchObject({
+        ...before,
+        state: { ...before.state, facing: expect.any(Object) }
+      });
     } finally {
       module.dispose();
     }

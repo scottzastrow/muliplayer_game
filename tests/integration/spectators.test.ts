@@ -235,7 +235,9 @@ describe("spectator admission and targets", () => {
 
   async function account(username: string) {
     const registered = await app.inject({ method: "POST", url: "/api/v1/auth/register",
-      headers: HEADERS, payload: { username, password: "correct horse battery staple 123" } });
+      headers: HEADERS, payload: {
+        username, password: "correct horse battery staple 123", controlMode: "keyboard-mouse"
+      } });
     expect(registered.statusCode).toBe(201);
     const login = await app.inject({ method: "POST", url: "/api/v1/auth/login",
       headers: HEADERS, payload: { username, password: "correct horse battery staple 123" } });

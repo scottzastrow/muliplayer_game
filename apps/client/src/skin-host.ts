@@ -1,5 +1,6 @@
 import type { JsonValue } from "@multiplayer-game/protocol";
 import type { AssetLoader, Point2, SkinFactory, SkinHost, SkinInstance } from "@multiplayer-game/theme-sdk";
+import type { ControlMode } from "./auth.js";
 
 export interface MountedSkinHost {
   readonly host: SkinHost;
@@ -13,6 +14,7 @@ export function mountSkinHost(
   factory: SkinFactory,
   options: {
     readonly target: Readonly<{ accountId: string; username: string }>;
+    readonly controlMode?: ControlMode;
     readonly dispatchInput: (action: JsonValue) => void;
     readonly navigate: SkinHost["navigate"];
     readonly onError: (error: Error) => void;
@@ -25,6 +27,7 @@ export function mountSkinHost(
   hud.className = "game-hud";
   const controls = document.createElement("div");
   controls.className = "game-controls";
+  controls.dataset.controlMode = options.controlMode ?? "keyboard-mouse";
   root.replaceChildren(hud, world, controls);
   let cameraAnchor: Point2 | undefined;
   let disposed = false;

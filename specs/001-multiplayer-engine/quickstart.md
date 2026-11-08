@@ -51,7 +51,12 @@ installs executable code from an uploaded archive.
 ## Manual acceptance exercise
 
 1. Open two separate browser profiles. Register Alice and Bob using distinct passwords;
-   verify invalid login fails. Create a two-level session, have Bob join, and start.
+   choose a different control mode for each, verify invalid login fails. Create a
+   two-level session, have Bob join, and start.
+   Verify keyboard-only WASD movement, arrow-key turning and Space fire; verify
+   keyboard+mouse arrow movement, pointer aim and left-click fire. Turn/aim while
+   stationary and confirm the same-color facing dot follows; confirm room player
+   colors differ and spectator views show the same colors and facing.
 2. Move apart and meet; verify independent centered cameras and nearby visibility.
    Attract only nearby NPCs; navigate around obstacles and claim pickups.
 3. Kill one player and time the five-second absence. Verify the other keeps playing,

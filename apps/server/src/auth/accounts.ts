@@ -6,6 +6,11 @@ import { HttpError } from "../errors.js";
 
 const SCRYPT_OPTIONS = Object.freeze({ N: 16_384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
 const HASH_BYTES = 64;
+export type ControlMode = "keyboard-only" | "keyboard-mouse";
+
+export interface AccountWithControlMode extends PublicAccount {
+  readonly controlMode: ControlMode | null;
+}
 
 function deriveKey(password: string, salt: Buffer, keyLength: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -26,12 +31,14 @@ interface AccountRow {
   password_hash: string;
   password_salt: string;
   role: "player" | "operator";
+  control_mode: ControlMode | null;
 }
 
 export interface AuthenticatedAccount {
   readonly id: string;
   readonly username: string;
   readonly role: "player" | "operator";
+  readonly controlMode: ControlMode | null;
 }
 
 export async function hashPassword(password: string): Promise<{
@@ -46,10 +53,12 @@ export async function hashPassword(password: string): Promise<{
 export async function createAccount(
   database: SqliteDatabase,
   usernameInput: unknown,
-  passwordInput: unknown
-): Promise<PublicAccount> {
+  passwordInput: unknown,
+  controlModeInput: unknown
+): Promise<AccountWithControlMode> {
   const username = validateUsername(usernameInput);
   const password = validatePassword(passwordInput);
+  const controlMode = validateControlMode(controlModeInput);
   const credential = await hashPassword(password);
   const id = randomUUID();
 
@@ -57,8 +66,8 @@ export async function createAccount(
     database
       .prepare(
         `INSERT INTO accounts
-         (id, username, normalized_username, password_hash, password_salt, role, created_at)
-         VALUES (?, ?, ?, ?, ?, 'player', ?)`
+         (id, username, normalized_username, password_hash, password_salt, role, control_mode, created_at)
+         VALUES (?, ?, ?, ?, ?, 'player', ?, ?)`
       )
       .run(
         id,
@@ -66,6 +75,7 @@ export async function createAccount(
         username.toLowerCase(),
         credential.passwordHash,
         credential.passwordSalt,
+        controlMode,
         new Date().toISOString()
       );
   } catch (error) {
@@ -75,7 +85,10 @@ export async function createAccount(
     throw error;
   }
 
-  return serializePublicAccount({ id, username, role: "player" });
+  return {
+    ...serializePublicAccount({ id, username, role: "player" }),
+    controlMode
+  };
 }
 
 export function validateUsername(input: unknown): string {
@@ -96,6 +109,32 @@ export function validatePassword(input: unknown): string {
   return input;
 }
 
+export function validateControlMode(input: unknown): ControlMode {
+  if (input !== "keyboard-only" && input !== "keyboard-mouse") {
+    throw new HttpError(400, "BAD_REQUEST", "Choose a supported control mode.");
+  }
+  return input;
+}
+
+export function updateControlMode(
+  database: SqliteDatabase,
+  accountId: string,
+  input: unknown
+): AccountWithControlMode {
+  const controlMode = validateControlMode(input);
+  const result = database
+    .prepare("UPDATE accounts SET control_mode = ? WHERE id = ?")
+    .run(controlMode, accountId);
+  if (result.changes !== 1) {
+    throw new Error("Authenticated account could not be updated.");
+  }
+  const account = getPublicAccount(database, accountId);
+  if (!account) {
+    throw new Error("Updated account could not be loaded.");
+  }
+  return { ...account, controlMode };
+}
+
 export async function verifyCredentials(
   database: SqliteDatabase,
   usernameInput: unknown,
@@ -111,7 +150,7 @@ export async function verifyCredentials(
   const password = typeof passwordInput === "string" ? passwordInput.slice(0, 128) : "";
   const row = database
     .prepare(
-      `SELECT id, username, normalized_username, password_hash, password_salt, role
+      `SELECT id, username, normalized_username, password_hash, password_salt, role, control_mode
        FROM accounts WHERE normalized_username = ?`
     )
     .get(username.toLowerCase()) as AccountRow | undefined;
@@ -138,17 +177,32 @@ export async function verifyCredentials(
     return undefined;
   }
 
-  return Object.freeze({ id: row.id, username: row.username, role: row.role });
+  return Object.freeze({
+    id: row.id,
+    username: row.username,
+    role: row.role,
+    controlMode: row.control_mode
+  });
 }
 
 export function getPublicAccount(
   database: SqliteDatabase,
   accountId: string
-): PublicAccount | undefined {
+): AccountWithControlMode | undefined {
   const row = database
-    .prepare("SELECT id, username, role FROM accounts WHERE id = ?")
-    .get(accountId) as { id: string; username: string; role: "player" | "operator" } | undefined;
-  return row ? serializePublicAccount(row) : undefined;
+    .prepare("SELECT id, username, role, control_mode FROM accounts WHERE id = ?")
+    .get(accountId) as {
+      id: string;
+      username: string;
+      role: "player" | "operator";
+      control_mode: ControlMode | null;
+    } | undefined;
+  return row
+    ? {
+        ...serializePublicAccount(row),
+        controlMode: row.control_mode
+      }
+    : undefined;
 }
 
 function isUniqueConstraint(error: unknown): boolean {

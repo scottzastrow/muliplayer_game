@@ -128,10 +128,11 @@ async function newWindow() {
   await waitFor(page, "document.querySelector('.auth-form') !== null");
   return page;
 }
-async function signIn(page, username, password) {
+async function signIn(page, username, password, controlMode = "keyboard-mouse") {
   await click(page, "Need an account? Register");
   await evaluate(page, `document.querySelector('[name=username]').value = ${JSON.stringify(username)};
-    document.querySelector('[name=password]').value = ${JSON.stringify(password)}`);
+    document.querySelector('[name=password]').value = ${JSON.stringify(password)};
+    document.querySelector('[name=controlMode][value=${controlMode}]').checked = true`);
   await click(page, "Register");
   await waitFor(page, "document.querySelector('#status').textContent.includes('Account created')");
   await evaluate(page, `document.querySelector('[name=password]').value = ${JSON.stringify(password)}`);
@@ -144,6 +145,11 @@ async function state(page) {
     return {
       snapshot: window.__probe.snapshot, actions: window.__probe.actions,
       arcs: canvas.__draw?.arcs ?? [], squares: canvas.__draw?.squares ?? [],
+      colors: Object.fromEntries(window.__probe.snapshot.players.map(player => {
+        const context = document.createElement('canvas').getContext('2d');
+        context.fillStyle = player.color;
+        return [player.accountId, context.fillStyle];
+      })),
       width: canvas.getBoundingClientRect().width, height: canvas.getBoundingClientRect().height,
       pixelWidth: canvas.width, pixelHeight: canvas.height,
       points: document.querySelector('.default-points').textContent,
@@ -156,8 +162,13 @@ async function state(page) {
 }
 const own = (view) => view.snapshot.players.find(p => p.accountId === view.snapshot.viewerAccountId);
 function centered(view) {
-  const dot = view.arcs.find(item => item.color === "#58d6ff");
-  assert.ok(dot, "own player dot is rendered");
+  const player = own(view);
+  const playerColor = view.colors[player.accountId];
+  const dot = view.arcs.find(item => item.color === playerColor && item.r === 14);
+  assert.ok(dot, `own player dot is rendered (${JSON.stringify({
+    color: player.color,
+    arcs: view.arcs
+  })})`);
   assert.ok(Math.abs(dot.x - view.width / 2) < 0.1,
     `own dot centered horizontally (${dot.x} versus ${view.width / 2})`);
   assert.ok(Math.abs(dot.y - view.height / 2) < 0.1,
@@ -165,15 +176,30 @@ function centered(view) {
   assert.ok(view.pointsFont > view.healthFont, "points are visually dominant");
   assert.equal(view.points, `Points: ${own(view).points}`);
   assert.equal(view.health, `Health: ${own(view).health}`);
+  const facing = player.facing ?? { x: 1, y: 0 };
+  assert.ok(view.arcs.some(item => item.color === playerColor && item.r === 3 &&
+    Math.abs(item.x - (dot.x + facing.x * 16)) < 0.1 &&
+    Math.abs(item.y - (dot.y + facing.y * 16)) < 0.1), "same-color facing dot follows player aim");
 }
 async function move(page, code, ms) {
   await cdp("Page.bringToFront", {}, page.session);
   await evaluate(page, "document.querySelector('canvas').focus()");
-  const key = { KeyW: "w", KeyA: "a", KeyS: "s", KeyD: "d" }[code];
+  const key = ({ KeyW: "w", KeyA: "a", KeyS: "s", KeyD: "d" })[code] ?? code;
   await cdp("Input.dispatchKeyEvent", { type: "keyDown", key, code }, page.session);
   await delay(ms);
   await cdp("Input.dispatchKeyEvent", { type: "keyUp", key, code }, page.session);
   await delay(200);
+}
+async function aim(page, horizontal, vertical) {
+  await cdp("Page.bringToFront", {}, page.session);
+  await evaluate(page, "document.querySelector('canvas').focus()");
+  const point = await evaluate(page, `(() => {
+    const bounds = document.querySelector('canvas').getBoundingClientRect();
+    return { x: bounds.left + bounds.width / 2 + ${horizontal},
+      y: bounds.top + bounds.height / 2 + ${vertical} };
+  })()`);
+  await cdp("Input.dispatchMouseEvent", { type: "mouseMoved", buttons: 0, ...point }, page.session);
+  await delay(350);
 }
 
 async function shootUntil(page, level, remaining) {
@@ -231,9 +257,65 @@ try {
   const suffix = Date.now().toString(36);
   const password = randomUUID();
   const creator = `ViewA_${suffix}`;
-  await signIn(alice, creator, password);
-  await signIn(bob, `ViewB_${suffix}`, password);
+  await signIn(alice, creator, password, "keyboard-mouse");
+  await signIn(bob, `ViewB_${suffix}`, password, "keyboard-only");
   await signIn(observer, `Watch_${suffix}`, password);
+  await evaluate(observer, `(() => {
+    const nativeFetch = window.fetch.bind(window);
+    let provideLegacyAccount = true;
+    window.fetch = async (input, init) => {
+      const response = await nativeFetch(input, init);
+      const url = input instanceof Request ? input.url : String(input);
+      if (provideLegacyAccount && url.endsWith('/api/v1/auth/login')) {
+        provideLegacyAccount = false;
+        const body = await response.clone().json();
+        body.account.controlMode = null;
+        return new Response(JSON.stringify(body), {
+          status: response.status, headers: { 'content-type': 'application/json' }
+        });
+      }
+      return response;
+    };
+  })()`);
+  await click(observer, "Sign out");
+  await waitFor(observer, "document.querySelector('.auth-form') !== null");
+  await evaluate(observer, `document.querySelector('[name=username]').value = ${JSON.stringify(`Watch_${suffix}`)};
+    document.querySelector('[name=password]').value = ${JSON.stringify(password)}`);
+  await click(observer, "Sign in");
+  await waitFor(observer, "document.querySelector('.auth-form h2')?.textContent === 'Choose your controls'");
+  assert.equal(await evaluate(observer,
+    "document.querySelectorAll('input[name=controlMode]').length"), 2);
+  assert.equal(await evaluate(observer,
+    "document.querySelector('input[name=controlMode]:checked')"), null);
+  await evaluate(observer, `document.querySelector('[name=controlMode][value=keyboard-only]').checked = true;
+    document.querySelector('.auth-form').requestSubmit()`);
+  await waitFor(observer, "document.querySelector('[aria-label=\"Active sessions\"]') !== null");
+  assert.equal(await evaluate(observer, `(async () =>
+    (await (await fetch('/api/v1/me')).json()).account.controlMode)()`),
+  "keyboard-only", "legacy sign-in choice is saved to the account");
+  await click(observer, "Sign out");
+  await waitFor(observer, "document.querySelector('.auth-form') !== null");
+  await evaluate(observer, `document.querySelector('[name=username]').value = ${JSON.stringify(`Watch_${suffix}`)};
+    document.querySelector('[name=password]').value = ${JSON.stringify(password)}`);
+  await click(observer, "Sign in");
+  await waitFor(observer, "document.querySelector('[aria-label=\"Active sessions\"]') !== null");
+  assert.equal(await evaluate(observer, `(async () =>
+    (await (await fetch('/api/v1/me')).json()).account.controlMode)()`),
+  "keyboard-only", "selected control mode persists after signing out and back in");
+  const selectedModes = await evaluate(alice, `(async () => {
+    const own = await (await fetch('/api/v1/me')).json();
+    return own.account.controlMode;
+  })()`);
+  assert.equal(selectedModes, "keyboard-mouse", "signup choice is saved to the account");
+  await evaluate(observer, `document.querySelector('[name=controlMode][value=keyboard-only]').checked = true;
+    document.querySelector('[name=controlMode]').closest('form').requestSubmit()`);
+  await waitFor(observer, "document.querySelector('#status').textContent === 'Controls updated.'");
+  const changedMode = await evaluate(observer, `(async () =>
+    (await (await fetch('/api/v1/me')).json()).account.controlMode)()`);
+  assert.equal(changedMode, "keyboard-only", "lobby control changes persist to the account");
+  await evaluate(observer, `document.querySelector('[name=controlMode][value=keyboard-mouse]').checked = true;
+    document.querySelector('[name=controlMode]').closest('form').requestSubmit()`);
+  await waitFor(observer, "document.querySelector('#status').textContent === 'Controls updated.'");
   if (process.argv.includes("--wave-timeout")) {
     const { verifyWaveTimeout } = await import("./wave-timeout.mjs");
     await verifyWaveTimeout({
@@ -267,24 +349,51 @@ try {
   assert.notEqual(startA.snapshot.viewerAccountId, startB.snapshot.viewerAccountId, "separate authenticated identities");
   centered(startA);
   centered(startB);
-  assert.ok(!startA.arcs.some(item => item.color === "#f7db76"), "off-viewport Bob is not rendered");
-  assert.ok(!startB.arcs.some(item => item.color === "#f7db76"), "off-viewport Alice is not rendered");
+  const colorA = startA.colors[own(startA).accountId];
+  const colorB = startB.colors[own(startB).accountId];
+  assert.notEqual(colorA, colorB, "players in a room have distinct colors");
+  assert.notEqual(colorA, "#ed6b61");
+  assert.notEqual(colorB, "#ed6b61");
+  assert.ok(!startA.arcs.some(item => item.color === colorB), "off-viewport Bob is not rendered");
+  assert.ok(!startB.arcs.some(item => item.color === colorA), "off-viewport Alice is not rendered");
   await move(bob, "KeyW", 1400);
   const movedB = await state(bob);
   const stationaryA = await state(alice);
   assert.ok(own(movedB).position.y < own(startB).position.y - 100, "Bob moves using his keyboard intent");
   assert.deepEqual(own(stationaryA).position, own(startA).position, "Bob cannot move Alice");
-  await move(alice, "KeyD", 450);
+  const bobFacingBefore = own(movedB).facing;
+  const bobPositionBeforeTurn = own(movedB).position;
+  await move(bob, "ArrowRight", 450);
+  const bobTurnedRight = await state(bob);
+  assert.deepEqual(own(bobTurnedRight).position, bobPositionBeforeTurn,
+    "keyboard-only right arrow turns in place");
+  assert.notDeepEqual(own(bobTurnedRight).facing, bobFacingBefore,
+    "keyboard-only right arrow changes facing");
+  await move(bob, "ArrowLeft", 300);
+  const bobTurnedLeft = await state(bob);
+  assert.notDeepEqual(own(bobTurnedLeft).facing, own(bobTurnedRight).facing,
+    "keyboard-only left arrow changes facing in the opposite direction");
+  await move(bob, "Space", 250);
+  assert.ok((await state(bob)).actions.some(input => input.payload.action.fire),
+    "keyboard-only Space sends firing intent");
+
+  const alicePositionBeforeWASD = own(await state(alice)).position;
+  await move(alice, "KeyD", 300);
+  assert.deepEqual(own(await state(alice)).position, alicePositionBeforeWASD,
+    "keyboard + mouse mode ignores WASD");
+  await move(alice, "ArrowRight", 450);
   const movedA = await state(alice);
   const stoppedB = await state(bob);
   assert.ok(own(movedA).position.x > own(startA).position.x + 30, "Alice moves independently");
   assert.deepEqual(own(stoppedB).position, own(movedB).position, "Alice cannot move Bob");
   centered(movedA);
   centered(stoppedB);
-  assert.ok(movedA.arcs.some(item => item.color === "#f7db76"), "Alice renders nearby Bob");
-  assert.ok(stoppedB.arcs.some(item => item.color === "#f7db76"), "Bob renders nearby Alice");
+  assert.ok(movedA.arcs.some(item => item.color === colorB), "Alice renders nearby Bob");
+  assert.ok(stoppedB.arcs.some(item => item.color === colorA), "Bob renders nearby Alice");
   const peerA = movedA.snapshot.players.find(p => p.accountId === stoppedB.snapshot.viewerAccountId);
   assert.deepEqual(peerA.position, own(stoppedB).position, "shared authoritative nearby position");
+  assert.equal(peerA.color, own(stoppedB).color, "player color is consistent across views");
+  assert.deepEqual(peerA.facing, own(stoppedB).facing, "player facing is consistent across views");
   const inputs = [...movedA.actions, ...stoppedB.actions];
   assert.ok(inputs.length > 0);
   for (const input of inputs) {
@@ -302,6 +411,14 @@ try {
   centered(resized);
   assert.equal(resized.pixelWidth, Math.round(resized.width * await evaluate(alice, "devicePixelRatio")));
   assert.equal(resized.status, "");
+  const beforeAim = own(resized);
+  await aim(alice, 0, -70);
+  const aimedWhileStill = await state(alice);
+  assert.deepEqual(own(aimedWhileStill).position, beforeAim.position,
+    "mouse aim does not move a standing player");
+  assert.notDeepEqual(own(aimedWhileStill).facing, beforeAim.facing,
+    "mouse aim updates facing while the player stands still");
+  centered(aimedWhileStill);
   await cdp("Page.bringToFront", {}, alice.session);
   await evaluate(alice, "document.querySelector('canvas').focus()");
   const canvasBounds = await evaluate(alice, `(() => {
@@ -325,8 +442,12 @@ try {
     const actions = [];
     const errors = [];
     const target = fixture.players.find(p => p.accountId === fixture.viewerAccountId);
+    const colorContext = document.createElement('canvas').getContext('2d');
+    colorContext.fillStyle = target.color;
+    const targetColor = colorContext.fillStyle;
     const mounted = mountSkinHost(root, defaultSkinFactory, {
       target: { accountId: target.accountId, username: 'Fixture' },
+      controlMode: 'keyboard-only',
       dispatchInput: input => actions.push(input),
       navigate: () => {},
       onError: error => errors.push(error.message)
@@ -345,7 +466,7 @@ try {
     canvas.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD', bubbles: true }));
     await new Promise(resolve => setTimeout(resolve, 120));
     const square = canvas.__draw.squares[0];
-    const dot = canvas.__draw.arcs.find(item => item.color === '#58d6ff');
+    const dot = canvas.__draw.arcs.find(item => item.color === targetColor && item.r === 14);
     const moved = actions.some(action => action.moveX === 1);
     const cameraOwn = mounted.host.cameraAnchor.x === target.position.x;
     let compatibilityRejected = false;
@@ -380,7 +501,14 @@ try {
   await click(observer, `Follow ${creator}`);
   await waitFor(observer, "window.__probe.snapshot?.viewerRole === 'spectator'");
   const spectatorA = await state(observer);
-  assert.equal(spectatorA.snapshot.viewerAccountId, (await state(alice)).snapshot.viewerAccountId);
+  const aliceAtSpectate = await state(alice);
+  assert.equal(spectatorA.snapshot.viewerAccountId, aliceAtSpectate.snapshot.viewerAccountId);
+  const spectatorPeerA = spectatorA.snapshot.players.find(
+    player => player.accountId === own(aliceAtSpectate).accountId);
+  assert.equal(spectatorPeerA.color, own(aliceAtSpectate).color,
+    "spectator snapshots preserve the player's color");
+  assert.deepEqual(spectatorPeerA.facing, own(aliceAtSpectate).facing,
+    "spectator snapshots preserve the player's facing");
   assert.deepEqual(spectatorA.snapshot.spectatorView.cameraAnchor, own(spectatorA).position);
   centered(spectatorA);
   await move(observer, "KeyD", 300);
@@ -397,6 +525,7 @@ try {
       dispatchInput: () => inputs++, navigate: () => {}, onError: error => {throw error;}
     });
     const target = snapshot.players.find(player => player.accountId === snapshot.viewerAccountId);
+    const playerEntity = snapshot.entities.find(entity => entity.state.accountId === target.accountId);
     target.alive = false; target.health = 0; target.respawnAtTick = snapshot.tick + 150;
     snapshot.entities = snapshot.entities.filter(entity => entity.state.accountId !== target.accountId);
     snapshot.spectatorView.death = {alive:false,remainingSeconds:5,respawnAtTick:target.respawnAtTick,respawnBlocked:false};
@@ -410,15 +539,25 @@ try {
     snapshot.spectatorView.hud.health = 100;
     snapshot.spectatorView.cameraAnchor = {x:800,y:600};
     target.alive = true; target.health = 100; target.position = {x:800,y:600};
+    if (!playerEntity || !target.color || !target.facing) throw new Error('Respawn fixture lacks player presentation data.');
+    snapshot.entities.push({...playerEntity, position: target.position});
     mounted.handleSnapshot(snapshot,4);
     await new Promise(resolve => setTimeout(resolve,100));
     const returned = root.querySelector('.default-health').textContent;
     const camera = mounted.host.cameraAnchor;
+    const canvas = root.querySelector('canvas');
+    const colorContext = document.createElement('canvas').getContext('2d');
+    colorContext.fillStyle = target.color;
+    const playerColor = colorContext.fillStyle;
+    const body = canvas.__draw.arcs.find(item => item.r === 14 && item.color === playerColor);
+    const facing = canvas.__draw.arcs.find(item => item.r === 3 && item.color === playerColor &&
+      Math.abs(item.x - (body?.x + target.facing.x * 16)) < 0.1 &&
+      Math.abs(item.y - (body?.y + target.facing.y * 16)) < 0.1);
     mounted.dispose(); root.remove();
-    return {countdown,health,returned,camera,inputs};
+    return {countdown,health,returned,camera,inputs,sharedRespawnColor: Boolean(body && facing)};
   })()`);
   assert.deepEqual(spectatorFixture, {countdown:"Respawning in 5s",health:"Health: 0",
-    returned:"Health: 100",camera:{x:800,y:600},inputs:0});
+    returned:"Health: 100",camera:{x:800,y:600},inputs:0,sharedRespawnColor:true});
   await click(observer, "Back to Players");
   await waitFor(observer, "document.querySelector('[aria-label=\"Followable players\"]') !== null");
   await click(observer, `Follow ViewB_${suffix}`);
@@ -469,6 +608,13 @@ try {
   await click(alice, "Back to lobby");
   await click(bob, "Back to lobby");
   await waitFor(alice, "document.querySelector('[aria-label=\"Active sessions\"]') !== null");
+  await waitFor(bob, "document.querySelector('[aria-label=\"Active sessions\"]') !== null");
+  await evaluate(bob, `document.querySelector('[name=controlMode][value=keyboard-mouse]').checked = true;
+    document.querySelector('[name=controlMode]').closest('form').requestSubmit()`);
+  await waitFor(bob, "document.querySelector('#status').textContent === 'Controls updated.'");
+  assert.equal(await evaluate(bob, `(async () =>
+    (await (await fetch('/api/v1/me')).json()).account.controlMode)()`),
+  "keyboard-mouse", "keyboard-only account can change to mouse controls in the lobby");
   await evaluate(alice, `document.querySelector('[name=setting-initialNpcsPerPlayer]').value = '1';
     document.querySelector('[name=setting-baseNpcHealth]').value = '1';
     document.querySelector('[name=setting-maxLevels]').value = '2';
@@ -605,7 +751,7 @@ try {
     let navigated;
     const dispose = mountGame(root, status, {
       id: ${JSON.stringify(savedResult.standings[0].accountId)},
-      username: ${JSON.stringify(creator)}, role: 'player'
+      username: ${JSON.stringify(creator)}, role: 'player', controlMode: 'keyboard-mouse'
     }, '00000000-0000-4000-8000-000000000099', action => { navigated = action; });
     for (let attempt = 0; attempt < 40 && status.getAttribute('role') !== 'alert'; attempt++) {
       await new Promise(resolve => setTimeout(resolve, 50));
@@ -621,6 +767,12 @@ try {
   assert.equal(failedConnectionNavigation.navigated, "lobby");
   console.log(JSON.stringify({
     browser: version.Browser,     windows: 3,
+    legacyAccountPromptAndReloginPersistence: true,
+    signupControlModePersistenceAndLobbyChanges: true,
+    keyboardOnlyWASDArrowsAndSpace: true,
+    keyboardMouseArrowsAimAndClick: true,
+    distinctPlayerColorsAndSpectatorFacing: true,
+    stationaryMouseAimFacingDot: true,
     spectatorJoinSwitchLeave: true, spectatorTargetUnavailable: true,
     spectatorNoGameplayInput: true, spectatorSavedStandings: true,
     spectatorDeathRespawnFixture: true,

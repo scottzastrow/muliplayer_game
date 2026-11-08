@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { HttpError } from "../errors.js";
 import type { SqliteDatabase } from "../storage/database.js";
-import type { AuthenticatedAccount } from "./accounts.js";
+import type { AuthenticatedAccount, ControlMode } from "./accounts.js";
 
 export const SESSION_COOKIE_NAME = "mp_session";
 export const SESSION_LIFETIME_SECONDS = 7 * 24 * 60 * 60;
@@ -10,6 +10,7 @@ interface SessionAccountRow {
   id: string;
   username: string;
   role: "player" | "operator";
+  control_mode: ControlMode | null;
 }
 
 export interface IssuedSession {
@@ -70,7 +71,7 @@ export function authenticateSession(
   }
   const row = database
     .prepare(
-      `SELECT a.id, a.username, a.role
+      `SELECT a.id, a.username, a.role, a.control_mode
        FROM auth_sessions s
        JOIN accounts a ON a.id = s.account_id
        WHERE s.token_digest = ? AND s.revoked_at IS NULL AND s.expires_at > ?`
@@ -80,7 +81,12 @@ export function authenticateSession(
   if (!row) {
     throw new HttpError(401, "UNAUTHENTICATED", "Authentication is required.");
   }
-  return Object.freeze({ id: row.id, username: row.username, role: row.role });
+  return Object.freeze({
+    id: row.id,
+    username: row.username,
+    role: row.role,
+    controlMode: row.control_mode
+  });
 }
 
 export function readSessionCookie(cookieHeader: string | undefined): string | undefined {

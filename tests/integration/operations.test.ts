@@ -40,7 +40,7 @@ describe("local operations", () => {
     let app: ReturnType<typeof createApp> | undefined;
     try {
       runMigrations(database);
-      const account = await createAccount(database, "DurableOperatorTest", password);
+      const account = await createAccount(database, "DurableOperatorTest", password, "keyboard-mouse");
       const lobby = new LobbyRegistry(database, Date.now, createThemeLoader());
       const finished = lobby.create(account, { settings }).summary.id;
       lobby.start(account, finished, { expectedRevision: 0 });
@@ -113,8 +113,8 @@ describe("local operations", () => {
       return module;
     });
     try {
-      const first = await createAccount(database, "FailureRoomPlayer", password);
-      const second = await createAccount(database, "HealthyRoomPlayer", password);
+      const first = await createAccount(database, "FailureRoomPlayer", password, "keyboard-mouse");
+      const second = await createAccount(database, "HealthyRoomPlayer", password, "keyboard-mouse");
       const failed = lobby.create(first, { settings }).summary.id;
       const healthy = lobby.create(second, { settings }).summary.id;
       for (const [account, id] of [[first, failed], [second, healthy]] as const) {
@@ -278,7 +278,7 @@ describe("local operations", () => {
       await waitUntil(() => moduleCount === 3 && stepCounts.every((count) => count > 0) &&
         socketsWithSnapshots === 3, 8_000);
       const rooms = database.prepare("SELECT id FROM matches ORDER BY rowid").all() as Array<{ id: string }>;
-      const spectator = await createAccount(database, "FailureRoomSpectator", password);
+      const spectator = await createAccount(database, "FailureRoomSpectator", password, "keyboard-mouse");
       const cookie = await login(app, spectator.username);
       const admission = await app.inject({
         method: "POST", url: `/api/v1/sessions/${rooms[1]!.id}/spectate`,
@@ -397,7 +397,7 @@ describe("local operations", () => {
     const app = createApp(config, database, readiness, { heartbeatIntervalMs: 25 });
     let socket: WebSocket | undefined;
     try {
-      const account = await createAccount(database, "ShutdownPlayer", password);
+      const account = await createAccount(database, "ShutdownPlayer", password, "keyboard-mouse");
       const cookie = await login(app, account.username);
       const created = await app.inject({ method: "POST", url: "/api/v1/sessions",
         headers: { ...headers, cookie }, payload: { settings } });

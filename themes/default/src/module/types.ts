@@ -1,6 +1,11 @@
 import type { JsonValue } from "@multiplayer-game/protocol";
 import type { Point2 } from "@multiplayer-game/theme-sdk";
 
+export interface DefaultFacing extends Record<string, JsonValue> {
+  readonly x: number;
+  readonly y: number;
+}
+
 export interface DefaultPlayerState extends Record<string, JsonValue> {
   readonly kind: "player";
   readonly accountId: string;
@@ -8,6 +13,8 @@ export interface DefaultPlayerState extends Record<string, JsonValue> {
   readonly points: number;
   readonly kills: number;
   readonly deaths: number;
+  readonly color: string;
+  readonly facing: DefaultFacing;
   readonly effects?: Readonly<{
     rapidFireExpiresAtTick?: number;
     spreadExpiresAtTick?: number;

@@ -49,6 +49,8 @@ respawn, complete two levels, and compare final scores.
 4. **Given** a level with enemies, **When** the last enemy dies, **Then** the next map and configured increases apply once; after the configured final level, the match finishes instead.
 5. **Given** a running match, **When** points or health change, **Then** the top HUD updates with points visually dominant; the final leaderboard ranks total points and includes kills and deaths.
 6. **Given** weapon or power pickups, **When** two players claim one at once, **Then** only one receives its effect and all viewers see its removal.
+7. **Given** a new or existing account, **When** its owner selects a control mode, **Then** the choice is required at signup or on first sign-in after the update, saved to the account, and changeable from the lobby.
+8. **Given** multiple players in one room, **When** they play, **Then** each has a distinct stable color and visible facing marker shared by players and spectators.
 
 ### User Story 3 - Spectate and reconnect (Priority: P2)
 
@@ -144,6 +146,15 @@ players, enemies, and spectators; produce a reproducible measured report.
   path; expiry ends the match, persists standings and releases the room through
   existing finalization. Countdown mechanics MUST be reusable; the module chooses
   expiry policy.
+- **FR-022**: Signup MUST require one of two Dots and Squares control modes:
+  Keyboard Only (WASD movement, left/right arrows turn in place, Space fires) or
+  Keyboard + Mouse (arrow-key movement, mouse aim, left click fires). Existing
+  accounts without a saved choice MUST be prompted at their first sign-in after the
+  update; the choice MUST persist on the account and remain changeable in the lobby.
+- **FR-023**: Every player in a room MUST have a distinct color, stable through
+  respawn and consistent in player and spectator views. All NPC squares MUST share
+  one different color. Each player MUST show a small same-color facing dot protruding
+  from the front edge of the player dot; facing MUST track aim while stationary.
 
 ### Key Entities
 
@@ -167,6 +178,7 @@ players, enemies, and spectators; produce a reproducible measured report.
 - **SC-005**: A developer changes one gameplay behavior and the HUD through documented theme interfaces with zero core-engine file edits, and runs it beside the default theme.
 - **SC-006**: A capacity report covers one, three, and five sessions, independent spectator counts, increasing NPC loads, and a 30-minute soak near the measured sustainable configuration. It records actual latency, resource use, and failures.
 - **SC-007**: In a restart exercise, saved accounts and completed standings remain available while previously active matches are explicitly interrupted.
+- **SC-008**: Browser verification confirms both control mappings, account persistence/change, distinct room colors, and facing that follows stationary aim in player and spectator views.
 
 ## Assumptions
 
@@ -194,6 +206,8 @@ explicit conversation decisions are user-confirmed.
 - Five seconds between levels; scores persist and living/returning players are safely
   positioned with full health when the new level begins. Existing death deadlines remain
   authoritative; no early respawn due to a level transition.
+- Control mode is an account preference. Legacy accounts are migrated without a
+  selection and must complete the first-sign-in prompt before entering the lobby.
 - Provisional wave duration is `min(300, 60 + 3 * starting NPC count)` seconds,
   recalculated at each wave start from that wave's full roster-based NPC count.
   A monotonic server deadline continues through death, blocked respawn and reconnect.

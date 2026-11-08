@@ -10,14 +10,16 @@ function view(x: number, deaths = 0): DefaultView {
     viewerAccountId: "alice", viewerRole: "player", tick: 2, level: 1, phase: "active",
     map: { width: 2048, height: 2048, obstacles: [] },
     players: [{ accountId: "alice", position: { x, y: 100 }, points: 200, health: 90,
-      alive: true, deaths }],
+      alive: true, deaths, color: "hsl(25 78% 58%)", facing: { x: 0, y: -1 } }],
     entities: [{ id: "player:alice", radius: 14, position: { x, y: 100 },
-      state: { kind: "player", accountId: "alice", deaths } }]
+      state: { kind: "player", accountId: "alice", deaths,
+        color: "hsl(25 78% 58%)", facing: { x: 0, y: -1 } } }]
   });
 }
 
 class HudElement extends EventTarget {
   readonly style: Record<string, string> = {};
+  readonly dataset: Record<string, string> = {};
   className = "";
   textContent = "";
   removed = false;
@@ -49,9 +51,11 @@ describe("Dots and Squares presentation", () => {
     const host: SkinHost = {
       slots: new Map(["world", "hud", "controls"].map(name => [name, document.createElement("div")])),
       selectedTarget: { accountId: "alice", username: "Alice" },
+      controlMode: "keyboard-only",
       cameraAnchor: undefined, setCameraAnchor: () => {},
       dispatchInput: vi.fn(), navigate: () => {}
     };
+    host.slots.get("controls")!.dataset.controlMode = "keyboard-only";
     const skin = defaultSkinFactory.mount(host, {
       image: async () => { throw new Error("No images used."); },
       audio: async () => { throw new Error("No audio used."); }

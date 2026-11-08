@@ -4,7 +4,7 @@
 
 | Entity | Fields and constraints | Relationships |
 | --- | --- | --- |
-| Account | UUID id; display username 3–24 ASCII letters/digits/underscore; normalized username lowercased UNIQUE; password 9–128 characters at signup; salted scrypt hash/parameters; role player/operator; createdAt | Owns login sessions, game memberships, results |
+| Account | UUID id; display username 3–24 ASCII letters/digits/underscore; normalized username lowercased UNIQUE; password 9–128 characters at signup; salted scrypt hash/parameters; role player/operator; nullable control mode for legacy accounts until selected; createdAt | Owns login sessions, game memberships, results |
 | AuthSession | token digest UNIQUE; accountId; createdAt; expiresAt; revokedAt nullable; absolute lifetime 7 days | Account FK, delete cascades |
 | ThemeRevision | themeId; version; name 1–64 characters; moduleId/version; rendererId/version; engineApiMajor=1; SHA-256 digest; immutable assetRoot; enabled; createdAt; UNIQUE(themeId,version) | Matches pin exact digest |
 | Match | UUID id; creatorAccountId; generated display name (`<theme display name> — <creator username>`); state waiting/running/finished/abandoned/interrupted/failed; settings JSON validated on creation; themeDigest; startedAt/endedAt nullable; seed | Results/membership reference match |
@@ -26,7 +26,7 @@ is outside scope. Failed/interrupted results may lack final scores and must say 
 | Participant | accountId; connected; connection generation; reservationDeadline; life alive/dead/disconnected/expired; respawnAt; points/kills/deaths; input sequence | Death/reservation deadlines survive socket replacement |
 | Spectator | accountId; socket; targetAccountId nullable | One active role per account per match; capped separately |
 | World | seed; geometry/walkability; spatial index; entities; projectiles; pickups | All entity references scoped to match ID |
-| Entity | id; typeId; position; collision shape; capability state; optional health | Core does not assume all entities attack |
+| Entity | id; typeId; position; collision shape; capability state; optional health; player color/facing | Core does not assume all entities attack; room player colors are unique and retained through respawn |
 | Input | accountId; sequence; normalized movement/aim; module command; receivedAt | Monotonic bounded sequence/rate; server validates |
 | Snapshot | protocolVersion; matchId; tick; level/phase; entities; selected HUD; theme revision; serverTime | No secrets; recoverable current state |
 | Metrics | per-runner timing histograms; counts; bytes; queue high-water; CPU/RSS; event-loop delay; RTT | Bounded buckets; no username labels |

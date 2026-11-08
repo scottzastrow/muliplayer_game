@@ -566,3 +566,40 @@ initiated closes from the WebSocket close handshake.
 
 This was a disposable local loopback exercise, not a capacity measurement.
 No Lightsail deployment or load run was performed; T042 remains open.
+
+## T045 - Account controls and facing indicators (2026-11-07)
+
+`npm run check` passed. The focused selection `npm test --
+tests/integration/accounts-lobby.test.ts tests/default-theme.test.ts
+tests/default-skin.test.ts` passed: **3 files, 18 tests**.
+
+`npm run test:browser` passed in three visible Chrome 156.0.8078.80 windows
+against a local Vite client and an isolated in-memory server. Assertions verified
+signup preference persistence, lobby preference changes, WASD/turn/Space and
+arrow/mouse/click input, distinct player colors and shared spectator
+color/facing, and stationary mouse aim updating the same-color facing dot. The
+focused account integration test also covered signup choice validation and the
+legacy null-choice account flow. The broader browser flow passed its spectator,
+saved-results, match-completion and session-capacity-slot checks. Browser
+accounts and server data were disposable and local. No production deployment,
+load test or capacity result is claimed; T042 remains open.
+
+Verification follow-up: `npm run check` passed; `npm test` passed with **41 files,
+179 tests**; the focused account/theme selection passed with **3 files, 18 tests**.
+`npm run test:browser` passed in Chrome 156.0.8078.80 with three visible windows,
+Vite at `127.0.0.1:5174` and an isolated in-memory server at `127.0.0.1:8083`.
+The browser harness returned a legacy-style `controlMode: null` login response to
+exercise the first-sign-in picker, then used the real save, sign-out and sign-in
+requests to verify the selected preference persisted. The account integration
+test independently sets an existing database account's preference to `NULL`,
+checks the sign-in/`GET /me` value, saves a selection, and verifies it after
+logout and a new login. The theme test verifies color and facing after respawn in
+both player and spectator snapshots; the browser spectator fixture renders the
+respawned body and facing dot in the same color.
+
+The initial full-suite run exposed stale migration expectations, a realtime test
+sending a signup-only field to login, and a movement assertion that did not allow
+the newly accepted facing update before a rejected movement step. Those tests
+were corrected and the complete rerun passed. The browser fixture also needed
+color normalization before comparing CSS HSL input with Canvas's normalized
+color value. No production data was used; T042 remains open.
