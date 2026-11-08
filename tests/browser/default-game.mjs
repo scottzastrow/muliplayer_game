@@ -108,12 +108,14 @@ const probe = `(() => {
   CanvasRenderingContext2D.prototype.fillRect = function(x, y, w, h) {
     if (!this.canvas.__draw) {
       this.canvas.__draw = {
+        snapshotTick: window.__probe.snapshot?.tick,
         arcs: [], squares: [], terrain: [], boundaries: [], pickups: [],
         fillStyles: [], strokes: [], fillTexts: [], radarTerrain: [], diamonds: []
       };
     }
     if (this.fillStyle === '#101824') {
       this.canvas.__draw = {
+        snapshotTick: window.__probe.snapshot?.tick,
         arcs: [], squares: [], terrain: [], boundaries: [], pickups: [],
         fillStyles: [], strokes: [], fillTexts: [], radarTerrain: [], diamonds: []
       };
@@ -210,6 +212,7 @@ async function state(page) {
     const canvas = document.querySelector('canvas');
     return {
       snapshot: window.__probe.snapshot, actions: window.__probe.actions,
+      renderedTick: canvas.__draw?.snapshotTick,
       arcs: canvas.__draw?.arcs ?? [], squares: canvas.__draw?.squares ?? [],
       terrain: canvas.__draw?.terrain ?? [], boundaries: canvas.__draw?.boundaries ?? [],
       pickups: canvas.__draw?.pickups ?? [],
@@ -614,6 +617,12 @@ try {
     await verifyReconnect({ alice, bob, observer, creator, bobName: `ViewB_${suffix}`,
       cdp, evaluate, waitFor, click, clickSessionButton, state, own, move, shootUntil, delay,
       browser: version.Browser });
+  } else if (process.argv.includes("--npc-spawns")) {
+    const { verifyNpcSpawns } = await import("./npc-spawns.mjs");
+    await verifyNpcSpawns({
+      alice, creator, cdp, evaluate, waitFor, click, clickSessionButton,
+      state, delay, browser: version.Browser, origin
+    });
   } else if (process.argv.includes("--simple-generated")) {
     const { verifySimpleGenerated } = await import("./simple-generated.mjs");
     await verifySimpleGenerated({
@@ -626,19 +635,26 @@ try {
       document.querySelector('[name=setting-baseNpcHealth]').value = '100000';
       document.querySelector('[name=setting-maxLevels]').value = '1'`);
     await click(alice, "Create session");
+    const { seedWaitingRoom } = await import("./npc-spawns.mjs");
+    await seedWaitingRoom({ alice, creator, evaluate, origin }, 1011);
     await clickSessionButton(alice, creator, "Start Session");
     await cdp("Page.bringToFront", {}, alice.session);
     await waitFor(alice, "window.__probe.snapshot !== null");
     await waitFor(alice, "document.querySelector('canvas') !== null");
     await delay(200);
-    const initial = await state(alice);
+    let initial = await state(alice);
+    for (let attempt = 0; attempt < 20 && initial.renderedTick !== initial.snapshot.tick; attempt++) {
+      await delay(16);
+      initial = await state(alice);
+    }
+    assert.equal(initial.renderedTick, initial.snapshot.tick, "compare the rendered snapshot, not a newer message");
     const arena = initial.snapshot.map;
     const playerAtStart = own(initial).position;
     const npcAtStart = initial.snapshot.entities.find(entity => entity.state.kind === "npc");
     assert.equal(arena.obstacles.length, 16, "four solid tetromino clusters are in the map");
     assert.deepEqual(playerAtStart, { x: 272, y: 272 });
     assert.ok(Math.hypot(npcAtStart.position.x - 528, npcAtStart.position.y - 528) < 60,
-      `NPC begins at its northwest-cluster encounter spawn (${JSON.stringify(npcAtStart.position)})`);
+      `Seed 1011 places the NPC near the northwest encounter (${JSON.stringify(npcAtStart.position)})`);
     assert.ok(segmentHitsObstacles(playerAtStart, npcAtStart.position, arena.obstacles, 3),
       "the player and NPC start across a solid cluster with no direct shot");
     const radarMarker = initial.arcs.find(item => item.color === "#ed6b61" && item.r === 3);
@@ -679,7 +695,13 @@ try {
     const npcHealthAtStart = npcAtStart.state.health;
     await fireWhileAiming(alice, () => npcAtStart.position, 800, npcTrace);
     await delay(250);
-    const afterBlockedShots = await state(alice);
+    let afterBlockedShots = await state(alice);
+    // The seeded encounter is farther away; allow collision travel, not lifetime expiry.
+    for (let attempt = 0; attempt < 8 &&
+      afterBlockedShots.snapshot.entities.some(entity => entity.state.kind === "projectile"); attempt++) {
+      await delay(30);
+      afterBlockedShots = await state(alice);
+    }
     const npcAfterBlockedShots = afterBlockedShots.snapshot.entities
       .find(entity => entity.state.kind === "npc");
     assert.equal(npcAfterBlockedShots.state.health, npcHealthAtStart,
@@ -761,6 +783,7 @@ try {
       arena: "Tile Cluster Arena",
       arenaId: "dots-and-squares-tile-arena-v1",
       seedIndependentGeometry: true,
+      encounterSeed: 1011,
       playerStart: playerAtStart,
       npcStart: npcAtStart.position,
       blockedShotNpcHealth: npcAfterBlockedShots.state.health,

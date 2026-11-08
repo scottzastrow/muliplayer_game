@@ -1,5 +1,83 @@
 # Local verification
 
+## Scattered NPC placement, T046 / FR-024 (2026-11-08)
+
+Implemented on `001-multiplayer-engine` over `720529e` as a placement-only
+Dots and Squares change. Counts/growth, NPC health, terrain,
+movement/detection settings, countdown tuning and runtime navigation limits are
+unchanged. Fixed remains the shipped source default.
+
+The final focused selection passed **11 files, 69 tests**: `npc-spawns`,
+`default-entities`, `generated-map-integration`, `maps`, integrated `gameplay`,
+`session-lifecycle`, `radar`, `generated-map-runtime`, `default-combat`,
+`default-respawn` and `fixture-theme`. `npm run check` passed after restoring
+Fixed. Theme and server/client builds passed. Coverage includes same seed/wave
+repeatability, variation across seeds/waves, all 16 zones for 40/50-NPC waves,
+unchanged difficulty/terrain, clearance from moved/current players and all
+32 player spawn positions, unique placement at the existing 2000-NPC ceiling,
+player-radius routes across six seeds per map mode, excluded disconnected clear
+space, bounded redistribution, explicit insufficient-space failure and waves
+while avatars are absent. Reachability assertions use a **test-only** 4096-node
+search ceiling to establish paths across the full grid; production search limits
+remain 2048. Placement itself visits at most 4096 grid cells and four neighbors
+per visited cell; it does not issue navigation searches during spawning.
+
+Visible local Chrome **156.0.8078.80** passed
+`node tests\browser\default-game.mjs --npc-spawns` once for each map mode:
+
+| Mode / seed | NPCs / health | Speed / detection | Occupied zones / quadrants | Canvas enemy radar draws |
+| --- | --- | --- | --- | --- |
+| Fixed / 42 | 10 / 100 | 67.5 / 512 | 10 / 4 | 10 |
+| Simple Generated / 42 | 10 / 100 | 67.5 / 512 | 10 / 4 | 10 |
+
+The harness used actual registration/login, lobby create/start, server snapshots
+and Canvas drawing in visible Chrome. It read back and asserted the unchanged
+lobby defaults and changed only its own waiting room's seed in a disposable
+SQLite database. Both runs received the exact selected terrain, matched every
+living NPC to its authorized radar position and rendered `Enemies remaining: 10`.
+Example separated positions were Fixed (176,976), (1200,1424), (1872,1104)
+and (1552,1840); Generated (368,912), (1360,1392), (1872,1104) and
+(1552,1840). Nearby NPCs had already begun normal pursuit when sampled; those
+moving coordinates are not claimed as exact initial placement. The automated
+module tests compare exact initial positions for repeatability.
+
+Windows, Node **24.11.0**, npm **11.6.1**, disposable loopback server **18086**,
+Vite client **15176**, Chrome debugging **19226** and a fresh owned Chrome
+profile/database. Server/proxied readiness and Chrome debugging returned HTTP
+200 before both runs. Screenshots captured after the assertions show the enemy
+radar dots, including distant enemies clamped to the rim, and were inspected.
+This is automated visible-Chrome/screenshot evidence, not human playtesting,
+cross-browser validation or capacity measurement.
+
+The separate existing `--arena-obstacles` fixture was adapted to use seed 1011,
+whose exact NPC spawn is (560,528), rather than assume a fixed northwest spawn.
+Its final Chrome run passed blocked shots (NPC health 100000), movement blocking
+(approximately 374.386,373.823), navigation around solid tiles, the northern
+walk-around (554.386,301.823) and open-angle damage (100000 to 99825).
+The first attempt retained one projectile at the fixed 250-ms observation:
+the farther encounter requires additional flight time. The fixture now polls
+collision removal for at most another 240 ms, still before any projectile can
+expire at two seconds. Subsequent attempts exposed snapshot/render races in the
+strict radar-position comparison. Comparing the interpolated world square was
+also incorrect because radar markers use the current snapshot. The final probe
+records the snapshot tick drawn by Canvas and synchronizes that comparison;
+the original 0.1-pixel tolerance remains unchanged. No gameplay geometry,
+detection, movement or global test timeout was altered.
+
+Initial placement-test failures were fixture issues: the renderer's existing
+300-second `waveRemainingSeconds` validation rejects the unchanged 360-second
+budget of a 40-NPC wave; placement assertions now inspect the module snapshot
+directly. **That pre-existing HUD schema limit is not fixed by this placement
+change.** The initial default navigation search budget also returned `limit`
+on some distant test routes; only the test reachability budget was raised.
+A search for an exact former encounter seed was stopped after its initial
+180-second wait; the bounded seed-1011 fixture above was used instead.
+
+Generated was selected only for its local fixture and restored to Fixed.
+Owned local services/profile/database were stopped/cleaned; screenshots were
+retained outside tracked source. T046 is complete; **T042 remains unchecked**.
+No deployment, server-setting changes or capacity runs were performed.
+
 ## Seed-42 walk-around diagnostic resume (2026-11-08)
 
 **Passed once.** The focused `node tests\browser\default-game.mjs

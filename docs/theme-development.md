@@ -150,7 +150,71 @@ geometry, force fallback, and check startup, terrain presentation, movement,
 projectile blocking, navigation, radar and wave persistence. They do not replace a
 real-browser playtest of the generated mode.
 
-### Disposable Chrome seed-42 playtest
+### Scattered NPC waves
+
+`themes/default/src/module/npc-spawns.ts` selects placement only; it does not
+change map geometry, wave counts/growth, health, movement or detection settings.
+Each wave partitions the selected map into a 4-by-4 grid of spawn zones (512-unit
+squares on the shipped arenas), shuffles the zones and their eligible cells, then
+takes one cell per zone per round. Unsaturated zones therefore differ by at most
+one NPC; a small wave visits as many distinct zones as its count allows.
+
+Placement uses a private deterministic stream derived from the low 32 bits of the
+match seed and the wave number. It does not consume the shared respawn/pickup RNG.
+The same seed, wave, selected geometry, current player positions and code revision
+reproduce the same placement. Moving players can exclude different cells in later
+waves; wave numbering changes the ordering even when the terrain is unchanged.
+The server passes the match seed through the default module into its simulator.
+Direct `DefaultEntitySimulator` consumers may supply the seed as the fourth
+constructor argument; omitted seeds use zero. No shared SDK or wire schema changed.
+
+An at-most-4096-cell flood fill includes only cells reachable from current living
+players via four-neighbor, collision-resolved radius-14 travel. If all avatars are
+absent, validated authored player spawns anchor the search so death/disconnection
+does not reduce the frozen wave count. Each NPC has radius 8; player centers are
+at least 38 units away (14 + 8 + 16 margin). One NPC per 32-unit cell center keeps
+NPC centers at least 32 units apart. Radius-14 eligible cells also clear solid
+terrain for the smaller NPC. Reachability is not restricted by detection radius;
+distant NPCs remain idle until a player approaches, as before.
+
+**Bounded fallback:** empty/exhausted zones are skipped and remaining reachable
+clear zones supply the full requested count. `default.npc_spawn.zone_fallback`
+records that redistribution once per affected wave. The search never retries
+randomly, changes terrain, relaxes clearance or duplicates cells. If every zone
+is exhausted before the full count fits, `default.npc_spawn.insufficient_space`
+increments and placement throws with the available/requested count. No partial
+NPC batch is added; the existing engine error path fails the session visibly
+rather than silently truncating the wave or treating it as cleared.
+
+Run focused checks after `npm run theme:build`:
+
+```powershell
+npm test -- tests\npc-spawns.test.ts tests\maps.test.ts tests\generated-map-integration.test.ts tests\default-entities.test.ts tests\integration\gameplay.test.ts tests\integration\session-lifecycle.test.ts tests\radar.test.ts
+npm run check
+```
+
+For a real local Chrome placement check, use the disposable server/client/profile
+procedure below with an unused port set and a fresh database. Set
+`BROWSER_TEST_ORIGIN`, `BROWSER_DEBUG_URL`, `BROWSER_TEST_DATABASE_PATH` and optionally
+`BROWSER_TEST_SCREENSHOT`, then run:
+
+```powershell
+node tests\browser\default-game.mjs --npc-spawns
+```
+
+This scenario seeds only its own waiting room to 42, leaves all lobby gameplay
+defaults unchanged, and checks 10 NPCs across several zones/all four quadrants,
+unchanged selected terrain/health/settings, matching enemy radar positions and
+10 actual Canvas radar dot draws. Repeat once with each source map mode, rebuilding
+and restarting between modes, then restore Fixed and rebuild. Screenshots and
+automated visible-Chrome assertions are local evidence, not human playtesting or
+capacity measurements. The separate `--arena-obstacles` fixture now uses the same
+disposable-database guard to pin its waiting room to seed 1011, placing its one
+NPC near (560,528) for the existing blocked-shot/navigation encounter instead of
+assuming a fixed NPC position. It requires `BROWSER_TEST_DATABASE_PATH`; it is not
+the scattered placement check. T042 stays open; do not deploy.
+
+### Earlier generated-map walk-around
 
 The focused seed-42 Chrome scenario passed on the diagnostic resume recorded in
 `docs/verification.md`, including open/blocked shots, movement blocking, matching

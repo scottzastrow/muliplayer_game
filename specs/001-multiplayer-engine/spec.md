@@ -155,6 +155,14 @@ players, enemies, and spectators; produce a reproducible measured report.
   respawn and consistent in player and spectator views. All NPC squares MUST share
   one different color. Each player MUST show a small same-color facing dot protruding
   from the front edge of the player dot; facing MUST track aim while stationary.
+- **FR-024**: Dots and Squares MUST distribute each wave's NPCs across several
+  reachable spawn zones on Fixed and Simple Generated maps, repeatably from the
+  match seed and wave number for the same map/player state. Placement MUST clear
+  solid terrain, current players and other newly spawned NPCs. When zones run out
+  of space, bounded placement MUST use remaining reachable clear zones; if the
+  full wave cannot fit, it MUST fail explicitly rather than overlap, truncate NPC
+  counts or falsely clear the wave. NPC growth/counts, health, terrain and detection
+  settings MUST remain unchanged by this placement-only change.
 
 ### Key Entities
 

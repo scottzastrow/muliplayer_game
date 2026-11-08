@@ -102,7 +102,8 @@ export const defaultModuleFactory: GameModuleFactory<
     const simulator = new DefaultEntitySimulator(
       _context,
       gameSettings.npcMovementSpeed,
-      gameSettings.npcDetectionRange
+      gameSettings.npcDetectionRange,
+      seed
     );
     const map = "defaultMapDefinition" in _context
       ? loadMap(_context.defaultMapDefinition)

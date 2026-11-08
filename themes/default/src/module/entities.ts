@@ -4,7 +4,6 @@ import type {
   Point2,
   RosterMember
 } from "@multiplayer-game/theme-sdk";
-import { MAP_CELL_SIZE } from "@multiplayer-game/theme-sdk";
 import {
   DEFAULT_RUNTIME_LIMITS,
   GameSettingsSchema,
@@ -32,6 +31,7 @@ import type {
   DefaultPlayerState
 } from "./types.js";
 import type { LoadedMap } from "./maps.js";
+import { selectNpcSpawns } from "./npc-spawns.js";
 
 export interface DefaultContactAttackCapability extends Record<string, JsonValue> {
   readonly typeId: "default.contact-attack";
@@ -74,10 +74,14 @@ export class DefaultEntitySimulator {
   constructor(
     readonly context: ModuleContext<DefaultEntity>,
     readonly npcMovementSpeed = NPC_SPEED,
-    readonly npcDetectionRange = NPC_ATTRACTION_RADIUS
+    readonly npcDetectionRange = NPC_ATTRACTION_RADIUS,
+    readonly seed = 0
   ) {
     GameSettingsSchema.shape.npcMovementSpeed.parse(npcMovementSpeed);
     GameSettingsSchema.shape.npcDetectionRange.parse(npcDetectionRange);
+    if (!Number.isSafeInteger(seed)) {
+      throw new RangeError("NPC placement seed must be a safe integer.");
+    }
   }
 
   initialize(
@@ -258,49 +262,11 @@ export class DefaultEntitySimulator {
     }
     const existingPlayerPositions = this.#roster.flatMap((member) => {
       const player = this.context.entities.get(this.#playerIds.get(member.accountId)!);
-      return player?.state.kind === "player" ? [player.position] : [];
+      return player?.state.kind === "player" && player.state.health > 0 ? [player.position] : [];
     });
-    const selected: Array<Readonly<{ x: number; y: number }>> = [];
-    const occupiedCells = new Set<string>();
-    const addPosition = (position: Readonly<{ x: number; y: number }>): boolean => {
-      const key = `${Math.floor(position.x / MAP_CELL_SIZE)},${Math.floor(position.y / MAP_CELL_SIZE)}`;
-      if (
-        occupiedCells.has(key) ||
-        existingPlayerPositions.some((player) => distance(player, position) < PLAYER_RADIUS + 24) ||
-        selected.some((other) => distance(other, position) < 24) ||
-        !map.isWalkable(position, 8) ||
-        !this.context.geometry.isWalkable(position.x, position.y, 8) ||
-        this.context.geometry.intersectsObstacle(position.x, position.y, 8)
-      ) {
-        return false;
-      }
-      occupiedCells.add(key);
-      selected.push(position);
-      return true;
-    };
-
-    for (const spawn of preferredSpawns) {
-      if (selected.length >= npcCount) break;
-      addPosition(spawn.position);
-    }
-    for (
-      let y = MAP_CELL_SIZE / 2;
-      y < map.definition.bounds.height && selected.length < npcCount;
-      y += MAP_CELL_SIZE
-    ) {
-      for (
-        let x = MAP_CELL_SIZE / 2;
-        x < map.definition.bounds.width && selected.length < npcCount;
-        x += MAP_CELL_SIZE
-      ) {
-        addPosition({ x, y });
-      }
-    }
-    if (selected.length !== npcCount) {
-      throw new RangeError(
-        `Map provides only ${selected.length} walkable NPC locations for ${npcCount} enemies.`
-      );
-    }
+    const selected = selectNpcSpawns(
+      this.context, map, existingPlayerPositions, this.seed, level, npcCount
+    );
     for (const [index, position] of selected.entries()) {
       const preferredId = preferredSpawns[index]?.id;
       const id = preferredId && level === 1

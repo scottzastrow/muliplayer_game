@@ -301,6 +301,16 @@ started.
 - [X] T043 Run actual build/check/test and quickstart.md browser scenarios, review contracts/settings for drift and resolve findings in docs/verification.md; do not claim runtime checks for planning-only artifacts.
 - [ ] T044 Update README.md with actual install/start commands and shipped state, add agent work evidence to docs/agent-work-log.md and a separate unfilled student reflection guide at docs/student-reflection.md; never fabricate the student's own-word reflections.
 - [X] T045 Add account-saved Dots and Squares control selection, existing-account first-sign-in prompt and lobby editing; implement keyboard-only and keyboard+mouse input, persistent per-player colors and aim-facing indicators, with account, theme, spectator and real-browser coverage.
+- [X] T046 [US2] Implement placement-only scattered NPC waves for FR-024 in themes/default/src/module/npc-spawns.ts, entities.ts and index.ts; use match seed/wave, reachable zones, terrain/player/NPC clearance and bounded explicit fallback without changing counts, health, terrain or detection settings; verify both map modes in tests/npc-spawns.test.ts and tests/browser/npc-spawns.mjs, and document reproduction/fallback in docs/theme-development.md and actual evidence in docs/verification.md.
+
+T046 local evidence (2026-11-08): focused checks passed (11 files, 69 tests),
+and `npm run check` passed. Visible local Chrome 156.0.8078.80 passed the
+seed-42 `--npc-spawns` scenario once per map mode: unchanged default 10 NPCs,
+100 HP, 67.5 movement speed and 512 detection range; 10 occupied zones, all four
+arena quadrants and 10 rendered radar dots in each run. Fixed was restored after
+the generated-mode fixture. Conditions, initial test-fixture failures and final
+check totals are recorded in docs/verification.md. T042 remains unchecked. No
+deployment or capacity evidence is claimed.
 
 ## Dependencies & Execution Order
 
@@ -310,6 +320,8 @@ US2 can use synthetic members for isolated simulation checks but requires US1 fo
 real player journey. US3 requires US1+US2. US4's SDK/default interfaces are foundational
 (T005/T017); package tooling can follow gameplay. US5 instruments all completed stories.
 T042 has an external deployment dependency and cannot be marked complete from local smoke checks.
+T046 is a separate placement follow-up to completed T018/T019/T021 and the
+T036 developer guide; it does not depend on or complete T042.
 
 ## Parallel Opportunities
 
