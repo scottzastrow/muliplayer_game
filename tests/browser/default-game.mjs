@@ -311,10 +311,116 @@ async function shootUntil(page, level, remaining) {
       pressed = true;
       await delay(100);
     }
-    throw new Error(`Timed out firing in level ${level} toward ${remaining} remaining NPCs.`);
+    const failed = await state(page);
+    throw new Error(`Timed out firing in level ${level} toward ${remaining} remaining NPCs: ${
+      JSON.stringify({
+        phase: failed.snapshot.phase,
+        player: own(failed),
+        npcs: failed.snapshot.entities.filter(item => item.state.kind === "npc")
+          .map(item => ({ position: item.position, health: item.state.health })),
+        actions: failed.actions.slice(-5)
+      })}`);
   } finally {
     if (pressed) await cdp("Input.dispatchMouseEvent", {
       type: "mouseReleased", button: "left", buttons: 0, clickCount: 1, ...target
+    }, page.session);
+  }
+}
+
+function pointHitsObstacle(point, radius, obstacle) {
+  const x = Math.max(obstacle.x, Math.min(point.x, obstacle.x + obstacle.width));
+  const y = Math.max(obstacle.y, Math.min(point.y, obstacle.y + obstacle.height));
+  return Math.hypot(point.x - x, point.y - y) < radius;
+}
+
+function segmentHitsObstacles(from, to, obstacles, radius = 0) {
+  const distance = Math.hypot(to.x - from.x, to.y - from.y);
+  const steps = Math.max(1, Math.ceil(distance / 4));
+  for (let index = 0; index <= steps; index += 1) {
+    const fraction = index / steps;
+    const point = {
+      x: from.x + (to.x - from.x) * fraction,
+      y: from.y + (to.y - from.y) * fraction
+    };
+    if (obstacles.some(obstacle => pointHitsObstacle(point, radius, obstacle))) return true;
+  }
+  return false;
+}
+
+async function observeNpcMovement(page, duration, trace) {
+  const deadline = Date.now() + duration;
+  while (Date.now() < deadline) {
+    const current = await state(page);
+    const npc = current.snapshot.entities.find(entity => entity.state.kind === "npc");
+    if (npc) trace.push(npc.position);
+    await delay(100);
+  }
+}
+
+async function moveAndSample(page, code, duration, playerTrace, npcTrace) {
+  await cdp("Page.bringToFront", {}, page.session);
+  await evaluate(page, "document.querySelector('canvas').focus()");
+  const key = ({ KeyW: "w", KeyA: "a", KeyS: "s", KeyD: "d" })[code] ?? code;
+  await cdp("Input.dispatchKeyEvent", { type: "keyDown", key, code }, page.session);
+  try {
+    const deadline = Date.now() + duration;
+    while (Date.now() < deadline) {
+      const current = await state(page);
+      const player = own(current);
+      const npc = current.snapshot.entities.find(entity => entity.state.kind === "npc");
+      if (player) playerTrace.push(player.position);
+      if (npc) npcTrace.push(npc.position);
+      await delay(100);
+    }
+  } finally {
+    await cdp("Input.dispatchKeyEvent", { type: "keyUp", key, code }, page.session);
+  }
+  await delay(200);
+  const current = await state(page);
+  playerTrace.push(own(current).position);
+  const npc = current.snapshot.entities.find(entity => entity.state.kind === "npc");
+  if (npc) npcTrace.push(npc.position);
+}
+
+async function fireWhileAiming(page, targetForView, duration, npcTrace) {
+  await cdp("Page.bringToFront", {}, page.session);
+  await evaluate(page, "document.querySelector('canvas').focus()");
+  let pressed = false;
+  let point;
+  try {
+    const deadline = Date.now() + duration;
+    while (Date.now() < deadline) {
+      const current = await state(page);
+      const player = own(current);
+      const target = targetForView(current);
+      if (!player || !target) throw new Error("The browser encounter lost its player or NPC.");
+      const npc = current.snapshot.entities.find(entity => entity.state.kind === "npc");
+      if (npc) npcTrace.push(npc.position);
+      const bounds = await evaluate(page, `(() => {
+        const rect = document.querySelector('canvas').getBoundingClientRect();
+        return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+      })()`);
+      const dx = target.x - player.position.x;
+      const dy = target.y - player.position.y;
+      const scale = Math.min(1, (bounds.width / 2 - 20) / Math.max(1, Math.abs(dx)),
+        (bounds.height / 2 - 20) / Math.max(1, Math.abs(dy)));
+      point = {
+        x: bounds.left + bounds.width / 2 + dx * scale,
+        y: bounds.top + bounds.height / 2 + dy * scale
+      };
+      await cdp("Input.dispatchMouseEvent", {
+        type: pressed ? "mouseMoved" : "mousePressed",
+        button: "left",
+        buttons: 1,
+        clickCount: 1,
+        ...point
+      }, page.session);
+      pressed = true;
+      await delay(100);
+    }
+  } finally {
+    if (pressed) await cdp("Input.dispatchMouseEvent", {
+      type: "mouseReleased", button: "left", buttons: 0, clickCount: 1, ...point
     }, page.session);
   }
 }
@@ -404,6 +510,146 @@ try {
     await verifyReconnect({ alice, bob, observer, creator, bobName: `ViewB_${suffix}`,
       cdp, evaluate, waitFor, click, clickSessionButton, state, own, move, shootUntil, delay,
       browser: version.Browser });
+  } else if (process.argv.includes("--arena-obstacles")) {
+    await evaluate(alice, `document.querySelector('[name=setting-maxPlayers]').value = '1';
+      document.querySelector('[name=setting-initialNpcsPerPlayer]').value = '1';
+      document.querySelector('[name=setting-baseNpcHealth]').value = '100000';
+      document.querySelector('[name=setting-maxLevels]').value = '1'`);
+    await click(alice, "Create session");
+    await clickSessionButton(alice, creator, "Start Session");
+    await cdp("Page.bringToFront", {}, alice.session);
+    await waitFor(alice, "window.__probe.snapshot !== null");
+    await waitFor(alice, "document.querySelector('canvas') !== null");
+    await delay(200);
+    const initial = await state(alice);
+    const arena = initial.snapshot.map;
+    const playerAtStart = own(initial).position;
+    const npcAtStart = initial.snapshot.entities.find(entity => entity.state.kind === "npc");
+    assert.equal(arena.obstacles.length, 16, "four solid tetromino clusters are in the map");
+    assert.deepEqual(playerAtStart, { x: 272, y: 272 });
+    assert.ok(Math.hypot(npcAtStart.position.x - 528, npcAtStart.position.y - 528) < 60,
+      `NPC begins at its northwest-cluster encounter spawn (${JSON.stringify(npcAtStart.position)})`);
+    assert.ok(segmentHitsObstacles(playerAtStart, npcAtStart.position, arena.obstacles, 3),
+      "the player and NPC start across a solid cluster with no direct shot");
+
+    const playerDot = initial.arcs.find(item => item.r === 14);
+    assert.ok(playerDot, "the player's rendered dot is available as a camera anchor");
+    const camera = {
+      x: playerAtStart.x + initial.width / 2 - playerDot.x,
+      y: playerAtStart.y + initial.height / 2 - playerDot.y
+    };
+    const visibleTiles = arena.obstacles.map(obstacle => ({
+      x: obstacle.x - camera.x + initial.width / 2,
+      y: obstacle.y - camera.y + initial.height / 2,
+      w: obstacle.width,
+      h: obstacle.height
+    })).filter(tile => tile.x + tile.w > 0 && tile.y + tile.h > 0 &&
+      tile.x < initial.width && tile.y < initial.height);
+    assert.ok(visibleTiles.length > 0);
+    for (const tile of visibleTiles) {
+      assert.ok(initial.terrain.some(rendered =>
+        Math.abs(rendered.x - tile.x) < 0.1 && Math.abs(rendered.y - tile.y) < 0.1 &&
+        rendered.w === tile.w && rendered.h === tile.h),
+      `rendered collision tile matches map geometry (${JSON.stringify(tile)})`);
+    }
+
+    const npcTrace = [npcAtStart.position];
+    const npcHealthAtStart = npcAtStart.state.health;
+    await fireWhileAiming(alice, () => npcAtStart.position, 800, npcTrace);
+    await delay(250);
+    const afterBlockedShots = await state(alice);
+    const npcAfterBlockedShots = afterBlockedShots.snapshot.entities
+      .find(entity => entity.state.kind === "npc");
+    assert.equal(npcAfterBlockedShots.state.health, npcHealthAtStart,
+      "shots stop at the obstacle instead of damaging the NPC");
+    assert.equal(afterBlockedShots.snapshot.entities
+      .filter(entity => entity.state.kind === "projectile").length, 0,
+    "blocked projectiles are removed at the same obstacle geometry");
+
+    await observeNpcMovement(alice, 1600, npcTrace);
+    const npcAfterNavigation = await state(alice);
+    const routedNpc = npcAfterNavigation.snapshot.entities.find(entity => entity.state.kind === "npc");
+    assert.ok(routedNpc, "the NPC remains alive while routing");
+    assert.ok(Math.hypot(routedNpc.position.x - npcAtStart.position.x,
+      routedNpc.position.y - npcAtStart.position.y) > 60,
+    "the attracted NPC advances toward the player");
+    assert.ok(npcTrace.some(position => Math.abs(position.x - position.y) > 24),
+      "the NPC deviates from the blocked diagonal to route around the cluster");
+    assert.ok(npcTrace.every(position =>
+      arena.obstacles.every(obstacle => !pointHitsObstacle(position, 8, obstacle))),
+    "the NPC remains outside every solid collision tile");
+
+    const playerTrace = [playerAtStart];
+    await aim(alice, 256, 256);
+    await moveAndSample(alice, "ArrowUp", 900, playerTrace, npcTrace);
+    const blockedMove = await state(alice);
+    const playerAtBlock = own(blockedMove).position;
+    assert.ok(playerAtBlock.x < 384 || playerAtBlock.y < 384,
+      "direct movement stops on the original side of the cluster");
+    assert.ok(playerTrace.every(position =>
+      arena.obstacles.every(obstacle => !pointHitsObstacle(position, 14, obstacle))),
+    "the player never walks through a collision tile");
+
+    if (own(blockedMove).position.y > 350) {
+      await aim(alice, 0, -140);
+      await moveAndSample(alice, "ArrowUp",
+        Math.ceil((own(blockedMove).position.y - 340) / 180 * 1000) + 120,
+        playerTrace, npcTrace);
+    }
+    const northRoute = await state(alice);
+    assert.ok(own(northRoute).position.y < 370 && own(northRoute).position.x < 384,
+      "the player reaches the open route above the cluster");
+    await aim(alice, 140, 0);
+    await moveAndSample(alice, "ArrowUp",
+      Math.ceil((510 - own(northRoute).position.x) / 180 * 1000) + 120,
+      playerTrace, npcTrace);
+    const aroundCluster = await state(alice);
+    const playerAfterRoute = own(aroundCluster).position;
+    assert.ok(playerAfterRoute.x > 494 && playerAfterRoute.y < 370,
+      "the player can move around the cluster through the open northern route");
+    assert.ok(playerTrace.every(position =>
+      arena.obstacles.every(obstacle => !pointHitsObstacle(position, 14, obstacle))),
+    "movement around the cluster remains collision-safe");
+
+    const npcBeforeOpenShot = aroundCluster.snapshot.entities
+      .find(entity => entity.state.kind === "npc");
+    assert.ok(npcBeforeOpenShot);
+    assert.ok(!segmentHitsObstacles(playerAfterRoute, npcBeforeOpenShot.position,
+      arena.obstacles, 3), "the routed position provides an open firing angle");
+    await fireWhileAiming(alice, current => {
+      const currentPlayer = own(current);
+      return current.snapshot.entities.filter(entity => entity.state.kind === "npc")
+        .sort((left, right) =>
+          Math.hypot(left.position.x - currentPlayer.position.x,
+            left.position.y - currentPlayer.position.y) -
+          Math.hypot(right.position.x - currentPlayer.position.x,
+            right.position.y - currentPlayer.position.y))[0]?.position;
+    }, 1400, npcTrace);
+    await delay(250);
+    const afterOpenShot = await state(alice);
+    const npcAfterOpenShot = afterOpenShot.snapshot.entities.find(entity => entity.state.kind === "npc");
+    assert.ok(npcAfterOpenShot);
+    assert.ok(npcAfterOpenShot.state.health < npcBeforeOpenShot.state.health,
+      "a shot from the open angle damages the NPC");
+    assert.ok(npcTrace.every(position =>
+      arena.obstacles.every(obstacle => !pointHitsObstacle(position, 8, obstacle))),
+    "NPC navigation never crosses the map's collision geometry");
+    console.log(JSON.stringify({
+      browser: version.Browser,
+      arena: "Tile Cluster Arena",
+      arenaId: "dots-and-squares-tile-arena-v1",
+      seedIndependentGeometry: true,
+      playerStart: playerAtStart,
+      npcStart: npcAtStart.position,
+      blockedShotNpcHealth: npcAfterBlockedShots.state.health,
+      blockedMovementStop: playerAtBlock,
+      openRoutePosition: playerAfterRoute,
+      npcRouteEnd: routedNpc.position,
+      openAngleNpcHealth: {
+        before: npcBeforeOpenShot.state.health,
+        after: npcAfterOpenShot.state.health
+      }
+    }, null, 2));
   } else {
   await evaluate(observer, `document.querySelector('[name=setting-maxPlayers]').value = '1';
     document.querySelector('[name=setting-initialNpcsPerPlayer]').value = '1';
@@ -451,9 +697,8 @@ try {
   assert.ok(soloView.fillStyles.includes("#344a60"), "terrain tiles have subtle patterns");
   assert.ok(soloView.strokes.some(stroke => stroke.color === "#3b5168"),
     "terrain tile seams are visible");
-  assert.ok(soloView.boundaries.length > 0 &&
-    soloView.strokes.some(stroke => stroke.color === "#c0cad3"),
-  "solid boundaries retain a legible outline");
+  assert.ok(soloView.strokes.some(stroke => stroke.color === "#c0cad3"),
+    "solid cluster tiles retain a legible outer outline");
   const pickupFixture = await evaluate(observer, `(async () => {
     const { mountSkinHost } = await import('/src/skin-host.ts');
     const { defaultSkinFactory } = await import('/@id/@multiplayer-game/default-theme');
@@ -895,7 +1140,23 @@ try {
     return {count:sessions.length,overflow:overflow.status,code:(await overflow.json()).error.code};
   })()`);
   assert.deepEqual(capacityBefore, { count: 5, overflow: 409, code: "SESSION_CAPACITY" });
+  await aim(alice, 256, 256);
+  await move(alice, "ArrowUp", 850);
+  const approach = own(await state(alice)).position;
+  if (approach.y > 350) {
+    await aim(alice, 0, -140);
+    await move(alice, "ArrowUp", Math.ceil((approach.y - 340) / 180 * 1000) + 120);
+  }
+  const northRoute = own(await state(alice)).position;
+  await aim(alice, 140, 0);
+  await move(alice, "ArrowUp", Math.ceil((510 - northRoute.x) / 180 * 1000) + 120);
   await shootUntil(alice, 1, 1);
+  const bobStart = own(await state(bob)).position;
+  await aim(bob, 140, 0);
+  await move(bob, "ArrowUp", Math.ceil((780 - bobStart.x) / 180 * 1000) + 120);
+  const bobEast = own(await state(bob)).position;
+  await aim(bob, 0, 140);
+  await move(bob, "ArrowUp", Math.ceil((1100 - bobEast.y) / 180 * 1000) + 120);
   await shootUntil(bob, 1, 0);
   await waitFor(alice, "window.__probe.snapshot.level === 2 && window.__probe.snapshot.phase === 'active'");
   await shootUntil(alice, 2, 0);

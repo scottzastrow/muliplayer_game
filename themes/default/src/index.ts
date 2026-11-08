@@ -15,6 +15,8 @@ export const defaultThemeRevision = validateThemeRevision({
 export { defaultModuleFactory, defaultSkinFactory };
 export { createDefaultResultsSkin } from "./skin/results.js";
 export {
+  DEFAULT_ARENA_ID,
+  DEFAULT_ARENA_NAME,
   DEFAULT_MAP_HEIGHT,
   DEFAULT_MAP_WIDTH,
   MAX_MAP_GENERATION_ATTEMPTS,

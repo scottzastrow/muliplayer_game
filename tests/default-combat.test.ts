@@ -344,6 +344,27 @@ describe("default combat", () => {
     );
     module.dispose();
   });
+
+  it("blocks shots through a solid tile in the default arena", () => {
+    const arena = generateMap(42).map;
+    const simulation = createSimulation(arena.obstacles);
+    const { context, module } = simulation;
+    removeNpcs(context);
+    addNpc(context, "npc:behind-cluster", { x: 528, y: 528 });
+    module.applyInput("player-a", combatInput(528, 528));
+    module.step(1 / 30, 1);
+    module.applyInput("player-a", { ...combatInput(528, 528), fire: false });
+    for (let tick = 2; tick <= 30; tick += 1) {
+      module.step(1 / 30, tick);
+    }
+
+    expect(context.entities.get("npc:behind-cluster")?.state).toMatchObject({
+      kind: "npc",
+      health: 100
+    });
+    expect(countProjectiles(context)).toBe(0);
+    module.dispose();
+  });
 });
 
 function createSimulation(

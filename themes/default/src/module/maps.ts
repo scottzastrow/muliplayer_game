@@ -9,8 +9,41 @@ import { PICKUP_RADIUS } from "./tuning.js";
 
 export const DEFAULT_MAP_WIDTH = 2_048;
 export const DEFAULT_MAP_HEIGHT = 2_048;
+export const DEFAULT_ARENA_ID = "dots-and-squares-tile-arena-v1";
+export const DEFAULT_ARENA_NAME = "Tile Cluster Arena";
 export const MAX_MAP_GENERATION_ATTEMPTS = 4;
 const DEFAULT_PLAYER_RADIUS = 14;
+const TETROMINO_CLUSTERS: readonly {
+  readonly id: string;
+  readonly tileX: number;
+  readonly tileY: number;
+  readonly tiles: readonly (readonly [number, number])[];
+}[] = [
+  {
+    id: "northwest-t",
+    tileX: 12,
+    tileY: 12,
+    tiles: [[0, 0], [1, 0], [2, 0], [1, 1]]
+  },
+  {
+    id: "northeast-j",
+    tileX: 32,
+    tileY: 15,
+    tiles: [[0, 0], [0, 1], [0, 2], [1, 2]]
+  },
+  {
+    id: "southeast-s",
+    tileX: 40,
+    tileY: 34,
+    tiles: [[1, 0], [2, 0], [0, 1], [1, 1]]
+  },
+  {
+    id: "southwest-l",
+    tileX: 20,
+    tileY: 40,
+    tiles: [[1, 0], [1, 1], [0, 2], [1, 2]]
+  }
+];
 
 type Rect = Readonly<{ x: number; y: number; width: number; height: number }>;
 
@@ -168,77 +201,44 @@ function spawnCellIndex(spawn: MapSpawn, columns: number, cellSize: number): num
 }
 
 function createGeneratedCandidate(seed: number, attempt: number): MapDefinition {
-  const random = createSeededRandom(((seed >>> 0) + attempt * 0x9e3779b9) >>> 0);
-  const openGate = random() >= 0.5;
-  const gateRow = 4 + Math.floor(random() * 56);
-  const barrier = openGate
-    ? [
-        { id: "wall-north", position: { x: 1_024, y: gateRow * MAP_CELL_SIZE / 2 }, height: gateRow * MAP_CELL_SIZE },
-        {
-          id: "wall-south",
-          position: {
-            x: 1_024,
-            y: gateRow * MAP_CELL_SIZE + MAP_CELL_SIZE / 2 +
-              (DEFAULT_MAP_HEIGHT - (gateRow + 1) * MAP_CELL_SIZE) / 2
-          },
-          height: DEFAULT_MAP_HEIGHT - (gateRow + 1) * MAP_CELL_SIZE
-        }
-      ]
-    : [
-        {
-          id: "wall-closed",
-          position: { x: 1_024, y: DEFAULT_MAP_HEIGHT / 2 },
-          height: DEFAULT_MAP_HEIGHT
-        }
-      ];
-  const objects = barrier.map(({ id, position }) => ({
-    id,
-    typeId: "terrain.wall",
-    position,
-    tags: ["obstacle"],
-    properties: { material: "stone" }
-  }));
-  const collisions = barrier.map(({ id, height }) => ({
-    id: `collision-${id}`,
-    objectId: id,
-    shape: { type: "rect" as const, width: MAP_CELL_SIZE, height }
-  }));
-
-  return {
-    formatVersion: 1,
-    id: `generated-${seed >>> 0}-${attempt + 1}`,
-    name: "Generated Arena",
-    bounds: { width: DEFAULT_MAP_WIDTH, height: DEFAULT_MAP_HEIGHT },
-    cellSize: MAP_CELL_SIZE,
-    objects,
-    collisions,
-    spawns: createDefaultSpawns()
-  };
+  return createTileClusterArena(`generated-${seed >>> 0}-${attempt + 1}`);
 }
 
 function createFallbackDefinition(): MapDefinition {
+  return createTileClusterArena("fallback");
+}
+
+function createTileClusterArena(objectIdPrefix: string): MapDefinition {
+  const tiles = TETROMINO_CLUSTERS.flatMap((cluster) =>
+    cluster.tiles.map(([offsetX, offsetY], index) => {
+      const id = `${objectIdPrefix}-${cluster.id}-${index + 1}`;
+      const tileX = cluster.tileX + offsetX;
+      const tileY = cluster.tileY + offsetY;
+      return {
+        id,
+        typeId: "terrain.tetris-tile",
+        position: {
+          x: (tileX + 0.5) * MAP_CELL_SIZE,
+          y: (tileY + 0.5) * MAP_CELL_SIZE
+        },
+        tags: ["obstacle", "tile-cluster"],
+        properties: { material: "stone", clusterId: cluster.id },
+        collision: {
+          id: `collision-${id}`,
+          objectId: id,
+          shape: { type: "rect" as const, width: MAP_CELL_SIZE, height: MAP_CELL_SIZE }
+        }
+      };
+    })
+  );
   return {
     formatVersion: 1,
-    id: "fallback-open-arena",
-    name: "Fallback Arena",
+    id: DEFAULT_ARENA_ID,
+    name: DEFAULT_ARENA_NAME,
     bounds: { width: DEFAULT_MAP_WIDTH, height: DEFAULT_MAP_HEIGHT },
     cellSize: MAP_CELL_SIZE,
-    objects: [
-      {
-        id: "fallback-pillar",
-        typeId: "terrain.pillar",
-        position: { x: 1_024, y: 1_024 },
-        tags: ["obstacle"],
-        properties: { material: "stone" }
-      }
-    ],
-    collisions: [
-      {
-        id: "collision-fallback-pillar",
-        objectId: "fallback-pillar",
-        shape: { type: "rect", width: 64, height: 64 }
-      }
-    ],
+    objects: tiles.map(({ collision: _collision, ...object }) => object),
+    collisions: tiles.map(({ collision }) => collision),
     spawns: createDefaultSpawns()
   };
 }
@@ -284,17 +284,6 @@ function createDefaultSpawns(): MapSpawn[] {
     }
   ];
   return [...players, ...npcs, ...pickups];
-}
-
-function createSeededRandom(seed: number): () => number {
-  let state = seed;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let value = state;
-    value = Math.imul(value ^ (value >>> 15), value | 1);
-    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
-    return ((value ^ (value >>> 14)) >>> 0) / 0x1_0000_0000;
-  };
 }
 
 function circleIntersectsRect(

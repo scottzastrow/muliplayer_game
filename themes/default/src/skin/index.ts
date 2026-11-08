@@ -14,13 +14,6 @@ const SNAPSHOT_INTERVAL_MS = 1000 / 15;
 const FACING_DOT_RADIUS = 3;
 const TURN_RADIANS_PER_SECOND = Math.PI;
 const TERRAIN_TILE_SIZE = 32;
-const TERRAIN_TETROMINOES: readonly (readonly (readonly [number, number])[])[] = [
-  [[0, 0], [1, 0], [2, 0], [3, 0]],
-  [[0, 0], [1, 0], [0, 1], [1, 1]],
-  [[0, 0], [0, 1], [0, 2], [1, 2]],
-  [[0, 0], [1, 0], [2, 0], [1, 1]],
-  [[1, 0], [2, 0], [0, 1], [1, 1]]
-];
 const TERRAIN_TILE_COLORS = Object.freeze(["#2b3d51", "#2d4155"]);
 const TERRAIN_SEAM_COLOR = "#3b5168";
 const TERRAIN_PATTERN_COLOR = "#344a60";
@@ -356,49 +349,47 @@ function drawTerrain(
   context.fillStyle = "#233345";
   context.fillRect(origin.x, origin.y, map.width, map.height);
 
-  const firstTileX = Math.max(0, Math.floor((camera.x - width / 2) / TERRAIN_TILE_SIZE));
-  const endTileX = Math.min(map.width / TERRAIN_TILE_SIZE,
-    Math.ceil((camera.x + width / 2) / TERRAIN_TILE_SIZE));
-  const firstTileY = Math.max(0, Math.floor((camera.y - height / 2) / TERRAIN_TILE_SIZE));
-  const endTileY = Math.min(map.height / TERRAIN_TILE_SIZE,
-    Math.ceil((camera.y + height / 2) / TERRAIN_TILE_SIZE));
-
-  for (let tileY = firstTileY; tileY < endTileY; tileY += 1) {
-    for (let tileX = firstTileX; tileX < endTileX; tileX += 1) {
-      const groupX = Math.floor(tileX / 4);
-      const groupY = Math.floor(tileY / 4);
-      const shape = TERRAIN_TETROMINOES[(groupX + groupY * 3) % TERRAIN_TETROMINOES.length]!;
-      const localX = tileX % 4;
-      const localY = tileY % 4;
-      if (!shape.some(([x, y]) => x === localX && y === localY)) continue;
-
-      const screenX = tileX * TERRAIN_TILE_SIZE - camera.x + width / 2;
-      const screenY = tileY * TERRAIN_TILE_SIZE - camera.y + height / 2;
-      context.fillStyle = TERRAIN_TILE_COLORS[(tileX + tileY) % TERRAIN_TILE_COLORS.length]!;
-      context.fillRect(screenX, screenY, TERRAIN_TILE_SIZE, TERRAIN_TILE_SIZE);
-      context.strokeStyle = TERRAIN_SEAM_COLOR;
-      context.lineWidth = 1;
-      context.strokeRect(
-        screenX + 0.5,
-        screenY + 0.5,
-        TERRAIN_TILE_SIZE - 1,
-        TERRAIN_TILE_SIZE - 1
-      );
-      context.fillStyle = TERRAIN_PATTERN_COLOR;
-      context.fillRect(screenX + 6, screenY + 6, 2, 2);
-      context.fillRect(screenX + 10, screenY + 6, 2, 2);
-      context.fillRect(screenX + 6, screenY + 10, 2, 2);
-    }
-  }
-
-  context.fillStyle = "#718395";
-  context.strokeStyle = "#c0cad3";
-  context.lineWidth = 1.5;
   for (const obstacle of map.obstacles) {
-    const screen = worldToScreen(obstacle, camera, width, height);
-    context.fillRect(screen.x, screen.y, obstacle.width, obstacle.height);
-    context.strokeRect(screen.x + 0.5, screen.y + 0.5,
-      obstacle.width - 1, obstacle.height - 1);
+    for (let tileY = 0; tileY < obstacle.height; tileY += TERRAIN_TILE_SIZE) {
+      for (let tileX = 0; tileX < obstacle.width; tileX += TERRAIN_TILE_SIZE) {
+        const screen = worldToScreen({
+          x: obstacle.x + tileX,
+          y: obstacle.y + tileY
+        }, camera, width, height);
+        const tileWidth = Math.min(TERRAIN_TILE_SIZE, obstacle.width - tileX);
+        const tileHeight = Math.min(TERRAIN_TILE_SIZE, obstacle.height - tileY);
+        context.fillStyle = TERRAIN_TILE_COLORS[
+          (Math.floor(obstacle.x / TERRAIN_TILE_SIZE) +
+            Math.floor(obstacle.y / TERRAIN_TILE_SIZE) +
+            tileX / TERRAIN_TILE_SIZE + tileY / TERRAIN_TILE_SIZE) %
+          TERRAIN_TILE_COLORS.length
+        ]!;
+        context.fillRect(screen.x, screen.y, tileWidth, tileHeight);
+        context.strokeStyle = TERRAIN_SEAM_COLOR;
+        context.lineWidth = 1;
+        context.strokeRect(
+          screen.x + 0.5,
+          screen.y + 0.5,
+          Math.max(0, tileWidth - 1),
+          Math.max(0, tileHeight - 1)
+        );
+        if (tileWidth >= 16 && tileHeight >= 16) {
+          context.fillStyle = TERRAIN_PATTERN_COLOR;
+          context.fillRect(screen.x + 6, screen.y + 6, 2, 2);
+          context.fillRect(screen.x + 10, screen.y + 6, 2, 2);
+          context.fillRect(screen.x + 6, screen.y + 10, 2, 2);
+        }
+      }
+    }
+    const topLeft = worldToScreen(obstacle, camera, width, height);
+    context.strokeStyle = "#c0cad3";
+    context.lineWidth = 1.5;
+    context.strokeRect(
+      topLeft.x + 0.5,
+      topLeft.y + 0.5,
+      Math.max(0, obstacle.width - 1),
+      Math.max(0, obstacle.height - 1)
+    );
   }
 }
 

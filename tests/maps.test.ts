@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import authoredMapFixture from "../themes/default/maps/authored-fixture.json" with { type: "json" };
 import {
+  BoundedNavigation,
+  WorldGeometry
+} from "@multiplayer-game/engine";
+import {
+  DEFAULT_ARENA_ID,
+  DEFAULT_ARENA_NAME,
   MAX_MAP_GENERATION_ATTEMPTS,
   MapValidationError,
   generateMap,
@@ -55,12 +61,16 @@ describe("default theme maps", () => {
   it("generates deterministic connected maps with legal default spawns", () => {
     const first = generateMap(42);
     const second = generateMap(42);
+    const otherSeed = generateMap(43);
 
     expect(first.map.definition).toEqual(second.map.definition);
+    expect(first.map.definition.id).toBe(DEFAULT_ARENA_ID);
+    expect(first.map.definition.name).toBe(DEFAULT_ARENA_NAME);
     expect(first.map.definition.bounds).toEqual({ width: 2_048, height: 2_048 });
     expect(first.map.definition.cellSize).toBe(32);
     expect(first.map.definition.spawns.filter((spawn) => spawn.kind === "player")).toHaveLength(32);
-    expect(first.map.obstacles.length).toBeGreaterThan(0);
+    expect(first.map.obstacles).toHaveLength(16);
+    expect(otherSeed.map.obstacles).toEqual(first.map.obstacles);
     for (const spawn of first.map.definition.spawns) {
       expect(first.map.isWalkable(spawn.position, spawn.radius)).toBe(true);
     }
@@ -74,15 +84,46 @@ describe("default theme maps", () => {
     }
   });
 
-  it("uses a known-valid fallback after the fixed generation attempt budget", () => {
-    const fallback = Array.from({ length: 128 }, (_, seed) => generateMap(seed))
-      .find((result) => result.source === "fallback");
-
-    expect(fallback).toBeDefined();
-    expect(fallback?.attempts).toBe(MAX_MAP_GENERATION_ATTEMPTS);
-    expect(fallback?.map.definition.id).toBe("fallback-open-arena");
-    for (const spawn of fallback?.map.definition.spawns ?? []) {
-      expect(fallback?.map.isWalkable(spawn.position, spawn.radius)).toBe(true);
+  it("blocks direct movement and routes around the encounter cluster", () => {
+    const map = generateMap(42).map;
+    const geometry = new WorldGeometry(map.definition.bounds, map.obstacles);
+    let position = { x: 272, y: 272 };
+    let encounteredBlock = false;
+    for (let tick = 0; tick < 40; tick += 1) {
+      const desired = { x: position.x + 6, y: position.y + 6 };
+      position = geometry.moveCircle(position, { x: 6, y: 6 }, 14);
+      if (position.x !== desired.x || position.y !== desired.y) encounteredBlock = true;
+      expect(geometry.isCircleWalkable(position, 14)).toBe(true);
     }
+    expect(encounteredBlock).toBe(true);
+
+    const navigation = new BoundedNavigation(geometry, { cellSize: 32, agentRadius: 8 });
+    let result:
+      | { status: "found" | "no-path" | "limit"; path: readonly { x: number; y: number }[] }
+      | undefined;
+    navigation.requestPath({ x: 528, y: 528 }, { x: 272, y: 272 }, (pathResult) => {
+      result = pathResult;
+    });
+    for (let tick = 0; tick < 10 && !result; tick += 1) navigation.processTick();
+
+    expect(result?.status).toBe("found");
+    const path = result?.path ?? [];
+    expect(path.slice(1, -1).some((point) => point.x < 384 || point.y < 384)).toBe(true);
+    for (let index = 1; index < path.length; index += 1) {
+      const from = path[index - 1]!;
+      const to = path[index]!;
+      const reached = geometry.moveCircle(
+        from,
+        { x: to.x - from.x, y: to.y - from.y },
+        8
+      );
+      expect(reached.x).toBeCloseTo(to.x, 5);
+      expect(reached.y).toBeCloseTo(to.y, 5);
+    }
+  });
+
+  it("uses a bounded map validation retry budget", () => {
+    expect(MAX_MAP_GENERATION_ATTEMPTS).toBe(4);
+    expect(generateMap(0).attempts).toBeLessThanOrEqual(MAX_MAP_GENERATION_ATTEMPTS);
   });
 });

@@ -10,10 +10,10 @@ import { normalizeMovement } from "../themes/default/src/module/entities.js";
 import { PLAYER_RADIUS, PLAYER_SPEED, SAFE_SPAWN_MARGIN } from "../themes/default/src/module/tuning.js";
 
 const TICK_SECONDS = 1 / 30;
-// Seed 42 produces a single 64x64 obstacle at (992, 992); these tests depend on that layout.
-const OBSTACLE = { x: 992, y: 992, width: 64, height: 64 };
+// The northwest T cluster's first tile is part of the fixed Tile Cluster Arena.
+const OBSTACLE = { x: 384, y: 384, width: 32, height: 32 };
 // Walkable position whose x-axis move lands on the obstacle's top-left corner arc.
-const CORNER_APPROACH = { x: 980.5, y: 983.9 };
+const CORNER_APPROACH = { x: 372.5, y: 375.9 };
 
 function playerDelta(moveX: number, moveY: number): Vector2 {
   const movement = normalizeMovement(moveX, moveY);
@@ -78,12 +78,12 @@ describe("rejected entity updates", () => {
       position: CORNER_APPROACH, state: { health: 100 }
     };
     world.addEntity(original);
-    expect(() => world.addEntity({ ...original, position: { x: 1_000, y: 1_000 }, state: { health: 1 } }))
+    expect(() => world.addEntity({ ...original, position: { x: 400, y: 400 }, state: { health: 1 } }))
       .toThrow(/outside walkable world geometry/);
     expect(world.getEntity("player:alice")).toEqual(original);
     expect(world.entityCount).toBe(1);
     expect(world.queryEntities(CORNER_APPROACH, 1).map((entity) => entity.id)).toEqual(["player:alice"]);
-    expect(world.queryEntities({ x: 1_000, y: 1_000 }, 1)).toHaveLength(0);
+    expect(world.queryEntities({ x: 400, y: 400 }, 1)).toHaveLength(0);
   });
 
   it("propagate from the default simulator without removing or corrupting the player", () => {
@@ -166,7 +166,7 @@ function createSimulation(options: {
   moveCircle?: ModuleContext<DefaultEntity>["geometry"]["moveCircle"];
 } = {}) {
   const map = generateMap(42).map;
-  expect(map.obstacles).toEqual([OBSTACLE]);
+  expect(map.obstacles).toContainEqual(OBSTACLE);
   const world = new SessionWorld<DefaultEntity>("movement-test", map.definition.bounds, map.obstacles);
   // Mirrors the session-lifecycle EntityStore.update contract.
   const context: ModuleContext<DefaultEntity> = {

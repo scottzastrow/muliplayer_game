@@ -621,3 +621,33 @@ player to assert its rendered shape without changing the map generator or
 collision geometry. The actual one-player room also verifies the textured,
 walkable terrain rendering. No deployment, production data, or capacity result
 is claimed; T042 remains open.
+
+## Tile Cluster Arena obstacle playtest (2026-11-07)
+
+Added the playable default-theme arena `Tile Cluster Arena`
+(`dots-and-squares-tile-arena-v1`). Its four fixed Tetris-like clusters contain
+16 solid 32-by-32 tiles. Geometry is seed-independent and comes from the same
+map obstacle rectangles used by the skin renderer, player/NPC collision,
+projectile blocking and NPC navigation. Spawn validation confirms the spawn
+points are clear and connected; open routes remain around each cluster.
+
+| Check | Result |
+| --- | --- |
+| `npm run check` | Passed after the final arena and browser-test changes. |
+| Focused arena Vitest selection | Passed: 5 files, 33 tests (`tests/maps.test.ts`, `tests/movement-collision.test.ts`, `tests/default-combat.test.ts`, `tests/default-skin.test.ts`, `tests/default-theme.test.ts`). |
+| `npm run test:browser` | Passed in Chrome 156.0.8078.80 with three windows; all account, controls, spectator, standings, match-completion and capacity-slot scenarios passed. |
+| `node tests/browser/default-game.mjs --arena-obstacles` | Passed in Chrome 156.0.8078.80. Blocked shots left NPC health at 100000; direct movement stopped at `(374.39, 373.82)`; player routed to `(542.39, 307.82)`; NPC routed around the cluster without intersecting tiles; open-angle fire reduced NPC health from 100000 to 99800. Rendered tiles matched the map obstacle rectangles. |
+
+Repeat the encounter in any generated room seed in `Tile Cluster Arena`: start a
+one-player match with one high-health NPC. The fixture begins the player at
+`(272, 272)` and the NPC near `(507, 507)`, on opposite sides of the northwest
+T cluster whose tile origin is `(384, 384)`. The initial direct shot and move
+are blocked; the player can route north and around the cluster to reach an open
+firing angle. The arena browser fixture is an automated Chrome playtest, not a
+claim of a separate human visual review.
+
+One initial dedicated Chrome attempt could not connect because an older local
+server still owned port 8082. After stopping that specific listener and starting
+a fresh in-memory server, the dedicated encounter passed as recorded above.
+All browser services and data were local. No deployment or capacity result is
+claimed; T042 remains open.
