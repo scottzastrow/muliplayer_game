@@ -234,7 +234,12 @@ try {
   await signIn(alice, creator, password);
   await signIn(bob, `ViewB_${suffix}`, password);
   await signIn(observer, `Watch_${suffix}`, password);
-  if (process.argv.includes("--reconnect")) {
+  if (process.argv.includes("--wave-timeout")) {
+    const { verifyWaveTimeout } = await import("./wave-timeout.mjs");
+    await verifyWaveTimeout({
+      alice, bob, creator, cdp, evaluate, waitFor, click, clickSessionButton, delay, browser: version.Browser
+    });
+  } else if (process.argv.includes("--reconnect")) {
     const { verifyReconnect } = await import("./reconnect.mjs");
     await verifyReconnect({ alice, bob, observer, creator, bobName: `ViewB_${suffix}`,
       cdp, evaluate, waitFor, click, clickSessionButton, state, own, move, shootUntil, delay,
@@ -433,7 +438,7 @@ try {
   })()`);
   assert.equal(released,0);
   await click(bob, "Refresh sessions");
-  await clickSessionButton(bob, creator, "Play");
+  await clickSessionButton(bob, creator, "Rejoin");
   await waitFor(bob, "document.querySelector('canvas') !== null");
   const boundedControls = await evaluate(alice, `(async () => {
     const { connectRealtime } = await import('/src/connection.ts');

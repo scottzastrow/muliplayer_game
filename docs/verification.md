@@ -1,5 +1,52 @@
 # Local verification
 
+## T043 - Build, contracts and browser verification (2026-11-07)
+
+Verified locally on Windows at commit `aeddbf6bb0896a75c9a4275e283a280491898967`
+with Node 24.11.0, npm 11.6.1 and Chrome 156.0.8078.80. Browser checks used
+separate visible Chrome windows, a local Vite client at `127.0.0.1:5173`, a
+disposable server at `127.0.0.1:8082`, process-only test configuration and an
+in-memory SQLite database. The ignored `.env` was loaded; no production settings,
+credentials or persistent Windows environment variables were used.
+
+| Check | Result |
+| --- | --- |
+| `npm run build` | Passed; protocol, theme SDK, engine, default/fixture themes, server and client built. Rollup printed non-fatal Zod annotation warnings. |
+| `npm run check` | Passed; workspace TypeScript checks and tools type-check completed. |
+| `npm test` | Passed; 41 files, 177 tests. |
+| `npm run test:browser` | Passed in three Chrome windows. Independent movement/cameras, nearby visibility, player controls/HUD, spectator target/switch/leave/no-input, capacity slot release, two-level completion and shared/reloaded saved standings passed. |
+| `npm run test:browser -- --reconnect` | Passed; the browser flow scored with Alice, observed target loss, switched to Bob, then rejoined Alice with the original identity and score without duplicate membership. |
+| `npm run test:browser -- --wave-timeout` | Passed; real player and spectator HUD countdowns both decreased from about 62.51 seconds. Timeout at level 1 of 2 displayed the saved one-player standings in both windows; Reload saved result preserved them. The persisted row had 0 points, 0 kills and 1 death. |
+
+Contract review found that the external-consumer fixture still pinned
+`ea65708b1ad0ed57cfdb9e5f6c795552b814c1e3`, before the committed additive
+countdown SDK and timeout-result contract changes. The first full-suite run
+therefore failed the fixture's no-drift assertion. Updated
+`tests/contract/external-theme/engine-contract.lock.json` to pin this verified
+commit and list the themes, realtime, settings and HTTP contracts; the full suite
+then passed. No further drift was found: the settings/spec use the same
+`min(300, 60 + 3 * starting NPC count)` tuning and unchanged roster growth; the SDK
+and realtime contract describe a monotonic server deadline, no intermission timer,
+player/selected-spectator HUD values and timeout precedence; HTTP/result schemas
+allow saved standings below `maxLevels`. This adds no lobby setting or capacity
+change.
+
+Two verification-harness corrections were needed. The first quickstart browser
+attempt expected `Play` after a player socket detached; the realtime contract
+requires HTTP Rejoin before the replacement socket, so the browser step now uses
+`Rejoin` and the run passed with the original one-NPC fixture. An initial Vite
+launch from the repository root returned 404; starting it from `apps/client`
+made the client, readiness and Chrome debugging endpoints return 200. Neither
+failed attempt is counted as a pass.
+
+Not run: live death-to-respawn in the browser (death/respawn remains covered by
+automated and synthetic HUD checks), process-restart durability, theme installation
+and hostile-package upload scenarios, production/Lightsail deployment, or T042's
+separate-host 1/3/5-room capacity matrix and 30-minute soak. These checks do not
+block this local T043 slice and are not represented as executed evidence.
+All browser test services and the isolated Chrome profile were local; no deployment
+or commit was made. T042 remains open.
+
 ## Focused Dots and Squares wave countdown (2026-11-07)
 
 Implemented on `001-multiplayer-engine` as an uncommitted follow-up to
