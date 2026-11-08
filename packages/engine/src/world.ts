@@ -85,12 +85,36 @@ export class WorldGeometry {
       throw new RangeError("The starting circle must be walkable.");
     }
 
-    let x = position.x + delta.x;
-    let y = position.y;
-    x = this.#resolveAxis(position.x, x, y, radius, "x");
-    y = position.y + delta.y;
-    y = this.#resolveAxis(position.y, y, x, radius, "y");
-    return Object.freeze({ x, y });
+    const start = { x: position.x, y: position.y };
+    const x = this.#resolveAxis(start.x, start.x + delta.x, start.y, radius, "x");
+    const afterX = this.#retreatToWalkable(start, { x, y: start.y }, radius);
+    const y = this.#resolveAxis(start.y, start.y + delta.y, afterX.x, radius, "y");
+    return Object.freeze(this.#retreatToWalkable(afterX, { x: afterX.x, y }, radius));
+  }
+
+  // Contact points come from sqrt, so a clamped target can round just inside the
+  // strict walkability test; back off along the move until it passes that same test.
+  #retreatToWalkable(from: Vector2, to: Vector2, radius: number): Vector2 {
+    if (this.isCircleWalkable(to, radius)) {
+      return to;
+    }
+    let walkable = 0;
+    let blocked = 1;
+    for (let iteration = 0; iteration < 64; iteration += 1) {
+      const fraction = (walkable + blocked) / 2;
+      const candidate = {
+        x: from.x + (to.x - from.x) * fraction,
+        y: from.y + (to.y - from.y) * fraction
+      };
+      if (this.isCircleWalkable(candidate, radius)) {
+        walkable = fraction;
+      } else {
+        blocked = fraction;
+      }
+    }
+    return walkable === 0
+      ? from
+      : { x: from.x + (to.x - from.x) * walkable, y: from.y + (to.y - from.y) * walkable };
   }
 
   #resolveAxis(
@@ -107,17 +131,24 @@ export class WorldGeometry {
       const distanceFromRange = axis === "x"
         ? distanceToRange(fixed, obstacle.y, obstacle.y + obstacle.height)
         : distanceToRange(fixed, obstacle.x, obstacle.x + obstacle.width);
-      if (distanceFromRange > radius) {
+      // Use the same strict test as circleIntersectsRect: a tangent circle may slide along a face.
+      const reaches = radius === 0
+        ? distanceFromRange === 0
+        : distanceFromRange * distanceFromRange < radius * radius;
+      if (!reaches) {
         continue;
       }
       const clearance = Math.sqrt(Math.max(0, radius * radius - distanceFromRange * distanceFromRange));
       const obstacleStart = (axis === "x" ? obstacle.x : obstacle.y) - clearance;
       const obstacleEnd =
         (axis === "x" ? obstacle.x + obstacle.width : obstacle.y + obstacle.height) + clearance;
-      if (target > from && from <= obstacleStart && target > obstacleStart) {
-        target = Math.min(target, obstacleStart);
-      } else if (target < from && from >= obstacleEnd && target < obstacleEnd) {
-        target = Math.max(target, obstacleEnd);
+      const obstacleMiddle = (obstacleStart + obstacleEnd) / 2;
+      // `from` is walkable, so it can only sit inside (obstacleStart, obstacleEnd) by rounding
+      // while touching one side; treat that as contact on that side rather than as already passed.
+      if (target > from && from < obstacleMiddle && target > obstacleStart) {
+        target = Math.min(target, Math.max(from, obstacleStart));
+      } else if (target < from && from > obstacleMiddle && target < obstacleEnd) {
+        target = Math.max(target, Math.min(from, obstacleEnd));
       }
     }
     return target;
