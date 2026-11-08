@@ -145,3 +145,8 @@ This is a saved-result notification, not client-authoritative scoring. The clien
 closes gameplay controls and fetches `/api/v1/matches/:id/results` only after this
 notification; a preceding complete-phase snapshot alone does not imply persistence
 has finished. Result links remain reloadable without a live WebSocket or runner.
+
+If a running session fails, the server logs the initiating exception with the
+session ID and sends its connected players and spectators a fatal `server.error`
+with code `INTERNAL_ERROR` and the safe message `The game session failed.`, then
+closes their sockets with code 1011. Exception details stay in server logs.

@@ -101,13 +101,14 @@ export function createApp(
     themes,
     (sessionId, tick, moduleStateSchemaVersion, snapshotForAccount) =>
       realtime?.publishSnapshot(sessionId, tick, moduleStateSchemaVersion, snapshotForAccount),
-    (error) =>
+    (error, sessionId) =>
       app.log.error(
-        { errorType: error instanceof Error ? error.name : "UnknownError" },
+        { err: error, sessionId },
         "Session lifecycle failed"
       ),
     (sessionId, tick) => realtime?.publishResult(sessionId, tick, "finished"),
-    metrics
+    metrics,
+    (sessionId) => realtime?.publishFailure(sessionId)
   );
   registerLobbyRoutes(app, database, config, lobby, auth,
     async (sessionId) => {

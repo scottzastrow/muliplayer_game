@@ -446,3 +446,27 @@ systemd/Nginx validation, deployed readiness and permissions, public HTTPS and
 authenticated WSS, certificate renewal and an isolated restore drill remain
 operator deployment checks. The separate-host 1/3/5-room capacity matrix and
 30-minute soak remain T042; this short loopback smoke establishes no capacity.
+
+### Failed-room regression (2026-11-07)
+
+The three-room loopback reproduction now injects a labeled module-step exception
+in the second room after all three players receive snapshots. A separately
+admitted spectator also connects to that room. The harness reports
+`Server INTERNAL_ERROR: The game session failed.` rather than `FORBIDDEN`;
+both affected sockets receive schema-valid fatal errors without exception details
+and are closed with code 1011. The initiating exception and room ID are passed
+to the server logger. At the first harness cleanup request the failed room is
+persisted as failed and both other rooms are still running. Existing realtime
+tests continue to exercise membership and origin enforcement.
+
+`npm exec -- vitest run tests\integration\operations.test.ts
+tests\integration\realtime.test.ts` passed: 2 files, 17 tests. `npm run check`
+passed. Initial attempts exposed the five-registrations-per-minute limit when
+using a spectator in every harness room, missing spectator termination before
+the fix, duplicate close-handshake observations, queued input during closure,
+and type errors in the pre-existing reproduction instrumentation. The final
+test provisions one additional local spectator directly and distinguishes
+initiated closes from the WebSocket close handshake.
+
+This was a disposable local loopback exercise, not a capacity measurement.
+No Lightsail deployment or load run was performed; T042 remains open.

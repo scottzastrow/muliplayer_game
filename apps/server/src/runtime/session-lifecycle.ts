@@ -74,9 +74,10 @@ export class SessionLifecycle {
     readonly lobby: LobbyRegistry,
     readonly themes: ThemeLoader,
     readonly publishSnapshot: SnapshotPublisher,
-    readonly reportError: (error: unknown) => void = () => {},
+    readonly reportError: (error: unknown, sessionId: string) => void = () => {},
     readonly publishResult?: (sessionId: string, tick: number) => void,
-    readonly metrics?: RuntimeMetrics
+    readonly metrics?: RuntimeMetrics,
+    readonly publishFailure?: (sessionId: string) => void
   ) {}
 
   async start(sessionId: string): Promise<void> {
@@ -163,18 +164,18 @@ export class SessionLifecycle {
         try {
           this.#release(registered);
         } catch (disposeError) {
-          this.reportError(disposeError);
+          this.reportError(disposeError, sessionId);
         }
       } else if (module) {
         try {
           module.dispose();
         } catch (disposeError) {
-          this.reportError(disposeError);
+          this.reportError(disposeError, sessionId);
         }
       }
       this.lobby.markTerminal(sessionId, "failed");
       this.metrics?.releaseSession(sessionId);
-      this.reportError(error);
+      this.reportError(error, sessionId);
       throw error;
     }
   }
@@ -371,14 +372,20 @@ export class SessionLifecycle {
       return;
     }
     this.metrics?.event(active.id, "errors");
+    this.reportError(error, active.id);
     try {
       this.lobby.markTerminal(active.id, "failed");
     } catch (finalizationError) {
-      this.reportError(finalizationError);
+      this.reportError(finalizationError, active.id);
     } finally {
-      this.#release(active);
+      try {
+        this.#release(active);
+      } catch (disposeError) {
+        this.reportError(disposeError, active.id);
+      } finally {
+        this.publishFailure?.(active.id);
+      }
     }
-    this.reportError(error);
   }
 
   #release(active: ActiveSession): void {

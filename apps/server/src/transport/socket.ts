@@ -318,6 +318,14 @@ export class RealtimeTransport {
     }
   }
 
+  publishFailure(sessionId: string): void {
+    for (const [socket, state] of this.#connections) {
+      if (state.sessionId !== sessionId || socket.readyState !== WebSocket.OPEN) continue;
+      this.#sendError(state, "INTERNAL_ERROR", "The game session failed.", undefined, true);
+      socket.close(1011, "The game session failed.");
+    }
+  }
+
   #upgrade(request: IncomingMessage, socket: Socket, head: Buffer): void {
     if (this.#closed) {
       rejectUpgrade(socket, 503, "Service Unavailable");
@@ -467,7 +475,8 @@ export class RealtimeTransport {
     raw: RawData,
     isBinary: boolean
   ): void {
-    if (this.#currentByMember.get(`${state.sessionId}:${state.account.id}`) !== webSocket) {
+    if (webSocket.readyState !== WebSocket.OPEN ||
+      this.#currentByMember.get(`${state.sessionId}:${state.account.id}`) !== webSocket) {
       return;
     }
     if (isBinary) {

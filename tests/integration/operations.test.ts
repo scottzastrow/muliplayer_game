@@ -6,14 +6,14 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { WebSocket } from "ws";
 import { z } from "zod";
-import { DEFAULT_GAME_SETTINGS } from "@multiplayer-game/protocol";
+import { DEFAULT_GAME_SETTINGS, ServerEnvelopeSchema } from "@multiplayer-game/protocol";
 import { createApp } from "../../apps/server/src/app.js";
 import { readConfig } from "../../apps/server/src/config.js";
 import { createAccount, verifyCredentials } from "../../apps/server/src/auth/accounts.js";
 import { LobbyRegistry } from "../../apps/server/src/lobby/registry.js";
 import { SessionLifecycle } from "../../apps/server/src/runtime/session-lifecycle.js";
 import { RuntimeMetrics } from "../../apps/server/src/runtime/metrics.js";
-import { createThemeLoader } from "../../apps/server/src/themes/builtins.js";
+import { createThemeLoader, ThemeLoader } from "../../apps/server/src/themes/builtins.js";
 import {
   openDatabase, reconcileInterruptedMatches, runMigrations
 } from "../../apps/server/src/storage/database.js";
@@ -21,6 +21,7 @@ import { finalizeMatchResult, getMatchResult } from "../../apps/server/src/stora
 import {
   BoundedMessageSender, MAX_BUFFERED_OUTGOING_BYTES
 } from "../../apps/server/src/transport/socket.js";
+import { runLoad } from "../../tools/load/index.js";
 
 const ORIGIN = "http://operations.example.test";
 const config = readConfig({ NODE_ENV: "test", PUBLIC_ORIGIN: ORIGIN });
@@ -146,6 +147,218 @@ describe("local operations", () => {
       database.close();
     }
   });
+
+  it("reports a failed room to its players and spectators while other rooms remain running", async () => {
+    const database = openDatabase(":memory:");
+    runMigrations(database);
+    const app = createApp(config, database, { ready: true });
+    const failure = new Error("loopback-repro: labeled step exception in room 2 of 3");
+    const stepCounts: number[] = [];
+    let moduleCount = 0;
+    let injectFailure = false;
+    let failureInjected = false;
+    let observationOrder = 0;
+    let firstCleanupOrder: number | undefined;
+    let statesAtCleanup: Array<{ id: string; state: string }> | undefined;
+    const errorEnvelopes: Array<Extract<
+      z.infer<typeof ServerEnvelopeSchema>, { type: "server.error" }
+    >> = [];
+    const socketRooms = new WeakMap<WebSocket, string>();
+    const observedSockets = new WeakSet<WebSocket>();
+    const snapshotSockets = new WeakSet<WebSocket>();
+    let socketsWithSnapshots = 0;
+    let socketsWithHello = 0;
+    let spectatorSocket: WebSocket | undefined;
+    const spectatorErrors: unknown[] = [];
+    let spectatorClose: { code: number; reason: string } | undefined;
+    const logSpy = vi.spyOn(app.log, "error");
+    const socketEvents: Array<{
+      order: number;
+      roomId: string;
+      type: "error" | "close";
+      relativeToCleanup: "before-cleanup" | "during-cleanup";
+      code?: number;
+      reason?: string;
+      error?: string;
+    }> = [];
+    const failureCloses: Array<{
+      order: number;
+      roomId: string;
+      code: number;
+      reason: string;
+      relativeToCleanup: "before-cleanup" | "during-cleanup";
+    }> = [];
+    const recordSocketEvent = (
+      roomId: string,
+      event: Omit<(typeof socketEvents)[number], "order" | "roomId" | "relativeToCleanup">
+    ) => {
+      const order = ++observationOrder;
+      socketEvents.push({
+        ...event,
+        order,
+        roomId,
+        relativeToCleanup: firstCleanupOrder !== undefined && order > firstCleanupOrder
+          ? "during-cleanup" : "before-cleanup"
+      });
+    };
+    const createModule = ThemeLoader.prototype.createModuleInstance;
+    const moduleSpy = vi.spyOn(ThemeLoader.prototype, "createModuleInstance")
+      .mockImplementation(function (this: ThemeLoader, ...args) {
+        const module = createModule.apply(this, args);
+        const roomIndex = moduleCount++;
+        stepCounts[roomIndex] = 0;
+        const step = module.step.bind(module);
+        vi.spyOn(module, "step").mockImplementation((dtSeconds, tick) => {
+          stepCounts[roomIndex] = (stepCounts[roomIndex] ?? 0) + 1;
+          if (injectFailure && roomIndex === 1 && !failureInjected) {
+            failureInjected = true;
+            throw failure;
+          }
+          step(dtSeconds, tick);
+        });
+        return module;
+      });
+    const send = WebSocket.prototype.send;
+    const sendSpy = vi.spyOn(WebSocket.prototype, "send").mockImplementation(function (this: WebSocket, data, ...args) {
+      if (typeof data === "string" && data.includes('"type":"server.')) {
+        const parsed = ServerEnvelopeSchema.safeParse(JSON.parse(data));
+        if (parsed.success && parsed.data.sessionId) {
+          const roomId = parsed.data.sessionId;
+          socketRooms.set(this, roomId);
+          if (!observedSockets.has(this)) {
+            observedSockets.add(this);
+            socketsWithHello++;
+            this.on("error", (error) => recordSocketEvent(roomId, {
+              type: "error", error: error.message
+            }));
+            this.on("close", (code, reason) => recordSocketEvent(roomId, {
+              type: "close", code, reason: reason.toString()
+            }));
+          }
+          if (parsed.data.type === "server.snapshot" && !snapshotSockets.has(this)) {
+            snapshotSockets.add(this);
+            socketsWithSnapshots++;
+          }
+          if (parsed.data.type === "server.error") errorEnvelopes.push(parsed.data);
+        }
+      }
+      return send.call(this, data, ...args);
+    });
+    const close = WebSocket.prototype.close;
+    const closeSpy = vi.spyOn(WebSocket.prototype, "close").mockImplementation(function (this: WebSocket, code, reason) {
+      const roomId = socketRooms.get(this);
+      if (code === 1011 && roomId && this.readyState === WebSocket.OPEN) {
+        const order = ++observationOrder;
+        failureCloses.push({
+          order, roomId, code, reason: reason?.toString() ?? "",
+          relativeToCleanup: firstCleanupOrder !== undefined && order > firstCleanupOrder
+            ? "during-cleanup" : "before-cleanup"
+        });
+      }
+      return close.call(this, code, reason);
+    });
+    const fetch = globalThis.fetch;
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const requestUrl = new URL(input instanceof Request ? input.url : input.toString());
+      if (statesAtCleanup === undefined && /\/sessions\/[^/]+\/leave$/.test(requestUrl.pathname)) {
+        firstCleanupOrder = ++observationOrder;
+        statesAtCleanup = database.prepare("SELECT id, state FROM matches ORDER BY rowid").all() as
+          Array<{ id: string; state: string }>;
+      }
+      return fetch.call(globalThis, input, init);
+    });
+
+    try {
+      const target = await app.listen({ host: "127.0.0.1", port: 0 });
+      const load = runLoad({
+        target, origin: ORIGIN, seed: 43, playersPerRoom: 1, spectatorsPerRoom: 0,
+        registrationIntervalMs: 0, warmupSeconds: 5,
+        steps: [{ rooms: 3, seconds: 5 }], soakSeconds: 0, settings
+      });
+      await waitUntil(() => moduleCount === 3 && stepCounts.every((count) => count > 0) &&
+        socketsWithSnapshots === 3, 8_000);
+      const rooms = database.prepare("SELECT id FROM matches ORDER BY rowid").all() as Array<{ id: string }>;
+      const spectator = await createAccount(database, "FailureRoomSpectator", password);
+      const cookie = await login(app, spectator.username);
+      const admission = await app.inject({
+        method: "POST", url: `/api/v1/sessions/${rooms[1]!.id}/spectate`,
+        headers: { ...headers, cookie }, payload: {}
+      });
+      expect(admission.statusCode).toBe(200);
+      spectatorSocket = new WebSocket(`${target.replace("http:", "ws:")}/ws?sessionId=${rooms[1]!.id}`, {
+        headers: { origin: ORIGIN, cookie }
+      });
+      spectatorSocket.on("message", (raw) => {
+        const message = ServerEnvelopeSchema.parse(JSON.parse(raw.toString()));
+        if (message.type === "server.error") spectatorErrors.push(message);
+      });
+      spectatorSocket.on("close", (code, reason) => {
+        spectatorClose = { code, reason: reason.toString() };
+      });
+      await waitUntil(() => socketsWithHello === 4);
+      injectFailure = true;
+      const report = await load;
+      await waitUntil(() => spectatorSocket?.readyState === WebSocket.CLOSED);
+
+      expect(failureInjected).toBe(true);
+      expect(report.status).toBe("failed");
+      expect(report.failures).toEqual(["Server INTERNAL_ERROR: The game session failed."]);
+      expect(report.cleanupFailures).toEqual([]);
+      expect(report.rooms).toHaveLength(3);
+      const failedRoomId = report.rooms[1]!.id;
+      expect(logSpy).toHaveBeenCalledWith(
+        { err: failure, sessionId: failedRoomId }, "Session lifecycle failed"
+      );
+      expect(errorEnvelopes).toHaveLength(2);
+      for (const envelope of errorEnvelopes) expect(envelope).toEqual({
+        v: 1,
+        type: "server.error",
+        sessionId: failedRoomId,
+        tick: 0,
+        serverTimeMs: expect.any(Number),
+        payload: {
+          code: "INTERNAL_ERROR",
+          message: "The game session failed.",
+          requestId: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
+          fatal: true
+        }
+      });
+      expect(errorEnvelopes.every((envelope) => envelope.requestId === undefined)).toBe(true);
+      expect(JSON.stringify(errorEnvelopes)).not.toContain(failure.message);
+      expect(spectatorErrors).toEqual([errorEnvelopes[1]]);
+      expect(spectatorClose).toEqual({ code: 1011, reason: "The game session failed." });
+      expect(failureCloses.map(({ roomId, code, reason, relativeToCleanup }) => ({
+        roomId, code, reason, relativeToCleanup
+      }))).toEqual([
+        {
+          roomId: failedRoomId, code: 1011,
+          reason: "The game session failed.", relativeToCleanup: "before-cleanup"
+        },
+        {
+          roomId: failedRoomId, code: 1011,
+          reason: "The game session failed.", relativeToCleanup: "before-cleanup"
+        }
+      ]);
+      expect(firstCleanupOrder).toBeDefined();
+      expect(statesAtCleanup).toEqual([
+        { id: report.rooms[0]!.id, state: "running" },
+        { id: failedRoomId, state: "failed" },
+        { id: report.rooms[2]!.id, state: "running" }
+      ]);
+      expect(socketEvents.filter((event) => event.type === "error")).toEqual([]);
+      expect(new Set(socketEvents.filter((event) => event.type === "close").map((event) => event.roomId)))
+        .toEqual(new Set(report.rooms.map((room) => room.id)));
+      expect(getMatchResult(database, failedRoomId)).toMatchObject({ status: "failed", standings: [] });
+    } finally {
+      spectatorSocket?.terminate();
+      fetchSpy.mockRestore();
+      closeSpy.mockRestore();
+      sendSpy.mockRestore();
+      moduleSpy.mockRestore();
+      logSpy.mockRestore();
+      await app.close();
+    }
+  }, 15_000);
 
   it("bounds thousands of pending snapshots and rejects reliable overflow without affecting a healthy sender", () => {
     const slow = outgoingSocket();
@@ -299,8 +512,8 @@ async function login(app: ReturnType<typeof createApp>, username: string): Promi
   return cookie.split(";", 1)[0]!;
 }
 
-async function waitUntil(condition: () => boolean): Promise<void> {
-  const deadline = Date.now() + 2000;
+async function waitUntil(condition: () => boolean, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
   while (!condition()) {
     if (Date.now() >= deadline) throw new Error("Operations condition timed out.");
     await new Promise((resolveWait) => setTimeout(resolveWait, 10));
