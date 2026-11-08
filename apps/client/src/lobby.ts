@@ -221,6 +221,13 @@ export function mountLobby(
         ? "Running"
         : session.status;
     statusCell.append(state);
+    if (session.creator === account.username && session.status === "waiting") {
+      const start = document.createElement("button");
+      start.type = "button";
+      start.textContent = "Start Session";
+      start.addEventListener("click", () => void startSession(session, start));
+      statusCell.append(start);
+    }
     const join = document.createElement("button");
     join.type = "button";
     join.textContent = "Join";
@@ -318,29 +325,27 @@ export function mountLobby(
           save.disabled = false;
         }
       });
-      const start = document.createElement("button");
-      start.type = "button";
-      start.textContent = "Start session";
-      start.addEventListener("click", async () => {
-        start.disabled = true;
-        try {
-          await api(`/api/v1/sessions/${session.id}/start`, {
-            method: "POST",
-            body: JSON.stringify({ expectedRevision: session.settingsRevision })
-          });
-          showStatus(status, "Session started.");
-          onPlay(session.id);
-        } catch (error) {
-          showStatus(status, messageOf(error), true);
-        } finally {
-          start.disabled = false;
-        }
-      });
-      controls.append(settingsForm, save, start);
+      controls.append(settingsForm, save);
     } catch (error) {
       const message = document.createElement("p");
       message.textContent = messageOf(error);
       controls.append(message);
+    }
+  }
+
+  async function startSession(session: SessionSummary, button: HTMLButtonElement): Promise<void> {
+    button.disabled = true;
+    try {
+      await api(`/api/v1/sessions/${session.id}/start`, {
+        method: "POST",
+        body: JSON.stringify({ expectedRevision: session.settingsRevision })
+      });
+      showStatus(status, "Session started.");
+      onPlay(session.id);
+    } catch (error) {
+      showStatus(status, messageOf(error), true);
+    } finally {
+      button.disabled = false;
     }
   }
 

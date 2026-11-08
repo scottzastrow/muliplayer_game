@@ -603,3 +603,21 @@ the newly accepted facing update before a rejected movement step. Those tests
 were corrected and the complete rerun passed. The browser fixture also needed
 color normalization before comparing CSS HSL input with Canvas's normalized
 color value. No production data was used; T042 remains open.
+
+## Live playtest findings (2026-11-07)
+
+`npm run check` passed. The focused default-theme/skin selection passed: **2 files,
+11 tests**. `npm run test:browser` passed in Chrome 156.0.8078.80 with three
+browser windows and an isolated in-memory server. Browser assertions covered
+screen-right forward movement and normalized diagonals in both input modes,
+strafing, turning, firing, mouse aiming, distinct player colors and same-color
+facing dots in player and spectator views, host-only Start Session placement,
+NPC squares, textured terrain tiles, and spectator lifecycle checks.
+
+The one-player room snapshot contains a `spread` pickup, which is the extra
+orange circle from the playtest. The renderer now presents it as an orange
+diamond with a glyph; the browser fixture places a clone of that pickup near the
+player to assert its rendered shape without changing the map generator or
+collision geometry. The actual one-player room also verifies the textured,
+walkable terrain rendering. No deployment, production data, or capacity result
+is claimed; T042 remains open.

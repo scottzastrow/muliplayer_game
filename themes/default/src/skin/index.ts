@@ -13,6 +13,18 @@ const INPUT_INTERVAL_MS = 1000 / 30;
 const SNAPSHOT_INTERVAL_MS = 1000 / 15;
 const FACING_DOT_RADIUS = 3;
 const TURN_RADIANS_PER_SECOND = Math.PI;
+const TERRAIN_TILE_SIZE = 32;
+const TERRAIN_TETROMINOES: readonly (readonly (readonly [number, number])[])[] = [
+  [[0, 0], [1, 0], [2, 0], [3, 0]],
+  [[0, 0], [1, 0], [0, 1], [1, 1]],
+  [[0, 0], [0, 1], [0, 2], [1, 2]],
+  [[0, 0], [1, 0], [2, 0], [1, 1]],
+  [[1, 0], [2, 0], [0, 1], [1, 1]]
+];
+const TERRAIN_TILE_COLORS = Object.freeze(["#2b3d51", "#2d4155"]);
+const TERRAIN_SEAM_COLOR = "#3b5168";
+const TERRAIN_PATTERN_COLOR = "#344a60";
+const NPC_COLOR = "#ed6b61";
 
 export const defaultSkinFactory: SkinFactory = Object.freeze({
   metadata,
@@ -235,21 +247,14 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
         context.setTransform(dpr, 0, 0, dpr, 0, 0);
         context.fillStyle = "#101824";
         context.fillRect(0, 0, width, height);
-        const origin = worldToScreen({ x: 0, y: 0 }, camera, width, height);
-        context.fillStyle = "#233345";
-        context.fillRect(origin.x, origin.y, current.map.width, current.map.height);
-        context.fillStyle = "#657586";
-        for (const obstacle of current.map.obstacles) {
-          const screen = worldToScreen(obstacle, camera, width, height);
-          context.fillRect(screen.x, screen.y, obstacle.width, obstacle.height);
-        }
+        drawTerrain(context, current.map, camera, width, height);
         for (const entity of entities) {
           const screen = worldToScreen(entity.position, camera, width, height);
           const radius = entity.radius;
           if (screen.x + radius < 0 || screen.y + radius < 0 ||
               screen.x - radius > width || screen.y - radius > height) continue;
           if (entity.state.kind === "npc") {
-            context.fillStyle = "#ed6b61";
+            context.fillStyle = NPC_COLOR;
             context.fillRect(screen.x - radius, screen.y - radius, radius * 2, radius * 2);
           } else if (entity.state.kind === "player") {
             const accountId = entity.state.accountId;
@@ -271,10 +276,10 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
               Math.PI * 2
             );
             context.fill();
+          } else if (entity.state.kind === "pickup") {
+            drawPickup(context, screen, radius, entity.state.pickupType);
           } else {
-            context.fillStyle = entity.state.kind === "projectile" ? "#ffffff"
-              : entity.state.pickupType === "health" ? "#66df8a"
-              : entity.state.pickupType === "rapid-fire" ? "#b892ff" : "#ffa64d";
+            context.fillStyle = "#ffffff";
             context.beginPath();
             context.arc(screen.x, screen.y, radius, 0, Math.PI * 2);
             context.fill();
@@ -294,11 +299,20 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
           : `Level ${current.level}`;
         if (focused && player.alive && current.phase === "active" && current.viewerRole === "player" &&
             time - lastInputAt >= INPUT_INTERVAL_MS) {
-          const movement = controlMode === "keyboard-only"
-            ? { x: Number(keys.has("KeyD")) - Number(keys.has("KeyA")),
-                y: Number(keys.has("KeyS")) - Number(keys.has("KeyW")) }
-            : { x: Number(keys.has("ArrowRight")) - Number(keys.has("ArrowLeft")),
-                y: Number(keys.has("ArrowDown")) - Number(keys.has("ArrowUp")) };
+          const forward = controlMode === "keyboard-only"
+            ? Number(keys.has("KeyW")) - Number(keys.has("KeyS"))
+            : Number(keys.has("ArrowUp")) - Number(keys.has("ArrowDown"));
+          const strafe = controlMode === "keyboard-only"
+            ? Number(keys.has("KeyD")) - Number(keys.has("KeyA"))
+            : Number(keys.has("ArrowRight")) - Number(keys.has("ArrowLeft"));
+          const magnitude = Math.hypot(forward, strafe);
+          const scale = magnitude > 1 ? 1 / magnitude : 1;
+          const facingX = Math.cos(facingAngle);
+          const facingY = Math.sin(facingAngle);
+          const movement = {
+            x: (forward * facingX - strafe * facingY) * scale,
+            y: (forward * facingY + strafe * facingX) * scale
+          };
           const aim = aimPoint(player);
           lastInputAt = time;
           sending = true;
@@ -330,3 +344,104 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     };
   }
 });
+
+function drawTerrain(
+  context: CanvasRenderingContext2D,
+  map: DefaultView["map"],
+  camera: Readonly<{ x: number; y: number }>,
+  width: number,
+  height: number
+): void {
+  const origin = worldToScreen({ x: 0, y: 0 }, camera, width, height);
+  context.fillStyle = "#233345";
+  context.fillRect(origin.x, origin.y, map.width, map.height);
+
+  const firstTileX = Math.max(0, Math.floor((camera.x - width / 2) / TERRAIN_TILE_SIZE));
+  const endTileX = Math.min(map.width / TERRAIN_TILE_SIZE,
+    Math.ceil((camera.x + width / 2) / TERRAIN_TILE_SIZE));
+  const firstTileY = Math.max(0, Math.floor((camera.y - height / 2) / TERRAIN_TILE_SIZE));
+  const endTileY = Math.min(map.height / TERRAIN_TILE_SIZE,
+    Math.ceil((camera.y + height / 2) / TERRAIN_TILE_SIZE));
+
+  for (let tileY = firstTileY; tileY < endTileY; tileY += 1) {
+    for (let tileX = firstTileX; tileX < endTileX; tileX += 1) {
+      const groupX = Math.floor(tileX / 4);
+      const groupY = Math.floor(tileY / 4);
+      const shape = TERRAIN_TETROMINOES[(groupX + groupY * 3) % TERRAIN_TETROMINOES.length]!;
+      const localX = tileX % 4;
+      const localY = tileY % 4;
+      if (!shape.some(([x, y]) => x === localX && y === localY)) continue;
+
+      const screenX = tileX * TERRAIN_TILE_SIZE - camera.x + width / 2;
+      const screenY = tileY * TERRAIN_TILE_SIZE - camera.y + height / 2;
+      context.fillStyle = TERRAIN_TILE_COLORS[(tileX + tileY) % TERRAIN_TILE_COLORS.length]!;
+      context.fillRect(screenX, screenY, TERRAIN_TILE_SIZE, TERRAIN_TILE_SIZE);
+      context.strokeStyle = TERRAIN_SEAM_COLOR;
+      context.lineWidth = 1;
+      context.strokeRect(
+        screenX + 0.5,
+        screenY + 0.5,
+        TERRAIN_TILE_SIZE - 1,
+        TERRAIN_TILE_SIZE - 1
+      );
+      context.fillStyle = TERRAIN_PATTERN_COLOR;
+      context.fillRect(screenX + 6, screenY + 6, 2, 2);
+      context.fillRect(screenX + 10, screenY + 6, 2, 2);
+      context.fillRect(screenX + 6, screenY + 10, 2, 2);
+    }
+  }
+
+  context.fillStyle = "#718395";
+  context.strokeStyle = "#c0cad3";
+  context.lineWidth = 1.5;
+  for (const obstacle of map.obstacles) {
+    const screen = worldToScreen(obstacle, camera, width, height);
+    context.fillRect(screen.x, screen.y, obstacle.width, obstacle.height);
+    context.strokeRect(screen.x + 0.5, screen.y + 0.5,
+      obstacle.width - 1, obstacle.height - 1);
+  }
+}
+
+function drawPickup(
+  context: CanvasRenderingContext2D,
+  position: Readonly<{ x: number; y: number }>,
+  radius: number,
+  type: "health" | "rapid-fire" | "spread"
+): void {
+  context.fillStyle = type === "health" ? "#66df8a"
+    : type === "rapid-fire" ? "#b892ff" : "#ffa64d";
+  context.beginPath();
+  context.moveTo(position.x, position.y - radius);
+  context.lineTo(position.x + radius, position.y);
+  context.lineTo(position.x, position.y + radius);
+  context.lineTo(position.x - radius, position.y);
+  context.closePath();
+  context.fill();
+  context.strokeStyle = "#f4f1e8";
+  context.lineWidth = 1.5;
+  context.stroke();
+
+  const mark = radius * 0.45;
+  context.beginPath();
+  if (type === "health") {
+    context.moveTo(position.x - mark, position.y);
+    context.lineTo(position.x + mark, position.y);
+    context.moveTo(position.x, position.y - mark);
+    context.lineTo(position.x, position.y + mark);
+  } else if (type === "rapid-fire") {
+    for (const offset of [-mark / 2, 0, mark / 2]) {
+      context.moveTo(position.x - mark, position.y + offset);
+      context.lineTo(position.x + mark, position.y + offset);
+    }
+  } else {
+    context.moveTo(position.x, position.y + mark);
+    context.lineTo(position.x, position.y);
+    context.moveTo(position.x, position.y);
+    context.lineTo(position.x - mark, position.y - mark);
+    context.moveTo(position.x, position.y);
+    context.lineTo(position.x + mark, position.y - mark);
+  }
+  context.strokeStyle = "#263445";
+  context.lineWidth = 1.5;
+  context.stroke();
+}

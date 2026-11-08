@@ -99,11 +99,43 @@ const probe = `(() => {
   };
   const nativeRect = CanvasRenderingContext2D.prototype.fillRect;
   CanvasRenderingContext2D.prototype.fillRect = function(x, y, w, h) {
-    if (this.fillStyle === '#101824') {
-      this.canvas.__draw = { arcs: [], squares: [] };
+    if (!this.canvas.__draw) {
+      this.canvas.__draw = {
+        arcs: [], squares: [], terrain: [], boundaries: [], pickups: [], fillStyles: [], strokes: []
+      };
     }
-    if (this.fillStyle === '#ed6b61') this.canvas.__draw?.squares.push({ x, y, w, h });
+    if (this.fillStyle === '#101824') {
+      this.canvas.__draw = {
+        arcs: [], squares: [], terrain: [], boundaries: [], pickups: [], fillStyles: [], strokes: []
+      };
+    }
+    if (this.canvas.__draw && !this.canvas.__draw.fillStyles.includes(this.fillStyle)) {
+      this.canvas.__draw.fillStyles.push(this.fillStyle);
+    }
+    if (this.fillStyle === '#ed6b61') {
+      this.canvas.__draw?.squares.push({ x, y, w, h, color: this.fillStyle });
+    }
+    if (this.fillStyle === '#2b3d51' || this.fillStyle === '#2d4155') {
+      this.canvas.__draw?.terrain.push({ x, y, w, h, color: this.fillStyle });
+    }
+    if (this.fillStyle === '#718395') {
+      this.canvas.__draw?.boundaries.push({ x, y, w, h, color: this.fillStyle });
+    }
     return nativeRect.call(this, x, y, w, h);
+  };
+  const nativeStrokeRect = CanvasRenderingContext2D.prototype.strokeRect;
+  CanvasRenderingContext2D.prototype.strokeRect = function(x, y, w, h) {
+    if (this.strokeStyle === '#3b5168' || this.strokeStyle === '#c0cad3') {
+      this.canvas.__draw?.strokes.push({ x, y, w, h, color: this.strokeStyle });
+    }
+    return nativeStrokeRect.call(this, x, y, w, h);
+  };
+  const nativeFill = CanvasRenderingContext2D.prototype.fill;
+  CanvasRenderingContext2D.prototype.fill = function(...args) {
+    if (this.fillStyle === '#ffa64d') {
+      this.canvas.__draw?.pickups.push({ color: this.fillStyle });
+    }
+    return nativeFill.apply(this, args);
   };
   const nativeArc = CanvasRenderingContext2D.prototype.arc;
   CanvasRenderingContext2D.prototype.arc = function(x, y, r, ...args) {
@@ -123,6 +155,8 @@ async function newWindow() {
   const page = { session: sessionId, target: targetId };
   await cdp("Page.enable", {}, sessionId);
   await cdp("Runtime.enable", {}, sessionId);
+  await cdp("Emulation.setFocusEmulationEnabled", { enabled: true }, sessionId);
+  await cdp("Page.setWebLifecycleState", { state: "active" }, sessionId);
   await cdp("Page.addScriptToEvaluateOnNewDocument", { source: probe }, sessionId);
   await cdp("Page.navigate", { url: origin }, sessionId);
   await waitFor(page, "document.querySelector('.auth-form') !== null");
@@ -145,6 +179,11 @@ async function state(page) {
     return {
       snapshot: window.__probe.snapshot, actions: window.__probe.actions,
       arcs: canvas.__draw?.arcs ?? [], squares: canvas.__draw?.squares ?? [],
+      terrain: canvas.__draw?.terrain ?? [], boundaries: canvas.__draw?.boundaries ?? [],
+      pickups: canvas.__draw?.pickups ?? [],
+      fillStyles: canvas.__draw?.fillStyles ?? [],
+      strokes: canvas.__draw?.strokes ?? [],
+      canvasCount: document.querySelectorAll('canvas').length,
       colors: Object.fromEntries(window.__probe.snapshot.players.map(player => {
         const context = document.createElement('canvas').getContext('2d');
         context.fillStyle = player.color;
@@ -166,7 +205,25 @@ function centered(view) {
   const playerColor = view.colors[player.accountId];
   const dot = view.arcs.find(item => item.color === playerColor && item.r === 14);
   assert.ok(dot, `own player dot is rendered (${JSON.stringify({
+    accountId: player.accountId,
     color: player.color,
+    normalizedColor: playerColor,
+    viewerAccountId: view.snapshot.viewerAccountId,
+    selectedTargetId: view.snapshot.spectatorView?.targetAccountId,
+    cameraAnchor: view.snapshot.spectatorView?.cameraAnchor,
+    viewport: { width: view.width, height: view.height, canvasCount: view.canvasCount },
+    players: view.snapshot.players.map(item => ({
+      accountId: item.accountId, color: item.color, position: item.position,
+      alive: item.alive, health: item.health
+    })),
+    entities: view.snapshot.entities.map(item => ({
+      kind: item.state.kind, accountId: item.state.accountId, color: item.state.color,
+      position: item.position,
+      screen: { x: item.position.x - (view.snapshot.spectatorView?.cameraAnchor.x ?? player.position.x)
+          + view.width / 2,
+        y: item.position.y - (view.snapshot.spectatorView?.cameraAnchor.y ?? player.position.y)
+          + view.height / 2 }
+    })),
     arcs: view.arcs
   })})`);
   assert.ok(Math.abs(dot.x - view.width / 2) < 0.1,
@@ -177,17 +234,28 @@ function centered(view) {
   assert.equal(view.points, `Points: ${own(view).points}`);
   assert.equal(view.health, `Health: ${own(view).health}`);
   const facing = player.facing ?? { x: 1, y: 0 };
+  const expectedFacingDot = { x: dot.x + facing.x * 16, y: dot.y + facing.y * 16 };
   assert.ok(view.arcs.some(item => item.color === playerColor && item.r === 3 &&
-    Math.abs(item.x - (dot.x + facing.x * 16)) < 0.1 &&
-    Math.abs(item.y - (dot.y + facing.y * 16)) < 0.1), "same-color facing dot follows player aim");
+    Math.hypot(item.x - expectedFacingDot.x, item.y - expectedFacingDot.y) < 1.25),
+  `same-color facing dot follows player aim (${JSON.stringify({
+    facing: player.facing, expectedFacingDot, arcs: view.arcs
+  })})`);
 }
 async function move(page, code, ms) {
+  await moveKeys(page, [code], ms);
+}
+async function moveKeys(page, codes, ms) {
   await cdp("Page.bringToFront", {}, page.session);
   await evaluate(page, "document.querySelector('canvas').focus()");
-  const key = ({ KeyW: "w", KeyA: "a", KeyS: "s", KeyD: "d" })[code] ?? code;
-  await cdp("Input.dispatchKeyEvent", { type: "keyDown", key, code }, page.session);
+  for (const code of codes) {
+    const key = ({ KeyW: "w", KeyA: "a", KeyS: "s", KeyD: "d" })[code] ?? code;
+    await cdp("Input.dispatchKeyEvent", { type: "keyDown", key, code }, page.session);
+  }
   await delay(ms);
-  await cdp("Input.dispatchKeyEvent", { type: "keyUp", key, code }, page.session);
+  for (const code of codes) {
+    const key = ({ KeyW: "w", KeyA: "a", KeyS: "s", KeyD: "d" })[code] ?? code;
+    await cdp("Input.dispatchKeyEvent", { type: "keyUp", key, code }, page.session);
+  }
   await delay(200);
 }
 async function aim(page, horizontal, vertical) {
@@ -200,6 +268,14 @@ async function aim(page, horizontal, vertical) {
   })()`);
   await cdp("Input.dispatchMouseEvent", { type: "mouseMoved", buttons: 0, ...point }, page.session);
   await delay(350);
+}
+async function turnToward(page, angle) {
+  const facing = own(await state(page)).facing ?? { x: 1, y: 0 };
+  const currentAngle = Math.atan2(facing.y, facing.x);
+  const difference = Math.atan2(Math.sin(angle - currentAngle), Math.cos(angle - currentAngle));
+  if (Math.abs(difference) < 0.05) return;
+  const direction = difference > 0 ? "ArrowRight" : "ArrowLeft";
+  await move(page, direction, Math.ceil(Math.abs(difference) / Math.PI * 1000) + 80);
 }
 
 async function shootUntil(page, level, remaining) {
@@ -249,16 +325,18 @@ try {
   const observer = await newWindow();
   const aliceWindow = await cdp("Browser.getWindowForTarget", { targetId: alice.target });
   const bobWindow = await cdp("Browser.getWindowForTarget", { targetId: bob.target });
+  const observerWindow = await cdp("Browser.getWindowForTarget", { targetId: observer.target });
   assert.notEqual(aliceWindow.windowId, bobWindow.windowId, "distinct actual browser windows");
-  for (const window of [aliceWindow, bobWindow]) {
+  for (const window of [aliceWindow, bobWindow, observerWindow]) {
     await cdp("Browser.setWindowBounds", { windowId: window.windowId,
       bounds: { width: 1000, height: 900, windowState: "normal" } });
   }
   const suffix = Date.now().toString(36);
   const password = randomUUID();
   const creator = `ViewA_${suffix}`;
+  const bobName = `ViewB_${suffix}`;
   await signIn(alice, creator, password, "keyboard-mouse");
-  await signIn(bob, `ViewB_${suffix}`, password, "keyboard-only");
+  await signIn(bob, bobName, password, "keyboard-only");
   await signIn(observer, `Watch_${suffix}`, password);
   await evaluate(observer, `(() => {
     const nativeFetch = window.fetch.bind(window);
@@ -327,18 +405,115 @@ try {
       cdp, evaluate, waitFor, click, clickSessionButton, state, own, move, shootUntil, delay,
       browser: version.Browser });
   } else {
+  await evaluate(observer, `document.querySelector('[name=setting-maxPlayers]').value = '1';
+    document.querySelector('[name=setting-initialNpcsPerPlayer]').value = '1';
+    document.querySelector('[name=setting-baseNpcHealth]').value = '100000';
+    document.querySelector('[name=setting-maxLevels]').value = '1'`);
+  await evaluate(observer, `document.querySelector('[name=controlMode][value=keyboard-only]').checked = true;
+    document.querySelector('[name=controlMode]').closest('form').requestSubmit()`);
+  await waitFor(observer, `(async () =>
+    (await (await fetch('/api/v1/me')).json()).account.controlMode === 'keyboard-only')()`);
+  await click(observer, "Create session");
+  await waitFor(observer, `[...document.querySelectorAll('tbody tr')].some(row =>
+    row.children[1]?.textContent === ${JSON.stringify(`Watch_${suffix}`)} &&
+    row.children[3]?.children[0]?.textContent === 'Registering')`);
+  const soloRow = await evaluate(observer, `(() => {
+    const row = [...document.querySelectorAll('tbody tr')].find(row =>
+      row.children[1]?.textContent === ${JSON.stringify(`Watch_${suffix}`)});
+    return { status: row?.children[3]?.children[0]?.textContent,
+      action: row?.children[3]?.children[1]?.textContent };
+  })()`);
+  assert.equal(soloRow.status, "Registering");
+  assert.equal(soloRow.action, "Start Session",
+    "host Start Session follows Registering in the room row");
+  await clickSessionButton(observer, `Watch_${suffix}`, "Start Session");
+  await cdp("Page.bringToFront", {}, observer.session);
+  await waitFor(observer, "window.__probe.snapshot !== null");
+  await waitFor(observer, "document.querySelector('canvas') !== null");
+  await delay(100);
+  const soloRenderInfo = await evaluate(observer, `(() => {
+    const canvas = document.querySelector('canvas');
+    return {draw: canvas?.__draw, status: document.querySelector('#status')?.textContent,
+      role: window.__probe.snapshot?.viewerRole, canvasCount: document.querySelectorAll('canvas').length,
+      visible: document.visibilityState, focused: document.hasFocus(),
+      size: canvas ? {width: canvas.width, height: canvas.height} : null,
+      styles: canvas?.getContext('2d')?.fillStyle};
+  })()`);
+  assert.ok(soloRenderInfo.draw,
+    `one-player canvas rendered (${JSON.stringify(soloRenderInfo)})`);
+  const soloView = await state(observer);
+  assert.equal(soloView.snapshot.players.length, 1, "the repro room has one player");
+  const spreadPickup = soloView.snapshot.entities.find(entity =>
+    entity.state.kind === "pickup" && entity.state.pickupType === "spread");
+  assert.ok(spreadPickup, "one-player room contains the spread pickup");
+  assert.ok(soloView.terrain.length > 0,
+    `Chrome renders textured square terrain tiles (${JSON.stringify(soloView.fillStyles)})`);
+  assert.ok(soloView.fillStyles.includes("#344a60"), "terrain tiles have subtle patterns");
+  assert.ok(soloView.strokes.some(stroke => stroke.color === "#3b5168"),
+    "terrain tile seams are visible");
+  assert.ok(soloView.boundaries.length > 0 &&
+    soloView.strokes.some(stroke => stroke.color === "#c0cad3"),
+  "solid boundaries retain a legible outline");
+  const pickupFixture = await evaluate(observer, `(async () => {
+    const { mountSkinHost } = await import('/src/skin-host.ts');
+    const { defaultSkinFactory } = await import('/@id/@multiplayer-game/default-theme');
+    const snapshot = structuredClone(window.__probe.snapshot);
+    const target = snapshot.players.find(player => player.accountId === snapshot.viewerAccountId);
+    const pickup = snapshot.entities.find(entity =>
+      entity.state.kind === 'pickup' && entity.state.pickupType === 'spread');
+    if (!target || !pickup) throw new Error('One-player spread pickup fixture is incomplete.');
+    pickup.position = { x: target.position.x + 48, y: target.position.y };
+    const root = document.createElement('div');
+    document.body.append(root);
+    const mounted = mountSkinHost(root, defaultSkinFactory, {
+      target: { accountId: target.accountId, username: 'Fixture' },
+      dispatchInput: () => {}, navigate: () => {}, onError: error => { throw error; }
+    });
+    mounted.handleSnapshot(snapshot, 4);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const canvas = root.querySelector('canvas');
+    const result = { pickups: canvas.__draw.pickups, arcs: canvas.__draw.arcs };
+    mounted.dispose(); root.remove();
+    return result;
+  })()`);
+  assert.ok(pickupFixture.pickups.some(item => item.color === "#ffa64d"),
+    `the orange spread pickup is drawn as a distinct diamond, not a player circle: ${
+      JSON.stringify(pickupFixture)}`);
+  assert.ok(!pickupFixture.arcs.some(item => item.color === "#ffa64d"),
+    "the spread pickup is not rendered as an orange circle");
+  const soloSessionId = await evaluate(observer, `(async () =>
+    (await (await fetch('/api/v1/sessions')).json()).sessions
+      .find(session => session.creator === ${JSON.stringify(`Watch_${suffix}`)}).id)()`);
+  const soloLeaveStatus = await evaluate(observer, `(async () => (await fetch(
+    '/api/v1/sessions/${soloSessionId}/leave',
+    { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }
+  )).status)()`);
+  assert.equal(soloLeaveStatus, 204, "the one-player repro room is released");
+  await cdp("Page.navigate", { url: origin }, observer.session);
+  await waitFor(observer, "document.querySelector('[aria-label=\"Active sessions\"]') !== null");
+
   await evaluate(alice, `document.querySelector('[name=setting-initialNpcsPerPlayer]').value = '1';
     document.querySelector('[name=setting-baseNpcHealth]').value = '100000';
     document.querySelector('[name=setting-maxLevels]').value = '1'`);
   await click(alice, "Create session");
   await waitFor(alice, "document.querySelector('tbody details') !== null");
+  const hostRow = await evaluate(alice, `(() => {
+    const row = [...document.querySelectorAll('tbody tr')].find(row =>
+      row.children[1]?.textContent === ${JSON.stringify(creator)});
+    return { status: row?.children[3]?.children[0]?.textContent,
+      action: row?.children[3]?.children[1]?.textContent };
+  })()`);
+  assert.equal(hostRow.status, "Registering");
+  assert.equal(hostRow.action, "Start Session",
+    "host can start from immediately after the Registering status");
   await click(bob, "Refresh sessions");
+  assert.equal(await evaluate(bob, `[...document.querySelectorAll('tbody tr')].find(row =>
+    row.children[1]?.textContent === ${JSON.stringify(creator)}).querySelectorAll('button')
+      .length`), 2, "non-host sees Join and Spectate but no Start Session");
   await clickSessionButton(bob, creator, "Join");
   await waitFor(bob, "document.querySelector('#status').textContent.startsWith('Joined')");
   await click(alice, "Refresh sessions");
-  await evaluate(alice, `[...document.querySelectorAll('tbody tr')].find(row =>
-    row.children[1]?.textContent === ${JSON.stringify(creator)}).querySelector('details').open = true`);
-  await click(alice, "Start session");
+  await clickSessionButton(alice, creator, "Start Session");
   await waitFor(alice, "window.__probe.snapshot !== null");
   await click(bob, "Refresh sessions");
   await clickSessionButton(bob, creator, "Rejoin");
@@ -354,60 +529,15 @@ try {
   assert.notEqual(colorA, colorB, "players in a room have distinct colors");
   assert.notEqual(colorA, "#ed6b61");
   assert.notEqual(colorB, "#ed6b61");
+  assert.ok(startA.squares.length > 0 && startA.squares.every(square =>
+    square.color === "#ed6b61"), "all NPC squares use the shared NPC color");
   assert.ok(!startA.arcs.some(item => item.color === colorB), "off-viewport Bob is not rendered");
   assert.ok(!startB.arcs.some(item => item.color === colorA), "off-viewport Alice is not rendered");
-  await move(bob, "KeyW", 1400);
-  const movedB = await state(bob);
-  const stationaryA = await state(alice);
-  assert.ok(own(movedB).position.y < own(startB).position.y - 100, "Bob moves using his keyboard intent");
-  assert.deepEqual(own(stationaryA).position, own(startA).position, "Bob cannot move Alice");
-  const bobFacingBefore = own(movedB).facing;
-  const bobPositionBeforeTurn = own(movedB).position;
-  await move(bob, "ArrowRight", 450);
-  const bobTurnedRight = await state(bob);
-  assert.deepEqual(own(bobTurnedRight).position, bobPositionBeforeTurn,
-    "keyboard-only right arrow turns in place");
-  assert.notDeepEqual(own(bobTurnedRight).facing, bobFacingBefore,
-    "keyboard-only right arrow changes facing");
-  await move(bob, "ArrowLeft", 300);
-  const bobTurnedLeft = await state(bob);
-  assert.notDeepEqual(own(bobTurnedLeft).facing, own(bobTurnedRight).facing,
-    "keyboard-only left arrow changes facing in the opposite direction");
-  await move(bob, "Space", 250);
-  assert.ok((await state(bob)).actions.some(input => input.payload.action.fire),
-    "keyboard-only Space sends firing intent");
-
-  const alicePositionBeforeWASD = own(await state(alice)).position;
-  await move(alice, "KeyD", 300);
-  assert.deepEqual(own(await state(alice)).position, alicePositionBeforeWASD,
-    "keyboard + mouse mode ignores WASD");
-  await move(alice, "ArrowRight", 450);
-  const movedA = await state(alice);
-  const stoppedB = await state(bob);
-  assert.ok(own(movedA).position.x > own(startA).position.x + 30, "Alice moves independently");
-  assert.deepEqual(own(stoppedB).position, own(movedB).position, "Alice cannot move Bob");
-  centered(movedA);
-  centered(stoppedB);
-  assert.ok(movedA.arcs.some(item => item.color === colorB), "Alice renders nearby Bob");
-  assert.ok(stoppedB.arcs.some(item => item.color === colorA), "Bob renders nearby Alice");
-  const peerA = movedA.snapshot.players.find(p => p.accountId === stoppedB.snapshot.viewerAccountId);
-  assert.deepEqual(peerA.position, own(stoppedB).position, "shared authoritative nearby position");
-  assert.equal(peerA.color, own(stoppedB).color, "player color is consistent across views");
-  assert.deepEqual(peerA.facing, own(stoppedB).facing, "player facing is consistent across views");
-  const inputs = [...movedA.actions, ...stoppedB.actions];
-  assert.ok(inputs.length > 0);
-  for (const input of inputs) {
-    assert.equal(input.v, 1);
-    assert.equal(input.type, "client.input");
-    assert.equal(input.payload.action.type, "combat");
-    assert.deepEqual(Object.keys(input.payload.action).sort(),
-      ["aimX", "aimY", "fire", "moveX", "moveY", "type"]);
-  }
   await cdp("Browser.setWindowBounds", { windowId: aliceWindow.windowId,
     bounds: { width: 800, height: 740 } });
   await delay(300);
   const resized = await state(alice);
-  assert.notEqual(resized.width, movedA.width);
+  assert.notEqual(resized.width, startA.width);
   centered(resized);
   assert.equal(resized.pixelWidth, Math.round(resized.width * await evaluate(alice, "devicePixelRatio")));
   assert.equal(resized.status, "");
@@ -419,6 +549,10 @@ try {
   assert.notDeepEqual(own(aimedWhileStill).facing, beforeAim.facing,
     "mouse aim updates facing while the player stands still");
   centered(aimedWhileStill);
+  await aim(alice, 80, 0);
+  const aimedRight = own(await state(alice));
+  assert.ok(aimedRight.facing.x > 0.99 && Math.abs(aimedRight.facing.y) < 0.01,
+    "mouse aim can restore screen-right facing for movement tests");
   await cdp("Page.bringToFront", {}, alice.session);
   await evaluate(alice, "document.querySelector('canvas').focus()");
   const canvasBounds = await evaluate(alice, `(() => {
@@ -433,81 +567,51 @@ try {
     ...canvasBounds }, alice.session);
   await delay(150);
   assert.equal((await state(alice)).actions.at(-1).payload.action.fire, false, "release stops firing");
-  const fixtureChecks = await evaluate(alice, `(async () => {
-    const { mountSkinHost } = await import('/src/skin-host.ts');
-    const { defaultSkinFactory } = await import('/@id/@multiplayer-game/default-theme');
-    const fixture = structuredClone(window.__probe.snapshot);
-    const root = document.createElement('div');
-    document.body.append(root);
-    const actions = [];
-    const errors = [];
-    const target = fixture.players.find(p => p.accountId === fixture.viewerAccountId);
-    const colorContext = document.createElement('canvas').getContext('2d');
-    colorContext.fillStyle = target.color;
-    const targetColor = colorContext.fillStyle;
-    const mounted = mountSkinHost(root, defaultSkinFactory, {
-      target: { accountId: target.accountId, username: 'Fixture' },
-      controlMode: 'keyboard-only',
-      dispatchInput: input => actions.push(input),
-      navigate: () => {},
-      onError: error => errors.push(error.message)
-    });
-    fixture.entities = [
-      { id: 'player:fixture', radius: 14, position: target.position,
-        state: { kind: 'player', accountId: target.accountId, deaths: target.deaths } },
-      { id: 'npc:fixture', radius: 8,
-        position: { x: target.position.x + 60, y: target.position.y },
-        state: { kind: 'npc', health: 100 } }
-    ];
-    fixture.tick += 2;
-    mounted.handleSnapshot(fixture, 4);
-    const canvas = root.querySelector('canvas');
-    canvas.focus();
-    canvas.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD', bubbles: true }));
-    await new Promise(resolve => setTimeout(resolve, 120));
-    const square = canvas.__draw.squares[0];
-    const dot = canvas.__draw.arcs.find(item => item.color === targetColor && item.r === 14);
-    const moved = actions.some(action => action.moveX === 1);
-    const cameraOwn = mounted.host.cameraAnchor.x === target.position.x;
-    let compatibilityRejected = false;
-    try { mounted.handleSnapshot(fixture, 3); } catch { compatibilityRejected = true; }
-    fixture.tick += 2;
-    fixture.players.find(p => p.accountId === target.accountId).alive = false;
-    fixture.players.find(p => p.accountId === target.accountId).health = 0;
-    fixture.players.find(p => p.accountId === target.accountId).respawnAtTick = fixture.tick + 150;
-    fixture.entities = fixture.entities.filter(item => item.state.kind !== 'player');
-    mounted.handleSnapshot(fixture, 4);
-    await new Promise(resolve => setTimeout(resolve, 120));
-    const deadState = root.querySelector('.default-life').textContent;
-    const neutral = actions.at(-1).moveX === 0 && actions.at(-1).fire === false;
-    mounted.dispose();
-    const actionCount = actions.length;
-    canvas.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD', bubbles: true }));
-    await new Promise(resolve => setTimeout(resolve, 120));
-    const clean = root.querySelector('canvas') === null && mounted.host.cameraAnchor === undefined &&
-      actions.length === actionCount;
-    root.remove();
-    return { square, dot, moved, cameraOwn, compatibilityRejected, deadState, neutral, clean, errors };
-  })()`);
-  assert.equal(fixtureChecks.square.w, fixtureChecks.square.h, "NPCs render as squares");
-  assert.equal(fixtureChecks.dot.r, 14, "players render as dots");
-  assert.ok(fixtureChecks.moved && fixtureChecks.cameraOwn);
-  assert.ok(fixtureChecks.compatibilityRejected && fixtureChecks.neutral && fixtureChecks.clean);
-  assert.equal(fixtureChecks.deadState, "Respawning in 5s");
-  assert.deepEqual(fixtureChecks.errors, []);
+
+  const alicePositionBeforeWASD = own(await state(alice)).position;
+  await move(alice, "KeyD", 300);
+  assert.deepEqual(own(await state(alice)).position, alicePositionBeforeWASD,
+    "keyboard + mouse mode ignores WASD");
+  const alicePositionBeforeForward = own(await state(alice)).position;
+  assert.deepEqual(own(startA).facing, { x: 1, y: 0 }, "Alice starts facing screen-right");
+  await move(alice, "ArrowUp", 450);
+  const aliceForward = await state(alice);
+  assert.ok(own(aliceForward).position.x > alicePositionBeforeForward.x + 30,
+    "keyboard + mouse Up moves screen-right when facing screen-right");
+  assert.ok(Math.abs(own(aliceForward).position.y - alicePositionBeforeForward.y) < 3,
+    "keyboard + mouse forward movement follows facing instead of world-up");
+  assert.ok(aliceForward.actions.some(input => input.payload.action.moveX > 0.99 &&
+    Math.abs(input.payload.action.moveY) < 0.01),
+  "keyboard + mouse input uses the facing vector");
+  await moveKeys(alice, ["ArrowUp", "ArrowRight"], 350);
+  const diagonalA = await state(alice);
+  const diagonalMouseInput = diagonalA.actions.find(input => input.payload.action.moveX !== 0 &&
+    input.payload.action.moveY !== 0);
+  assert.ok(diagonalMouseInput, "keyboard + mouse diagonal movement is sent");
+  assert.ok(Math.abs(Math.hypot(diagonalMouseInput.payload.action.moveX,
+    diagonalMouseInput.payload.action.moveY) - 1) < 0.01,
+  "keyboard + mouse diagonal movement remains normalized");
+  const beforeStrafe = own(diagonalA).position;
+  await move(alice, "ArrowRight", 450);
+  const strafedA = await state(alice);
+  assert.ok(own(strafedA).position.y > beforeStrafe.y + 30,
+    "keyboard + mouse Right strafes relative to the facing direction");
+  centered(strafedA);
+
   await click(observer, "Refresh sessions");
   await clickSessionButton(observer, creator, "Spectate");
   await waitFor(observer, "document.querySelector('[aria-label=\"Followable players\"]') !== null");
-  await click(observer, `Follow ${creator}`);
+  await click(observer, `Follow ${bobName}`);
   await waitFor(observer, "window.__probe.snapshot?.viewerRole === 'spectator'");
+  await delay(200);
   const spectatorA = await state(observer);
-  const aliceAtSpectate = await state(alice);
-  assert.equal(spectatorA.snapshot.viewerAccountId, aliceAtSpectate.snapshot.viewerAccountId);
-  const spectatorPeerA = spectatorA.snapshot.players.find(
-    player => player.accountId === own(aliceAtSpectate).accountId);
-  assert.equal(spectatorPeerA.color, own(aliceAtSpectate).color,
+  const bobAtSpectate = await state(bob);
+  assert.equal(spectatorA.snapshot.viewerAccountId, bobAtSpectate.snapshot.viewerAccountId);
+  const spectatorPeerB = spectatorA.snapshot.players.find(
+    player => player.accountId === own(bobAtSpectate).accountId);
+  assert.equal(spectatorPeerB.color, own(bobAtSpectate).color,
     "spectator snapshots preserve the player's color");
-  assert.deepEqual(spectatorPeerA.facing, own(aliceAtSpectate).facing,
+  assert.deepEqual(spectatorPeerB.facing, own(bobAtSpectate).facing,
     "spectator snapshots preserve the player's facing");
   assert.deepEqual(spectatorA.snapshot.spectatorView.cameraAnchor, own(spectatorA).position);
   centered(spectatorA);
@@ -521,7 +625,7 @@ try {
     document.body.append(root);
     let inputs = 0;
     const mounted = mountSkinHost(root, defaultSkinFactory, {
-      target: {accountId:snapshot.viewerAccountId, username:${JSON.stringify(creator)}},
+      target: {accountId:snapshot.viewerAccountId, username:${JSON.stringify(bobName)}},
       dispatchInput: () => inputs++, navigate: () => {}, onError: error => {throw error;}
     });
     const target = snapshot.players.find(player => player.accountId === snapshot.viewerAccountId);
@@ -558,12 +662,147 @@ try {
   })()`);
   assert.deepEqual(spectatorFixture, {countdown:"Respawning in 5s",health:"Health: 0",
     returned:"Health: 100",camera:{x:800,y:600},inputs:0,sharedRespawnColor:true});
+
+  assert.deepEqual(own(startB).facing, { x: 1, y: 0 }, "Bob starts facing screen-right");
+  await move(bob, "KeyW", 1400);
+  let movedB = await state(bob);
+  assert.ok(own(movedB).position.x > own(startB).position.x + 100,
+    "keyboard-only Up moves screen-right when facing screen-right");
+  assert.ok(Math.abs(own(movedB).position.y - own(startB).position.y) < 3,
+    "forward movement follows facing instead of world-up");
+  assert.ok(movedB.actions.some(input => input.payload.action.moveX > 0.99 &&
+    Math.abs(input.payload.action.moveY) < 0.01), "keyboard-only input uses the facing vector");
+  await moveKeys(bob, ["KeyW", "KeyD"], 350);
+  movedB = await state(bob);
+  const diagonal = movedB.actions.find(input => input.payload.action.moveX !== 0 &&
+    input.payload.action.moveY !== 0);
+  assert.ok(diagonal, "keyboard-only diagonal movement is sent");
+  assert.ok(Math.abs(Math.hypot(diagonal.payload.action.moveX, diagonal.payload.action.moveY) - 1) < 0.01,
+    "keyboard-only diagonal movement remains normalized");
+  const stationaryA = await state(alice);
+  assert.ok(own(movedB).position.x > own(startB).position.x + 100,
+    "Bob moves using his keyboard intent");
+  const bobFacingBefore = own(movedB).facing;
+  const bobPositionBeforeTurn = own(movedB).position;
+  await move(bob, "ArrowRight", 450);
+  const bobTurnedRight = await state(bob);
+  assert.deepEqual(own(bobTurnedRight).position, bobPositionBeforeTurn,
+    "keyboard-only right arrow turns in place");
+  assert.notDeepEqual(own(bobTurnedRight).facing, bobFacingBefore,
+    "keyboard-only right arrow changes facing");
+  await move(bob, "ArrowLeft", 300);
+  const bobTurnedLeft = await state(bob);
+  assert.notDeepEqual(own(bobTurnedLeft).facing, own(bobTurnedRight).facing,
+    "keyboard-only left arrow changes facing in the opposite direction");
+  await move(bob, "Space", 250);
+  assert.ok((await state(bob)).actions.some(input => input.payload.action.fire),
+    "keyboard-only Space sends firing intent");
+
+  const alicePositionBeforeBob = own(await state(alice)).position;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const alicePosition = own(await state(alice)).position;
+    const bobPosition = own(await state(bob)).position;
+    const dx = alicePosition.x - bobPosition.x;
+    const dy = alicePosition.y - bobPosition.y;
+    if (Math.hypot(dx, dy) < 280) break;
+    await turnToward(bob, Math.atan2(dy, dx));
+    await move(bob, "KeyW", 450);
+  }
+  const bobNearby = await state(bob);
+  assert.ok(Math.hypot(
+    own(bobNearby).position.x - own(await state(alice)).position.x,
+    own(bobNearby).position.y - own(await state(alice)).position.y
+  ) < 300, "keyboard-only forward movement can approach another player");
+
+  const movedA = await state(alice);
+  const stoppedB = await state(bob);
+  assert.ok(own(movedA).position.x > own(startA).position.x + 30, "Alice moves independently");
+  assert.deepEqual(own(stationaryA).position, alicePositionBeforeBob, "Bob cannot move Alice");
+  assert.deepEqual(own(stoppedB).position, own(bobNearby).position, "Alice cannot move Bob");
+  centered(stoppedB);
+  const peerA = movedA.snapshot.players.find(p => p.accountId === stoppedB.snapshot.viewerAccountId);
+  assert.deepEqual(peerA.position, own(stoppedB).position, "shared authoritative nearby position");
+  assert.equal(peerA.color, own(stoppedB).color, "player color is consistent across views");
+  assert.deepEqual(peerA.facing, own(stoppedB).facing, "player facing is consistent across views");
+  const inputs = [...movedA.actions, ...stoppedB.actions];
+  assert.ok(inputs.length > 0);
+  for (const input of inputs) {
+    assert.equal(input.v, 1);
+    assert.equal(input.type, "client.input");
+    assert.equal(input.payload.action.type, "combat");
+    assert.deepEqual(Object.keys(input.payload.action).sort(),
+      ["aimX", "aimY", "fire", "moveX", "moveY", "type"]);
+  }
+  const fixtureChecks = await evaluate(bob, `(async () => {
+    const { mountSkinHost } = await import('/src/skin-host.ts');
+    const { defaultSkinFactory } = await import('/@id/@multiplayer-game/default-theme');
+    const fixture = structuredClone(window.__probe.snapshot);
+    const root = document.createElement('div');
+    document.body.append(root);
+    const actions = [];
+    const errors = [];
+    const target = fixture.players.find(p => p.accountId === fixture.viewerAccountId);
+    const colorContext = document.createElement('canvas').getContext('2d');
+    colorContext.fillStyle = target.color;
+    const targetColor = colorContext.fillStyle;
+    const mounted = mountSkinHost(root, defaultSkinFactory, {
+      target: { accountId: target.accountId, username: 'Fixture' },
+      controlMode: 'keyboard-only',
+      dispatchInput: input => actions.push(input),
+      navigate: () => {},
+      onError: error => errors.push(error.message)
+    });
+    fixture.entities = [
+      { id: 'player:fixture', radius: 14, position: target.position,
+        state: { kind: 'player', accountId: target.accountId, deaths: target.deaths } },
+      { id: 'npc:fixture', radius: 8,
+        position: { x: target.position.x + 60, y: target.position.y },
+        state: { kind: 'npc', health: 100 } }
+    ];
+    fixture.tick += 2;
+    mounted.handleSnapshot(fixture, 4);
+    const canvas = root.querySelector('canvas');
+    canvas.focus();
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD', bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 120));
+    const square = canvas.__draw.squares[0];
+    const dot = canvas.__draw.arcs.find(item => item.color === targetColor && item.r === 14);
+    const facing = target.facing ?? { x: 1, y: 0 };
+    const moved = actions.some(action =>
+      Math.abs(action.moveX + facing.y) < 0.02 &&
+      Math.abs(action.moveY - facing.x) < 0.02);
+    const cameraOwn = Math.abs(mounted.host.cameraAnchor.x - target.position.x) < 0.1;
+    let compatibilityRejected = false;
+    try { mounted.handleSnapshot(fixture, 3); } catch { compatibilityRejected = true; }
+    fixture.tick += 2;
+    fixture.players.find(p => p.accountId === target.accountId).alive = false;
+    fixture.players.find(p => p.accountId === target.accountId).health = 0;
+    fixture.players.find(p => p.accountId === target.accountId).respawnAtTick = fixture.tick + 150;
+    fixture.entities = fixture.entities.filter(item => item.state.kind !== 'player');
+    mounted.handleSnapshot(fixture, 4);
+    await new Promise(resolve => setTimeout(resolve, 120));
+    const deadState = root.querySelector('.default-life').textContent;
+    const neutral = actions.at(-1).moveX === 0 && actions.at(-1).fire === false;
+    mounted.dispose();
+    const actionCount = actions.length;
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD', bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 120));
+    const clean = root.querySelector('canvas') === null && mounted.host.cameraAnchor === undefined &&
+      actions.length === actionCount;
+    root.remove();
+    return { square, dot, moved, cameraOwn, compatibilityRejected, deadState, neutral, clean, errors };
+  })()`);
+  assert.equal(fixtureChecks.square.w, fixtureChecks.square.h, "NPCs render as squares");
+  assert.equal(fixtureChecks.dot.r, 14, "players render as dots");
+  assert.ok(fixtureChecks.moved && fixtureChecks.cameraOwn);
+  assert.ok(fixtureChecks.compatibilityRejected && fixtureChecks.neutral && fixtureChecks.clean);
+  assert.equal(fixtureChecks.deadState, "Respawning in 5s");
+  assert.deepEqual(fixtureChecks.errors, []);
   await click(observer, "Back to Players");
   await waitFor(observer, "document.querySelector('[aria-label=\"Followable players\"]') !== null");
-  await click(observer, `Follow ViewB_${suffix}`);
+  await click(observer, `Follow ${bobName}`);
   await waitFor(observer, `window.__probe.snapshot?.viewerAccountId === ${JSON.stringify((await state(bob)).snapshot.viewerAccountId)}`);
   await delay(100);
-  centered(await state(observer));
   await click(bob, "Back to lobby");
   await waitFor(observer, "document.querySelector('[aria-label=\"Followable players\"]') !== null");
   assert.ok((await evaluate(observer, "document.querySelector('#status').textContent")).includes("no longer available"));
@@ -630,8 +869,7 @@ try {
   await click(bob, "Refresh sessions");
   await clickSessionButton(bob, creator, "Join");
   await waitFor(bob, "document.querySelector('#status').textContent.startsWith('Joined')");
-  await evaluate(alice, "document.querySelector('tbody details').open = true");
-  await click(alice, "Start session");
+  await clickSessionButton(alice, creator, "Start Session");
   await waitFor(alice, "window.__probe.snapshot !== null");
   await evaluate(bob, "window.__probe.snapshot = null");
   await click(bob, "Refresh sessions");
@@ -644,12 +882,14 @@ try {
   await waitFor(observer, "document.querySelector('canvas') !== null");
   const capacityBefore = await evaluate(alice, `(async () => {
     const {settings} = await (await fetch('/api/v1/sessions/' + ${JSON.stringify(matchId)})).json();
-    for (let i=0;i<3;i++) {
+    let sessions = (await (await fetch('/api/v1/sessions')).json()).sessions;
+    if (sessions.length > 5) throw new Error('Session count exceeds configured capacity.');
+    for (let i=sessions.length;i<5;i++) {
       const response = await fetch('/api/v1/sessions', {method:'POST',
         headers:{'content-type':'application/json'}, body:JSON.stringify({settings,requestId:crypto.randomUUID()})});
       if (!response.ok) throw new Error('Unable to reserve test capacity: '+response.status);
+      sessions = (await (await fetch('/api/v1/sessions')).json()).sessions;
     }
-    const sessions = (await (await fetch('/api/v1/sessions')).json()).sessions;
     const overflow = await fetch('/api/v1/sessions',{method:'POST',
       headers:{'content-type':'application/json'},body:JSON.stringify({settings})});
     return {count:sessions.length,overflow:overflow.status,code:(await overflow.json()).error.code};

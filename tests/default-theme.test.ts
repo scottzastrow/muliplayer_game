@@ -105,6 +105,32 @@ describe("default theme registration", () => {
     expect(first.snapshot({ accountId: "account-1", role: "player" }).acceptedInputs).toBe(1);
   });
 
+  it("includes the spread pickup as a non-player entity in a one-player room", () => {
+    const roster: readonly RosterMember[] = [
+      { accountId: "account-1", username: "host", joinedOrder: 0 }
+    ];
+    const module = DEFAULT_THEME_REGISTRATION.moduleFactory.create(
+      createContext(),
+      { initialNpcsPerPlayer: 1, baseNpcHealth: 100_000 },
+      roster,
+      42
+    );
+    try {
+      module.initialize();
+      const snapshot = DefaultViewSchema.parse(
+        module.snapshot({ accountId: "account-1", role: "player" })
+      );
+      expect(snapshot.players).toHaveLength(1);
+      expect(snapshot.entities.filter((entity) => entity.state.kind === "player"))
+        .toHaveLength(1);
+      expect(snapshot.entities.some((entity) =>
+        entity.state.kind === "pickup" && entity.state.pickupType === "spread"
+      )).toBe(true);
+    } finally {
+      module.dispose();
+    }
+  });
+
   it("assigns distinct room colors and keeps authoritative facing through death and respawn", () => {
     const roster: readonly RosterMember[] = [
       { accountId: "account-1", username: "host", joinedOrder: 0 },
