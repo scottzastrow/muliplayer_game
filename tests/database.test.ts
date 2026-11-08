@@ -15,6 +15,7 @@ const expectedMigrations = [
 "003-match-display-name.sql",
 "004-default-theme-display-name.sql",
 "005-single-operator.sql",
+"006-fixture-theme.sql",
 ];
 
 let temporaryDirectory: string | undefined;
