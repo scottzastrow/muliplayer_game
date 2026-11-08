@@ -43,6 +43,8 @@ function packageFiles(options: {
     ...defaultThemeDefinition,
     id: options.themeId ?? "test-theme",
     name: "Test Theme",
+    project: "Package validation fixture",
+    author: "Engine test team",
     version: options.version ?? "1.0.0",
     assets
   };
@@ -75,6 +77,71 @@ function fixture() {
 }
 
 describe("theme package validation and installation", () => {
+  it.each(["project", "author"] as const)(
+    "rejects missing, blank and non-string %s without changing installed themes",
+    async (field) => {
+      const state = fixture();
+      try {
+        for (const value of [undefined, "", " \t\r\n\u00a0", null, 42]) {
+          const files = packageFiles();
+          if (value === undefined) delete files.manifest[field];
+          else files.manifest[field] = value;
+          files.manifest.assetsDigest = calculateThemePackageDigest(files.manifest);
+          files.entries[0]!.bytes = Buffer.from(JSON.stringify(files.manifest));
+          writeFileSync(state.archivePath, createZip(files.entries));
+          await expect(validateAndInstallThemePackage(
+            state.database, state.archivePath, state.assetDirectory, state.modules, state.renderers
+          )).rejects.toThrow(`${field === "project" ? "Project" : "Author"} (${field})`);
+          expect(state.database.prepare("SELECT * FROM theme_revisions ORDER BY theme_id, version").all())
+            .toEqual(state.registryBefore);
+          expect(existsSync(state.assetDirectory)).toBe(false);
+        }
+      } finally {
+        state.database.close();
+      }
+    }
+  );
+
+  it("identifies both missing credit fields", async () => {
+    const state = fixture();
+    const files = packageFiles();
+    delete files.manifest.project;
+    delete files.manifest.author;
+    files.manifest.assetsDigest = calculateThemePackageDigest(files.manifest);
+    files.entries[0]!.bytes = Buffer.from(JSON.stringify(files.manifest));
+    writeFileSync(state.archivePath, createZip(files.entries));
+    try {
+      await expect(validateAndInstallThemePackage(
+        state.database, state.archivePath, state.assetDirectory, state.modules, state.renderers
+      )).rejects.toThrow(/Project \(project\)[\s\S]*Author \(author\)/);
+    } finally {
+      state.database.close();
+    }
+  });
+
+  it("preserves credited manifest bytes and digest without requiring a runtime migration", async () => {
+    const state = fixture();
+    const files = packageFiles();
+    files.manifest.project = "  Test project  ";
+    files.manifest.author = "  Public theme team  ";
+    files.manifest.course = "Optional course";
+    files.manifest.assetsDigest = calculateThemePackageDigest(files.manifest);
+    files.entries[0]!.bytes = Buffer.from(JSON.stringify(files.manifest));
+    writeFileSync(state.archivePath, createZip(files.entries));
+    try {
+      const installed = await validateAndInstallThemePackage(
+        state.database, state.archivePath, state.assetDirectory, state.modules, state.renderers
+      );
+      expect(readFileSync(join(installed.assetRoot, "theme.json"))).toEqual(files.entries[0]!.bytes);
+      expect(installed.revision.packageDigest).toBe(files.manifest.assetsDigest);
+      expect(installed.revision.definition).not.toHaveProperty("project");
+      expect(installed.revision.definition).not.toHaveProperty("author");
+      expect(installed.revision.definition).not.toHaveProperty("course");
+    } finally {
+      state.database.close();
+    }
+  });
+
   it("streams a valid ZIP asset, checks its manifest hash and registers atomically", async () => {
     const state = fixture();
     const files = packageFiles();

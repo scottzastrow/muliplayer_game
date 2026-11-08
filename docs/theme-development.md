@@ -41,6 +41,60 @@ referencing registered code; it does not compile or execute archive contents.
 Operator credentials and `.env` values are local runtime configuration and must
 never be copied into theme source, preview fixtures, or packages.
 
+## Theme credits at handoff
+
+Every new export/import manifest must contain nonblank string `project` (Project)
+and `author` (public Author, a person or team). `course` (Course) is an optional
+string. These credits are separate from the theme's ID, display name and account
+identity; a display name is not a substitute for confirmed Project or Author.
+
+```json
+{
+  "project": "Example Theme",
+  "author": "Example Theme Team",
+  "course": "Optional course"
+}
+```
+
+This fragment extends the existing manifest; it is not a complete theme package.
+`theme:code`, `theme:validate`, and admin ZIP upload enforce the credits. Missing,
+empty, whitespace-only or non-string values identify the exact field, for example
+`Project (project) is required and must be a nonblank string.` If both are
+missing, both appear in the validation error. Import failures leave installed
+revisions unchanged. Existing installed themes without credits continue to run;
+they must add confirmed credits before their next export/import.
+
+Credits are retained in the imported `theme.json` and included in the canonical
+package digest. Editing any credit requires recalculating that digest. Validation
+does not trim the stored strings or rewrite existing installed revisions. The
+compiled runtime SDK definition is unchanged: handoff-only credit fields are
+separated before runtime compatibility checks.
+
+### Setup and generated-source policy
+
+Setup tooling must suggest credits found in existing manifest/package metadata
+or recognizable Project/Author comments, identify their sources, and ask the
+developer to confirm or replace them before writing `theme.json`. Conflicting
+names must be shown as choices; never silently pick one or infer public authorship
+from private account, Git identity or machine configuration.
+
+Generated source headers must use the confirmed Project and Author plus a
+**file-specific Description**. Course is optional. Use `/* ... */` for Java
+and JavaScript/TypeScript, `<!-- ... -->` for HTML, and `#` lines for Python.
+JSON stays comment-free. The header template adds no copyright or SPDX lines.
+Preserve existing contributor credits, asset source/license attribution and
+unrelated comments; do not replace prior authorship with the confirmed public
+theme credit. Preserve shebangs, encoding declarations and other language
+preambles; escape or reject embedded comment terminators before generating source.
+
+**Access limit:** This engine checkout has no setup, ZIP export or source-header
+generator. The companion local checkout was unavailable. GitHub `main` contains
+only README; inspected `001-theme-development` contains planning documents and
+`templates/theme/` as a documented skeleton, not runnable tooling. Setup,
+export, header-generation implementation/tests and companion instruction edits
+remain blocked in `specs/002-theme-credits/tasks.md`. Do not treat the policy above
+as executed functionality or create a duplicate workflow to bypass missing access.
+
 ## Extension points and compatibility
 
 Import only `@multiplayer-game/theme-sdk` for module, skin, capability, map, and

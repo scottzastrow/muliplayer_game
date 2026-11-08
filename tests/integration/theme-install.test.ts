@@ -215,6 +215,32 @@ describe("theme installation conformance", () => {
     await reject(archiveFor(manifest(defaultThemeDefinition, pixelOverflow), pixelOverflow), "decoded limit");
   }, 30_000);
 
+  it("returns exact missing credit fields through upload without disrupting legacy themes", async () => {
+    const baseline = registryRows();
+    for (const field of ["project", "author"] as const) {
+      for (const value of [undefined, "", " \t\r\n\u00a0", null, 42]) {
+        const definition = manifest();
+        if (value === undefined) delete definition[field];
+        else definition[field] = value;
+        definition.assetsDigest = calculateThemePackageDigest(definition);
+        const response = await uploadArchive(archiveFor(definition), operatorCookie);
+        expect(response.statusCode).toBe(422);
+        expect(response.json().error.code).toBe("INCOMPATIBLE_THEME");
+        expect(response.json().error.message)
+          .toContain(`${field === "project" ? "Project" : "Author"} (${field})`);
+        expect(registryRows()).toEqual(baseline);
+        expect(readdirSync(directory)).toEqual([]);
+      }
+    }
+    const registry = new ThemeRegistry(database, createThemeLoader());
+    for (const definition of [defaultThemeDefinition, fixtureThemeDefinition]) {
+      expect(definition).not.toHaveProperty("project");
+      expect(definition).not.toHaveProperty("author");
+      expect(registry.getEnabled(`${definition.id}@${definition.version}`).digest)
+        .toBe(definition.assetsDigest);
+    }
+  });
+
   function registryRows() {
     return database.prepare("SELECT * FROM theme_revisions ORDER BY theme_id, version").all();
   }
@@ -264,6 +290,8 @@ function manifest(
     ...definition,
     id: "installation-test",
     name: "Installation Test",
+    project: "Installation fixture",
+    author: "Engine test team",
     assets: {
       required: Object.fromEntries(assets.map(({ path, bytes }, index) => [
         `asset-${index}`, { path, sha256: createHash("sha256").update(bytes).digest("hex") }

@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import {
-  ThemeDefinitionSchema,
   validateThemeRevision,
   type ThemePackageRevision
 } from "@multiplayer-game/theme-sdk";
@@ -9,6 +8,11 @@ import {
   defaultModuleFactory,
   defaultSkinFactory
 } from "@multiplayer-game/default-theme";
+import {
+  runtimeThemeDefinition,
+  ThemeImportDefinitionSchema,
+  type ThemeImportDefinition
+} from "../apps/server/src/themes/credits.js";
 
 const reviewedModules = new Map([
   [`${defaultModuleFactory.metadata.id}@${defaultModuleFactory.metadata.version}`, defaultModuleFactory]
@@ -18,6 +22,7 @@ const reviewedRenderers = new Map([
 ]);
 
 export interface ReviewedThemeCodeRegistration {
+  readonly manifest: ThemeImportDefinition;
   readonly revision: ThemePackageRevision;
   readonly moduleFactory: typeof defaultModuleFactory;
   readonly skinFactory: typeof defaultSkinFactory;
@@ -28,7 +33,8 @@ export function registerReviewedThemeCode(
   moduleKey: string,
   rendererKey: string
 ): ReviewedThemeCodeRegistration {
-  const definition = ThemeDefinitionSchema.parse(manifestInput);
+  const manifest = ThemeImportDefinitionSchema.parse(manifestInput);
+  const definition = runtimeThemeDefinition(manifest);
   const moduleFactory = reviewedModules.get(moduleKey);
   const skinFactory = reviewedRenderers.get(rendererKey);
   if (!moduleFactory) {
@@ -54,7 +60,7 @@ export function registerReviewedThemeCode(
     throw new Error("The reviewed skin renderer does not support the selected game module.");
   }
 
-  return Object.freeze({ revision, moduleFactory, skinFactory });
+  return Object.freeze({ manifest, revision, moduleFactory, skinFactory });
 }
 
 async function main(args: readonly string[]): Promise<void> {

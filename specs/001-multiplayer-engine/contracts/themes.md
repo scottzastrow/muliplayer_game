@@ -204,6 +204,20 @@ validation.
 
 ## Package upload/install
 
+Theme Credits adds handoff-only required `project` and `author` nonblank strings
+to new export/import manifests; Author is a developer-confirmed public person or
+team. Optional `course` is a string. Missing, empty, whitespace-only or non-string
+values identify the exact field as Project (`project`) or Author (`author`).
+Both are identified when both are absent. ZIP upload/validation and reviewed-code
+manifest import share this requirement. Credits bind into the canonical package
+digest and persist in the imported `theme.json`; do not trim their bytes during
+validation. The compiled runtime ThemeDefinition remains unchanged and import
+separates these fields before its compatibility checks. Existing installed
+themes keep running with their original revision/digest, but require credits on
+their next export/import. No installed-manifest or database migration is required.
+See [Theme Credits](../../002-theme-credits/contracts/credits.md) and
+`docs/theme-development.md` for setup confirmation and generated-header policy.
+
 Manifest includes theme ID/name/version, engine major 1, exact installed module and
 renderer versions, accepted state schema, required/optional asset mappings, hashes,
 and declared settings schema version. Pin resolved manifest plus digest per session.

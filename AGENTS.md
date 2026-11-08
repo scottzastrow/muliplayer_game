@@ -17,8 +17,8 @@ If the checkout-local pointer is absent, use the current feature path below.
   Spec Kit planning workflow is permitted within that workflow.
 - Record actual checks and failures; never invent runtime, browser or capacity evidence.
 - Do not commit credentials/runtime data or write the student's personal reflection for them.
-- This planning branch has no game implementation yet. Future run commands are
-  contracts to implement, not currently verified commands.
+- The workspace/runtime exists. Use current scripts and record actual scoped
+  checks; documented browser/capacity commands are not evidence of execution.
 
 ## Companion repository and environment
 
@@ -36,3 +36,21 @@ only. Production uses systemd EnvironmentFile=/etc/multiplayer-game/game.env.
 No Windows persistent environment variables or production credentials are required
 for designer previews. Consult docs/hosting.md for reported infrastructure state;
 its setup success does not imply a deployed game or completed capacity test.
+
+## Theme Credits
+
+The separate Theme Credits feature is `specs/002-theme-credits/`; use the local
+feature pointer when present, retaining the original engine artifacts for context.
+Theme export/import requires nonblank `project` and public `author` (person or
+team), with exact field errors. `course` is optional. Existing installed themes
+continue to run; enforce credits at their next export/import, not runtime loading.
+
+Setup must suggest credits from existing metadata/recognizable comments, show
+conflicting names as choices and require developer confirmation before writing.
+Never infer consent to public credit from private identity or invent an author.
+Generated headers use confirmed Project, Author, file-specific Description and
+optional Course, with correct language comments. Keep JSON comment-free; omit
+new copyright/SPDX template lines while preserving existing contributor credits,
+asset attribution and unrelated comments. Follow `docs/theme-development.md`.
+Unavailable companion tooling remains blocked; do not claim export/header checks
+or modify remote content when the handoff requires uncommitted local changes.

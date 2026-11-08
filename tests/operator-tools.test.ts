@@ -9,6 +9,12 @@ import { bootstrapOperator, readPasswordFromStdin } from "../tools/operator.js";
 import { defaultThemeDefinition } from "@multiplayer-game/default-theme";
 import { registerReviewedThemeCode } from "../tools/install-theme-code.js";
 
+const creditedDefinition = {
+  ...defaultThemeDefinition,
+  project: "Reviewed code fixture",
+  author: "Engine test team"
+};
+
 let temporaryDirectory: string | undefined;
 
 afterEach(() => {
@@ -67,20 +73,43 @@ describe("local operator and reviewed theme-code tools", () => {
 
   it("registers only code present in the reviewed build and validates manifest metadata", () => {
     const registration = registerReviewedThemeCode(
-      defaultThemeDefinition,
+      creditedDefinition,
       "default@1.0.0",
       "default@1.0.0"
     );
     expect(registration.revision.definition.id).toBe("default");
     expect(() =>
-      registerReviewedThemeCode(defaultThemeDefinition, "unreviewed@1.0.0", "default@1.0.0")
+      registerReviewedThemeCode(creditedDefinition, "unreviewed@1.0.0", "default@1.0.0")
     ).toThrow("not registered in the reviewed build");
     expect(() =>
       registerReviewedThemeCode(
-        { ...defaultThemeDefinition, id: "invalid id" },
+        { ...creditedDefinition, id: "invalid id" },
         "default@1.0.0",
         "default@1.0.0"
       )
     ).toThrow();
+  });
+
+  it.each(["project", "author"] as const)("requires nonblank %s on reviewed-code import", (field) => {
+    for (const value of [undefined, "", " \t\r\n\u00a0", null, 42]) {
+      const manifest: Record<string, unknown> = { ...creditedDefinition };
+      if (value === undefined) delete manifest[field];
+      else manifest[field] = value;
+      expect(() => registerReviewedThemeCode(manifest, "default@1.0.0", "default@1.0.0"))
+        .toThrow(`${field === "project" ? "Project" : "Author"} (${field})`);
+    }
+  });
+
+  it("accepts a person or team, optional Course and unchanged runtime definition", () => {
+    for (const author of ["Public author", "Public theme team"]) {
+      const registration = registerReviewedThemeCode(
+        { ...creditedDefinition, author, course: "Optional course" },
+        "default@1.0.0", "default@1.0.0"
+      );
+      expect(registration.revision.definition).toEqual(defaultThemeDefinition);
+      expect(registration.manifest).toMatchObject({
+        project: creditedDefinition.project, author, course: "Optional course"
+      });
+    }
   });
 });

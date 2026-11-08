@@ -18,7 +18,6 @@ import { createInflateRaw } from "node:zlib";
 import { z } from "zod";
 import {
   isThemeCompatible,
-  ThemeDefinitionSchema,
   validateThemeRevision,
   type ModuleMetadata,
   type SkinFactoryMetadata,
@@ -26,6 +25,7 @@ import {
   type ThemePackageRevision
 } from "@multiplayer-game/theme-sdk";
 import type { SqliteDatabase } from "../storage/database.js";
+import { runtimeThemeDefinition, ThemeImportDefinitionSchema } from "./credits.js";
 
 export const MAX_THEME_ARCHIVE_BYTES = 10 * 1024 * 1024;
 export const MAX_THEME_EXTRACTED_BYTES = 40 * 1024 * 1024;
@@ -45,7 +45,7 @@ const PackageAssetsSchema = z.object({
   optional: z.record(z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/), AssetDeclarationSchema)
 }).strict();
 
-export const ThemePackageManifestSchema = ThemeDefinitionSchema.safeExtend({
+export const ThemePackageManifestSchema = ThemeImportDefinitionSchema.safeExtend({
   assets: PackageAssetsSchema
 }).strict();
 
@@ -601,7 +601,8 @@ function validateCodeReferences(
   ) {
     throw new Error("Theme manifest does not match the registered module and renderer versions.");
   }
-  const { assets: _assets, ...definition } = manifest;
+  const { assets: _assets, ...importDefinition } = manifest;
+  const definition = runtimeThemeDefinition(importDefinition);
   const revision: ThemePackageRevision = {
     definition,
     packageDigest: manifest.assetsDigest,
