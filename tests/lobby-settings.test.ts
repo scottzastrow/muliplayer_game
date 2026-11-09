@@ -5,6 +5,7 @@ import { mountLobby } from "../apps/client/src/lobby.js";
 class ElementStub extends EventTarget {
   readonly children: ElementStub[] = [];
   readonly attributes = new Map<string, string>();
+  readonly dataset: Record<string, string> = {};
   textContent = "";
   id = "";
   name = "";
@@ -109,6 +110,14 @@ describe("host NPC settings", () => {
     const elements = () => createdElements[0]!.descendants();
     const createSpeed = elements().find(element => element.name === "setting-npcMovementSpeed")!;
     const createRange = elements().find(element => element.name === "setting-npcDetectionRange")!;
+    const createMode = elements().find(element => element.name === "setting-mapMode")!;
+    const densityMode = elements().find(element => element.name === "setting-densityMode")!;
+    expect(createMode.value).toBe("fixed");
+    createMode.value = "simple-generated";
+    createMode.dispatchEvent(new Event("change"));
+    expect(densityMode.disabled).toBe(false);
+    expect(elements().find(element => element.name === "setting-startingDensity")!.value).toBe("3");
+    expect(elements().find(element => element.name === "setting-increasePerLevel")!.value).toBe("0");
     expect(elements().find(element => element.name === "setting-baseNpcHealth")!.value).toBe("50");
     expect(createSpeed.value).toBe("67.5");
     expect([createSpeed.min, createSpeed.max, createSpeed.step]).toEqual(["0", "180", "any"]);
@@ -133,7 +142,23 @@ describe("host NPC settings", () => {
     const create = fetch.mock.calls.find(([url, init]) => url === "/api/v1/sessions" &&
       init?.method === "POST")!;
     expect(JSON.parse(String(create[1]!.body)).settings).toMatchObject({
-      npcMovementSpeed: 33.75, npcDetectionRange: 300, baseNpcHealth: 50
+      npcMovementSpeed: 33.75, npcDetectionRange: 300, baseNpcHealth: 50,
+      mapMode: "simple-generated",
+      terrainDensity: { mode: "incremental", startingDensity: 3, increasePerLevel: 0 }
+    });
+    densityMode.value = "per-level";
+    densityMode.dispatchEvent(new Event("change"));
+    const densities = elements().find(element => element.name === "setting-densities")!;
+    expect(densities.disabled).toBe(false);
+    densities.value = "0,3,10";
+    elements().find(element => element.name === "setting-maxLevels")!.value = "3";
+    createForm.dispatchEvent(new Event("submit", { cancelable: true }));
+    await vi.waitFor(() => expect(fetch.mock.calls.filter(([url, init]) =>
+      url === "/api/v1/sessions" && init?.method === "POST")).toHaveLength(2));
+    const perLevelCreate = fetch.mock.calls.filter(([url, init]) =>
+      url === "/api/v1/sessions" && init?.method === "POST")[1]!;
+    expect(JSON.parse(String(perLevelCreate[1]!.body)).settings).toMatchObject({
+      maxLevels: 3, terrainDensity: { mode: "per-level", densities: [0, 3, 10] }
     });
 
     await vi.waitFor(() => expect(elements().some(element => element.tagName === "details")).toBe(true));

@@ -5,13 +5,13 @@ import {
   type RadarView,
   type RosterMember
 } from "@multiplayer-game/theme-sdk";
-import { JsonValueSchema, type JsonValue } from "@multiplayer-game/protocol";
+import { JsonValueSchema, resolveTerrainDensity, type JsonValue } from "@multiplayer-game/protocol";
 import { z } from "zod";
 import { DefaultPlayerActionSchema, type DefaultPlayerAction } from "./actions.js";
 import type { DefaultEntity, DefaultPlayerState } from "./types.js";
 import { DefaultEntitySimulator } from "./entities.js";
 import { DefaultCombatSimulator } from "./combat.js";
-import { generateMap, loadMap } from "./maps.js";
+import { generateMap, generateDensityMap, loadMap, type DensityMap } from "./maps.js";
 import { DefaultRespawnSimulator } from "./respawn.js";
 import {
   DefaultProgression,
@@ -76,6 +76,14 @@ export const defaultModuleFactory: GameModuleFactory<
   DefaultEntity
 > = Object.freeze({
   metadata: defaultModuleMetadata,
+  createInitialMap(settings: Readonly<Record<string, JsonValue>>, seed: number) {
+    if (settings.mapMode === "simple-generated") {
+      return generateDensityMap(seed, 1, resolveTerrainDensity(
+        settings.terrainDensity, 1, Number(settings.maxLevels ?? 5)
+      )).map.definition;
+    }
+    return settings.mapMode === "fixed" ? generateMap(seed, "fixed").map.definition : undefined;
+  },
   validateSettings(settings: unknown): settings is Record<string, JsonValue> {
     return DefaultSettingsSchema.safeParse(settings).success;
   },
@@ -112,14 +120,28 @@ export const defaultModuleFactory: GameModuleFactory<
       gameSettings.npcDetectionRange,
       seed
     );
-    const map = "defaultMapDefinition" in _context
+    const usesDensity = gameSettings.mapMode === "simple-generated";
+    if (usesDensity && !_context.maps) {
+      throw new Error("Simple Generated density requires the authoritative map transition service.");
+    }
+    let coverage: DensityMap["terrain"] | undefined;
+    let pending: { layout: DensityMap; token: number } | undefined;
+    let map = "defaultMapDefinition" in _context
       ? loadMap(_context.defaultMapDefinition)
-      : generateMap(seed).map;
-    const presentationMap = {
+      : loadMap(this.createInitialMap?.(settings, seed) ?? generateMap(seed).map.definition);
+    if (usesDensity) {
+      const density = resolveTerrainDensity(gameSettings.terrainDensity, 1, gameSettings.maxLevels);
+      const actualCoveragePercent = map.obstacles.reduce((sum, rect) =>
+        sum + rect.width * rect.height, 0) / (map.definition.bounds.width * map.definition.bounds.height) * 100;
+      coverage = { level: 1, density, targetCoveragePercent: density * 8, actualCoveragePercent,
+        budgetExhausted: actualCoveragePercent + 100 / 4096 < density * 8 };
+    }
+    const presentationMap = () => ({
       width: map.definition.bounds.width,
       height: map.definition.bounds.height,
-      obstacles: map.obstacles.map((obstacle) => ({ ...obstacle }))
-    };
+      obstacles: map.obstacles.map((obstacle) => ({ ...obstacle })),
+      ...(coverage ? { terrain: { ...coverage } } : {})
+    });
     const respawn = new DefaultRespawnSimulator(
       _context, map, roster, gameSettings.respawnDelaySeconds,
       (accountId) => {
@@ -136,11 +158,13 @@ export const defaultModuleFactory: GameModuleFactory<
         if (level === 1) {
           simulator.initialize(map, roster, difficulty.npcCount, difficulty.npcHealth);
         } else {
-          simulator.startLevel(level, difficulty.npcCount, difficulty.npcHealth);
+          if (usesDensity) commitNextLayout(level);
+          simulator.startLevel(level, difficulty.npcCount, difficulty.npcHealth, map);
         }
         levelStartingPoints = new Map(respawn.playerStates().map(player =>
           [player.accountId, player.points]));
-      }
+      },
+      usesDensity ? prepareNextLayout : undefined
     );
     return {
       stateSchemaVersion: defaultModuleMetadata.stateSchemaVersion,
@@ -150,7 +174,7 @@ export const defaultModuleFactory: GameModuleFactory<
           acceptedInputs,
           entities: serializeEntities(_context.entities.values()),
           players: respawn.snapshot(),
-          map: structuredClone(presentationMap),
+          map: presentationMap(),
           tick: currentTick,
           level: progressionState.level,
           phase: progressionState.phase,
@@ -210,6 +234,7 @@ export const defaultModuleFactory: GameModuleFactory<
         assertActive();
         progression.initialize();
         respawn.initialize();
+        if (coverage) reportCoverage();
       },
       snapshot(viewer): DefaultModuleSnapshot {
         assertActive();
@@ -218,8 +243,8 @@ export const defaultModuleFactory: GameModuleFactory<
           acceptedInputs,
           entities: serializeEntities(_context.entities.values()),
           players: respawn.snapshot(),
-          radar: serializeRadar(_context.entities.values(), viewer.accountId, presentationMap.obstacles),
-          map: structuredClone(presentationMap),
+          radar: serializeRadar(_context.entities.values(), viewer.accountId, map.obstacles),
+          map: presentationMap(),
           tick: currentTick,
           viewerAccountId: viewer.accountId,
           viewerRole: viewer.role,
@@ -255,6 +280,53 @@ export const defaultModuleFactory: GameModuleFactory<
       if (disposed) {
         throw new Error("Default theme module instance has been disposed.");
       }
+    }
+
+    function prepareNextLayout(level: number): void {
+      const layout = generateDensityMap(seed, level,
+        resolveTerrainDensity(gameSettings.terrainDensity, level, gameSettings.maxLevels));
+      const token = _context.maps!.prepare({
+        bounds: layout.map.definition.bounds, cellSize: layout.map.definition.cellSize,
+        obstacles: layout.map.obstacles
+      });
+      pending = { layout, token };
+      _context.metrics.increment("default.map.prepared");
+    }
+
+    function commitNextLayout(level: number): void {
+      if (!pending || pending.layout.terrain.level !== level) {
+        throw new Error("The next level terrain was not prepared during intermission.");
+      }
+      const nextMap = pending.layout.map;
+      const spawns = nextMap.definition.spawns.filter(spawn => spawn.kind === "player");
+      const replacements = _context.entities.values().flatMap(entity => {
+        if (entity.state.kind === "player") {
+          const accountId = entity.state.accountId;
+          const index = roster.findIndex(member => member.accountId === accountId);
+          const spawn = spawns[index];
+          if (!spawn) throw new Error("New map has insufficient player spawns.");
+          return [{ ...entity, position: spawn.position }];
+        }
+        if (entity.state.kind === "pickup") {
+          const spawn = nextMap.definition.spawns.find(spawn => `pickup:${spawn.id}` === entity.id);
+          if (!spawn) throw new Error("New map has no retained pickup spawn.");
+          return [{ ...entity, position: spawn.position }];
+        }
+        return [];
+      });
+      _context.maps!.commit(pending.token, replacements);
+      map = nextMap;
+      coverage = pending.layout.terrain;
+      pending = undefined;
+      respawn.setMap(map);
+      reportCoverage();
+    }
+
+    function reportCoverage(): void {
+      if (!coverage) throw new Error("Density coverage is unavailable.");
+      _context.metrics.gauge("default.map.actual_coverage_percent", coverage.actualCoveragePercent);
+      _context.metrics.gauge("default.map.target_coverage_percent", coverage.targetCoveragePercent);
+      if (coverage.budgetExhausted) _context.metrics.increment("default.map.density_shortfall");
     }
 
     function waveSummary() {

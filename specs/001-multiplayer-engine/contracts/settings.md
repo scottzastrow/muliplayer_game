@@ -18,6 +18,34 @@ explicitly confirmed 10:1, five-second delay and five-session cap.
 | respawnDelaySeconds | 5 | Number 0–60 seconds |
 | maxLevels | 5 | Integer 1–100 |
 | themeRevision | default@1.0.0 | Installed/enabled exact immutable revision |
+| mapMode | Absent = legacy source-selected mode | Optional `fixed` / `simple-generated`; host selection freezes at start |
+| terrainDensity | Explicit Simple Generated: Incremental 3/0 | Optional strict schedule; integers 0-10, described below |
+
+## Per-level terrain (additive v1)
+
+Hosts can select Fixed or Simple Generated. Only explicitly selected Simple
+Generated opts into per-level terrain. `terrainDensity` is either
+`{mode:"incremental",startingDensity:3,increasePerLevel:0}` or
+`{mode:"per-level",densities:[0,3,10]}`. Start/increase and all entries are integers
+0-10; Per Level requires exactly maxLevels entries, also on settings edits.
+Incremental resolves min(10, start + increase * (level - 1)); zero stays steady.
+An omitted schedule in an explicitly generated session resolves to 3/0.
+An explicit malformed schedule fails rather than being replaced.
+
+Each density step targets 8 percentage points of solid coverage over the full
+bounded playable arena, including reserved clear space in that denominator.
+Density 0 has no interior obstacles; 3 targets 24%; 10 targets 80%.
+Targets round down to whole 32-unit cells. The bounded generator prioritizes
+connected player-sized routes and authored spawn radii plus 64-unit clearance;
+if the target cannot fit, it uses the best valid layout and reports actual
+coverage and shortfall. NPC count/health/speed/wandering rules are unchanged.
+
+Saved room/result settings are never rewritten to inject mapMode or a schedule.
+Absent mode keeps legacy layout behavior, including original four-cluster Simple
+Generated and Fixed fallback when that source mode was selected. Fixed remains
+the same authored arena and ignores density. The saved editor retains absent
+fields unless the host selects a mode. See
+[terrain contract](../../003-terrain-density/contracts/terrain.md).
 
 Freeze participant count P at match start. Level L starts at 1. Let R be initial
 NPCs/player, G population percentage/100, H base health, K health percentage/100.

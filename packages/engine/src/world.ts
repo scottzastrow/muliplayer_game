@@ -265,8 +265,8 @@ export class SpatialGrid<TEntity extends WorldEntity = WorldEntity> {
 }
 
 export class SessionWorld<TEntity extends WorldEntity = WorldEntity> {
-  readonly geometry: WorldGeometry;
-  readonly #entities: SpatialGrid<TEntity>;
+  #geometry: WorldGeometry;
+  #entities: SpatialGrid<TEntity>;
 
   constructor(
     readonly sessionId: string,
@@ -279,7 +279,26 @@ export class SessionWorld<TEntity extends WorldEntity = WorldEntity> {
       throw new TypeError("Session ID must not be empty.");
     }
     this.#entities = new SpatialGrid<TEntity>(cellSize, maxEntities);
-    this.geometry = new WorldGeometry(bounds, obstacles);
+    this.#geometry = new WorldGeometry(bounds, obstacles);
+  }
+
+  get geometry(): WorldGeometry {
+    return this.#geometry;
+  }
+
+  replaceLayout(geometry: WorldGeometry, entities: readonly TEntity[]): void {
+    const replacement = new SpatialGrid<TEntity>(this.#entities.cellSize, this.#entities.maxEntities);
+    const ids = new Set<string>();
+    for (const entity of entities) {
+      if (ids.has(entity.id)) throw new TypeError("Replacement layout contains duplicate entity IDs.");
+      ids.add(entity.id);
+      if (!geometry.isCircleWalkable(entity.position, entity.radius)) {
+        throw new RangeError("Replacement entity position must be walkable.");
+      }
+      replacement.set(entity);
+    }
+    this.#geometry = geometry;
+    this.#entities = replacement;
   }
 
   get entityCount(): number {

@@ -163,7 +163,8 @@ export class NavigationGrid {
 }
 
 export class BoundedNavigation {
-  readonly grid: NavigationGrid;
+  #grid: NavigationGrid;
+  #geometry: WorldGeometry;
   readonly #maxSearchesPerTick: number;
   readonly #maxNodesPerSearch: number;
   readonly #maxNodesPerTick: number;
@@ -182,7 +183,7 @@ export class BoundedNavigation {
   });
 
   constructor(
-    readonly geometry: WorldGeometry,
+    geometry: WorldGeometry,
     options: NavigationOptions = {}
   ) {
     const cellSize = options.cellSize ?? 32;
@@ -213,7 +214,8 @@ export class BoundedNavigation {
     ) {
       throw new RangeError("Per-tick path work must not exceed the configured total work limit.");
     }
-    this.grid = new NavigationGrid(
+    this.#geometry = geometry;
+    this.#grid = new NavigationGrid(
       geometry.bounds,
       geometry,
       cellSize,
@@ -223,6 +225,22 @@ export class BoundedNavigation {
 
   get stats(): NavigationTickStats {
     return this.#lastTickStats;
+  }
+
+  get geometry(): WorldGeometry { return this.#geometry; }
+  get grid(): NavigationGrid { return this.#grid; }
+
+  replaceGeometry(geometry: WorldGeometry, grid: NavigationGrid): void {
+    if (grid.geometry !== geometry) throw new TypeError("Navigation grid must use the new geometry.");
+    this.#queue.length = 0;
+    this.#active.length = 0;
+    this.#activeCursor = 0;
+    this.#geometry = geometry;
+    this.#grid = grid;
+    this.#lastTickStats = Object.freeze({
+      startedSearches: 0, nodesProcessed: 0, completedSearches: 0,
+      activeSearches: 0, queuedRequests: 0
+    });
   }
 
   get outstandingRequests(): number {

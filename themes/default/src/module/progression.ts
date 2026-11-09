@@ -47,7 +47,8 @@ export class DefaultProgression {
     readonly context: ModuleContext<DefaultEntity>,
     readonly settings: GameSettings,
     readonly rosterSize: number,
-    readonly startLevel: (level: number, difficulty: LevelDifficulty) => void
+    readonly startLevel: (level: number, difficulty: LevelDifficulty) => void,
+    readonly prepareNextLevel?: (level: number) => void
   ) {
     validateMatchCapacity(settings, rosterSize);
   }
@@ -112,6 +113,7 @@ export class DefaultProgression {
     this.#phase = "intermission";
     this.#waveCountdown = undefined;
     this.#intermissionEndsAtTick = tick + LEVEL_INTERMISSION_TICKS;
+    this.prepareNextLevel?.(this.#level + 1);
     this.context.requestCompletion({
       kind: "level",
       reason: `level-${this.#level}-cleared`

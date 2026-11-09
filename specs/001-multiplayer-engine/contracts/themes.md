@@ -22,9 +22,9 @@ Implement TypeScript interfaces and runtime schemas in `packages/theme-sdk/src/`
 | Interface | Required operations/data |
 | --- | --- |
 | ThemeDefinition | id, name, version, engineApiMajor, module id/version/stateSchemaVersion, skin renderer id/version, assets digest, settings schema/defaults |
-| GameModuleFactory | metadata, validateSettings, create(context, settings, roster, seed) returns isolated instance |
+| GameModuleFactory | metadata, validateSettings, create(context, settings, roster, seed) returns isolated instance; optional createInitialMap(settings, seed) opts into authored initial geometry |
 | GameModuleInstance | initialize; validateInput; applyInput; setPlayerPresence(accountId, connected/disconnected/expired); step(dt, tick); snapshot(viewer); results; dispose |
-| ModuleContext | monotonic clock, seeded RNG, scoped entity store with bounded radius queries, geometry/circle movement, bounded navigation request/results, bounded event sink, completion request sink, metrics counters |
+| ModuleContext | monotonic clock, seeded RNG, scoped entity store with bounded radius queries, geometry/circle movement, bounded navigation request/results, optional maps prepare/commit service, bounded event sink, completion request sink, metrics counters |
 | Capability | stable type ID plus validated state and optional behavior hooks; no mandatory universal attack method |
 | SkinFactory | metadata including accepted module/state schema; mount(host, assets) returns isolated presenter |
 | SkinInstance | handleSnapshot; handleEvents; render(frameTime, interpolatedState); handleViewport; dispose |
@@ -61,7 +61,29 @@ Dimensions are multiples of the 32-unit navigation cell and no larger than 2048 
 2048. The theme's shared loader additionally checks collision bounds, spawn
 walkability and connectivity; authored documents and generated documents must both
 pass through that same loader. Generation is deterministic by seed, has a fixed
-attempt limit, and falls back to a known-valid traversable map.
+attempt limit, and falls back to a known-valid traversable map for legacy
+generation. Explicit density generation instead uses its best valid layout and
+reports actual coverage; it does not substitute Fixed for an unmet target.
+
+`createInitialMap(settings, seed)` returns a validated `MapDefinition` or undefined
+to retain the existing initial-map path. Optional `context.maps.prepare(layout)`
+accepts `{bounds,cellSize,obstacles}` and returns a session-local numeric token.
+Only one pending layout is retained; a new preparation supersedes its token.
+Preparation leaves active geometry/entities/navigation untouched. The module
+supplies terrain, route/clearance validation and spawn rules.
+`maps.commit(token, completeReplacementEntities)` validates the whole replacement
+against the pending geometry before changing the world. Invalid, reused or
+cross-session tokens/blocked entities fail explicitly. The engine replaces
+geometry and entities atomically, retires all prior navigation jobs/results,
+and preserves configured navigation work ceilings.
+
+Dots and Squares prepares the next seeded layout on intermission entry and commits
+at the next wave boundary. Living avatars move to safe roster spawns while
+retaining health, colors, facing, scores and effects. Death/presence deadlines
+remain intact and respawn uses the new map. Pickups retain their states at
+authored positions; retired projectiles/NPC goals cannot survive the boundary.
+Other modules opt in through the public service rather than an engine theme-ID
+branch. The fixture explicitly delegates the default initial-map hook.
 
 Entity stores provide radius queries backed by the session spatial index. Geometry
 services provide walkability, obstacle checks and collision-resolved circle movement.
@@ -90,6 +112,12 @@ Default module state schema v3 keeps only active avatars in `entities` and adds 
 position and `alive`. Dead entries additionally expose `respawnAtTick` and
 `respawnBlocked`. Schema v4 retains these fields and adds the authoritative `tick`
 and `map: {width, height, obstacles: [{x, y, width, height}]}` for presentation.
+The additive optional `map.terrain` report contains level, density,
+targetCoveragePercent, actualCoveragePercent and budgetExhausted (target shortfall).
+Solid union area over the bounded interior is the denominator. Geometry and its
+report share one snapshot; radar footprints use these same collision rectangles.
+The renderer switches geometry directly and does not interpolate entities across
+level boundaries. Legacy v4 snapshots remain accepted without the report.
 The implemented default renderer requires schema v4; earlier stub-renderer
 snapshots are explicitly rejected rather than rendered with guessed geometry.
 

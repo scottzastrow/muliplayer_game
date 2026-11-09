@@ -4,6 +4,7 @@ import {
   RequestIdSchema,
   type JsonValue
 } from "@multiplayer-game/protocol";
+import type { MapDefinition } from "./maps.js";
 export { Countdown } from "./countdown.js";
 export {
   RadarMarkerSchema,
@@ -140,12 +141,24 @@ export interface ModuleMetrics {
   gauge(name: string, value: number): void;
 }
 
+export interface MapGeometry {
+  readonly bounds: Readonly<{ width: number; height: number }>;
+  readonly cellSize: number;
+  readonly obstacles: readonly Readonly<{ x: number; y: number; width: number; height: number }>[];
+}
+
+export interface MapTransitionService<TEntity> {
+  prepare(layout: MapGeometry): number;
+  commit(token: number, entities: readonly TEntity[]): void;
+}
+
 export interface ModuleContext<TEntity extends { readonly id: string }> {
   readonly clock: MonotonicClock;
   readonly random: RandomSource;
   readonly entities: EntityStore<TEntity>;
   readonly geometry: GeometryService;
   readonly navigation: NavigationService;
+  readonly maps?: MapTransitionService<TEntity>;
   emit(event: ScopedEvent): void;
   requestCompletion(request: Readonly<{ kind: "level" | "match"; reason: string }>): void;
   readonly metrics: ModuleMetrics;
@@ -190,6 +203,7 @@ export interface GameModuleFactory<
   TEntity extends { readonly id: string } = { readonly id: string }
 > {
   readonly metadata: ModuleMetadata;
+  createInitialMap?(settings: Readonly<TSettings>, seed: number): MapDefinition | undefined;
   validateSettings(settings: unknown): settings is TSettings;
   create(
     context: ModuleContext<TEntity>,

@@ -4,6 +4,9 @@ import { z } from "zod";
 import { DEFAULT_GAME_SETTINGS } from "@multiplayer-game/protocol";
 import { WorldGeometry } from "@multiplayer-game/engine";
 import { PROJECTILE_RADIUS } from "@multiplayer-game/default-theme";
+import type { ModuleContext } from "@multiplayer-game/theme-sdk";
+import type { DefaultEntity } from "@multiplayer-game/default-theme";
+import { DefaultViewSchema } from "../../themes/default/src/skin/view.js";
 import { createApp } from "../../apps/server/src/app.js";
 import { readConfig } from "../../apps/server/src/config.js";
 import { ThemeLoader } from "../../apps/server/src/themes/builtins.js";
@@ -36,14 +39,18 @@ describe("session simulation lifecycle", () => {
   });
 
   it(
-    "starts the isolated module, routes actions, completes levels, saves results and releases the slot",
+    "switches real generated terrain at the wave boundary for players/spectators, saves results and releases the slot",
     async () => {
       const createModule = ThemeLoader.prototype.createModuleInstance;
+      let capturedContext: ModuleContext<DefaultEntity> | undefined;
+      let preparation: ReturnType<typeof vi.spyOn> | undefined;
       vi.spyOn(ThemeLoader.prototype, "createModuleInstance").mockImplementation(function (
         this: ThemeLoader, ...args
       ) {
         const module = createModule.apply(this, args);
         const context = args[1];
+        capturedContext = context;
+        preparation = vi.spyOn(context.maps!, "prepare");
         const placedNpcs = new Set<string>();
         // Stage each wave once without replacing terrain, combat or progression.
         const placeEncounter = () => {
@@ -84,7 +91,9 @@ describe("session simulation lifecycle", () => {
             baseNpcHealth: 1,
             npcHealthGrowthPercent: 0,
             npcMovementSpeed: 0,
-            maxLevels: 2
+            maxLevels: 2,
+            mapMode: "simple-generated",
+            terrainDensity: { mode: "per-level", densities: [0, 3] }
           }
         }
       });
@@ -117,6 +126,15 @@ describe("session simulation lifecycle", () => {
         payload: { sessionState: "running" }
       });
       const firstSnapshot = await nextSnapshot(socket);
+      expect(DefaultViewSchema.parse(firstSnapshot).map).toMatchObject({
+        obstacles: [], terrain: { density: 0, actualCoveragePercent: 0 }
+      });
+      const observer = await connect(observerCookie, sessionId);
+      await nextMessageOfType(observer, "server.hello");
+      observer.send(JSON.stringify({ v: 1, type: "client.spectate.target",
+        payload: { targetAccountId: firstSnapshot.viewerAccountId } }));
+      await nextMessageOfType(observer, "server.spectate.target");
+      expect((await nextSnapshot(observer)).map).toEqual(firstSnapshot.map);
       expect(firstSnapshot).toMatchObject({
         protocolVersion: 1,
         moduleStateSchemaVersion: 4,
@@ -125,7 +143,15 @@ describe("session simulation lifecycle", () => {
       });
       socket.send(JSON.stringify(inputMessage(0, aimAtStationaryNpc(firstSnapshot))));
 
-      await nextSnapshot(socket, snapshot => snapshot.phase === "intermission", 2_500);
+      const intermission = await nextSnapshot(socket, snapshot => snapshot.phase === "intermission", 2_500);
+      expect(intermission.map).toEqual(firstSnapshot.map);
+      expect(preparation).toHaveBeenCalledOnce();
+      const pendingObstacle = preparation!.mock.calls[0]![0].obstacles[0];
+      expect(capturedContext!.geometry.intersectsObstacle(
+        pendingObstacle.x + pendingObstacle.width / 2, pendingObstacle.y + pendingObstacle.height / 2, 1
+      )).toBe(false);
+      expect((await nextSnapshot(observer, snapshot => snapshot.phase === "intermission")).map)
+        .toEqual(firstSnapshot.map);
       expect(database.prepare("SELECT current_level FROM matches WHERE id = ?").get(sessionId))
         .toEqual({ current_level: 1 });
       await waitUntil(
@@ -143,6 +169,26 @@ describe("session simulation lifecycle", () => {
         7_000
       );
       expect(secondLevel.acceptedInputs).toBe(1);
+      const secondView = DefaultViewSchema.parse(secondLevel);
+      expect(secondView.map.obstacles.length).toBeGreaterThan(0);
+      expect(secondView.map.terrain).toMatchObject({ density: 3, targetCoveragePercent: 24 });
+      expect(capturedContext!.geometry.intersectsObstacle(
+        pendingObstacle.x + pendingObstacle.width / 2, pendingObstacle.y + pendingObstacle.height / 2, 1
+      )).toBe(true);
+      const observedSecond = DefaultViewSchema.parse(await nextSnapshot(observer,
+        snapshot => snapshot.level === 2 && snapshot.phase === "active", 7_000));
+      expect(observedSecond.map).toEqual(secondView.map);
+      expect(observedSecond.radar!.markers.filter(marker => marker.category === "terrain"))
+        .toEqual(secondView.radar!.markers.filter(marker => marker.category === "terrain"));
+      for (const obstacle of secondView.map.obstacles) {
+        expect(capturedContext!.geometry.intersectsObstacle(
+          obstacle.x + obstacle.width / 2, obstacle.y + obstacle.height / 2, 1
+        )).toBe(true);
+      }
+      expect(secondView.entities.every(entity => capturedContext!.geometry.isWalkable(
+        entity.position.x, entity.position.y, entity.radius
+      ))).toBe(true);
+      console.log(`real socket transition level=1 density=0 coverage=0% -> level=2 density=3 actual=${secondView.map.terrain!.actualCoveragePercent}%`);
       expect(secondLevel.players).toEqual([
         expect.objectContaining({ points: 100, kills: 1 })
       ]);

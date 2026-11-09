@@ -33,6 +33,9 @@ export const fixtureModuleFactory: GameModuleFactory<
   DefaultEntity
 > = Object.freeze({
   metadata: fixtureModuleMetadata,
+  createInitialMap(settings: Readonly<Record<string, JsonValue>>, seed: number) {
+    return defaultModuleFactory.createInitialMap?.(settings, seed);
+  },
   validateSettings: defaultModuleFactory.validateSettings,
   create(
     context: ModuleContext<DefaultEntity>,

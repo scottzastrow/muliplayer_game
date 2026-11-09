@@ -166,7 +166,7 @@ export class DefaultEntitySimulator {
     this.#initialized = true;
   }
 
-  startLevel(level: number, npcCount: number, npcHealth: number): void {
+  startLevel(level: number, npcCount: number, npcHealth: number, nextMap?: LoadedMap): void {
     this.#assertInitialized();
     if (!Number.isSafeInteger(level) || level < 2) {
       throw new RangeError("Subsequent level number must be a safe integer of at least two.");
@@ -175,6 +175,7 @@ export class DefaultEntitySimulator {
       this.context.entities.remove(id);
     }
     this.#npcNavigation.clear();
+    if (nextMap) this.#map = nextMap;
     const map = this.#map;
     if (!map) {
       throw new Error("Default entity simulator has no loaded map.");

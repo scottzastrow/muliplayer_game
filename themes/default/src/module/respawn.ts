@@ -23,7 +23,7 @@ export class DefaultRespawnSimulator {
 
   constructor(
     readonly context: ModuleContext<DefaultEntity>,
-    readonly map: LoadedMap,
+    public map: LoadedMap,
     readonly roster: readonly RosterMember[],
     delaySeconds: number,
     readonly resetInput: (accountId: string) => void
@@ -41,6 +41,21 @@ export class DefaultRespawnSimulator {
         throw new Error("Respawn initialization requires every roster player's entity.");
       }
       this.#players.set(member.accountId, { ...entity, state: entity.state });
+    }
+  }
+
+  setMap(map: LoadedMap): void {
+    this.map = map;
+    for (const [accountId, previous] of this.#players) {
+      const live = this.context.entities.get(previous.id);
+      if (live?.state.kind === "player") {
+        this.#players.set(accountId, { ...live, state: live.state });
+      } else {
+        const spawn = map.definition.spawns.filter(item => item.kind === "player")
+          [this.roster.findIndex(member => member.accountId === accountId)];
+        if (!spawn) throw new Error("New map has no roster respawn position.");
+        this.#players.set(accountId, { ...previous, position: spawn.position });
+      }
     }
   }
 

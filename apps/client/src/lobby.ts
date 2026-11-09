@@ -1,4 +1,4 @@
-import { DEFAULT_GAME_SETTINGS, type GameSettings } from "@multiplayer-game/protocol";
+import { DEFAULT_GAME_SETTINGS, GameSettingsSchema, type GameSettings } from "@multiplayer-game/protocol";
 import {
   createControlModeFieldset,
   saveControlMode,
@@ -30,7 +30,7 @@ interface SessionSummary {
 }
 
 const NUMBER_FIELDS: ReadonlyArray<{
-  key: Exclude<keyof GameSettings, "themeRevision">;
+  key: Exclude<keyof GameSettings, "themeRevision" | "mapMode" | "terrainDensity">;
   label: string;
   min: number;
   max: number;
@@ -98,7 +98,7 @@ export function mountLobby(
   const createHeading = document.createElement("h2");
   createHeading.textContent = "Create a session";
   const createForm = document.createElement("form");
-  const createSettings = buildSettingsForm(DEFAULT_GAME_SETTINGS);
+  const createSettings = buildSettingsForm(DEFAULT_GAME_SETTINGS, true);
   const createButton = document.createElement("button");
   createButton.type = "submit";
   createButton.textContent = "Create session";
@@ -359,7 +359,7 @@ export function mountLobby(
   }
 }
 
-function buildSettingsForm(settings: GameSettings): HTMLFieldSetElement {
+function buildSettingsForm(settings: GameSettings, newSession = false): HTMLFieldSetElement {
   const fieldset = document.createElement("fieldset");
   const legend = document.createElement("legend");
   legend.textContent = "Session settings";
@@ -394,11 +394,45 @@ function buildSettingsForm(settings: GameSettings): HTMLFieldSetElement {
   );
   theme.input.required = true;
   fieldset.append(theme.label, theme.input);
+  const mode = selectField("Map mode", "setting-mapMode", [
+    ["legacy", "Saved legacy layout"], ["fixed", "Fixed arena"], ["simple-generated", "Simple Generated"]
+  ], settings.mapMode ?? (newSession ? "fixed" : "legacy"));
+  const density = settings.terrainDensity;
+  const schedule = selectField("Terrain density schedule", "setting-densityMode", [
+    ["incremental", "Incremental"], ["per-level", "Per Level"]
+  ], density?.mode ?? "incremental");
+  const start = inputField("Starting density (0-10)", "setting-startingDensity", "number",
+    String(density?.mode === "incremental" ? density.startingDensity : 3), 2);
+  const increase = inputField("Density increase per level (0-10)", "setting-increasePerLevel", "number",
+    String(density?.mode === "incremental" ? density.increasePerLevel : 0), 2);
+  for (const input of [start.input, increase.input]) {
+    input.min = "0"; input.max = "10"; input.step = "1"; input.required = true;
+  }
+  const perLevel = inputField("Per Level densities (comma-separated, one per level)",
+    "setting-densities", "text",
+    density?.mode === "per-level" ? density.densities.join(",") : Array(settings.maxLevels).fill(3).join(","),
+    300);
+  const help = document.createElement("p");
+  help.textContent = "Simple Generated only: each density step targets 8% obstacle coverage. " +
+    "Safe routes/spawns can reduce actual coverage. Default 3 with zero increase.";
+  fieldset.append(mode.label, mode.select, schedule.label, schedule.select,
+    start.label, start.input, increase.label, increase.input, perLevel.label, perLevel.input, help);
+  const update = () => {
+    const enabled = mode.select.value === "simple-generated";
+    schedule.select.disabled = !enabled;
+    start.input.disabled = increase.input.disabled = !enabled || schedule.select.value !== "incremental";
+    perLevel.input.disabled = !enabled || schedule.select.value !== "per-level";
+  };
+  mode.select.addEventListener("change", update);
+  schedule.select.addEventListener("change", update);
+  update();
+  // Saved non-generated schedules are retained when editing unrelated settings.
+  fieldset.dataset.terrainDensity = JSON.stringify(settings.terrainDensity ?? null);
   return fieldset;
 }
 
 function readSettings(fieldset: HTMLFieldSetElement): GameSettings {
-  const value = (key: keyof GameSettings): string =>
+  const value = (key: keyof GameSettings | "densityMode" | "densities"): string =>
     fieldset.querySelector<HTMLInputElement>(`[name="setting-${key}"]`)?.value ?? "";
   if (value("npcMovementSpeed").trim() === "") {
     throw new Error("NPC movement speed is required.");
@@ -406,7 +440,18 @@ function readSettings(fieldset: HTMLFieldSetElement): GameSettings {
   if (value("npcDetectionRange").trim() === "") {
     throw new Error("NPC detection range is required.");
   }
-  return {
+  const mapMode = value("mapMode");
+  const savedDensity: unknown = JSON.parse(fieldset.dataset.terrainDensity ?? "null");
+  const terrainDensity = mapMode === "simple-generated"
+    ? value("densityMode") === "per-level"
+      ? { mode: "per-level", densities: value("densities").split(",").map(item => {
+        if (!item.trim()) throw new Error("Each Per Level density is required.");
+        return Number(item);
+      }) }
+      : { mode: "incremental", startingDensity: requiredNumber("startingDensity"),
+        increasePerLevel: requiredNumber("increasePerLevel") }
+    : savedDensity;
+  return GameSettingsSchema.parse({
     maxPlayers: Number(value("maxPlayers")),
     maxSpectators: Number(value("maxSpectators")),
     initialNpcsPerPlayer: Number(value("initialNpcsPerPlayer")),
@@ -417,10 +462,33 @@ function readSettings(fieldset: HTMLFieldSetElement): GameSettings {
     npcDetectionRange: Number(value("npcDetectionRange")),
     respawnDelaySeconds: Number(value("respawnDelaySeconds")),
     maxLevels: Number(value("maxLevels")),
-    themeRevision: value("themeRevision")
-  };
+    themeRevision: value("themeRevision"),
+    ...(mapMode === "legacy" ? {} : { mapMode }),
+    ...(terrainDensity === null ? {} : { terrainDensity })
+  });
+
+  function requiredNumber(key: keyof GameSettings | "startingDensity" | "increasePerLevel"): number {
+    const input = fieldset.querySelector<HTMLInputElement>(`[name="setting-${key}"]`)?.value ?? "";
+    if (!input.trim()) throw new Error("Terrain density is required.");
+    return Number(input);
+  }
 }
 
+function selectField(labelText: string, name: string, choices: readonly (readonly [string, string])[],
+  value: string): { label: HTMLLabelElement; select: HTMLSelectElement } {
+  const label = document.createElement("label");
+  label.htmlFor = name;
+  label.textContent = labelText;
+  const select = document.createElement("select");
+  select.id = name; select.name = name;
+  for (const [value, text] of choices) {
+    const option = document.createElement("option");
+    option.value = value; option.textContent = text;
+    select.append(option);
+  }
+  select.value = value;
+  return { label, select };
+}
 function inputField(
   labelText: string,
   name: string,

@@ -341,13 +341,25 @@ the changed default; do not assume an already-running build has picked it up.
 
 ## Dots and Squares map modes
 
-The theme developer selects the source-code constant `DEFAULT_MAP_MODE` in
+Hosts now select **Fixed arena** or **Simple Generated** in session settings.
+Simple Generated offers **Incremental** (starting density and integer increase per
+level, capped at 10) or **Per Level** (comma-separated explicit densities, exactly
+one per configured level). All entries are integers 0-10. New generated sessions
+default to 3 with zero increase. Each step targets 8 percentage points of solid
+coverage: 0 is empty, 3 targets 24%, 10 targets 80%. The denominator is the full
+bounded playable arena, including reserved clear routes/spawn zones; whole-cell
+targets round down.
+
+Settings without explicit `mapMode` preserve the legacy source-code constant
+`DEFAULT_MAP_MODE` in
 `themes/default/src/module/maps.ts`: `"fixed"` (the shipped default, **Tile Cluster
-Arena**) or `"simple-generated"` (**Simple Generated**). This is trusted theme
-configuration, not a lobby setting, environment variable or public session API.
+Arena**) or `"simple-generated"` (**Simple Generated**). This constant is now the
+legacy compatibility path, not a way to enable density for saved sessions.
 Change the constant, rebuild with `npm run theme:build`, and restart the local
 server before starting new matches. Existing running matches keep their selected
-map. The companion fixture also wraps the default module and uses this map.
+map. No saved settings/results are migrated. Editing unrelated saved settings
+retains the "Saved legacy layout" choice; choosing a mode explicitly opts in.
+The companion fixture wraps the default module and delegates its map hook.
 
 Fixed now has 16 solid four-tile clusters (64 tiles), with four clusters in each
 quadrant, adding cover to the previously sparse outer and inner regions. The
@@ -356,10 +368,10 @@ routes at x=1008 and y=1008 remain clear, every walkable grid cell is connected,
 and all authored spawns retain their radius plus 64 units of terrain clearance.
 The new clusters live in the same map object/collision definition, not a
 render-only decoration layer; movement, shots, NPC paths, rendering and radar
-all consume that geometry. Simple Generated still shifts its original four
+all consume that geometry. Legacy Simple Generated still shifts its original four
 clusters; its bounded fallback uses the expanded Fixed arena.
 
-Simple Generated uses the match seed and attempt number to move the four solid
+Legacy Simple Generated uses the match seed and attempt number to move the four solid
 four-tile clusters by up to six 32-unit cells in each direction. The selected
 layout is shared for the entire match, including later waves. Every candidate goes
 through `loadMap`: the public map schema, collision bounds, all spawn clearances
@@ -372,7 +384,61 @@ navigation, collision and projectile checks, rendered obstacles and radar
 footprints use its geometry. A module running outside this server context can
 call `generateMap` directly.
 
-To reproduce a layout, use the same safe-integer match seed, mode, and code
+### Reusable density and authoritative transitions
+
+The protocol exports `TerrainDensityScheduleSchema`, `DEFAULT_TERRAIN_DENSITY`
+and `resolveTerrainDensity(schedule, level, maxLevels)`; modules decide whether to
+consume them. `GameModuleFactory.createInitialMap?` opts into an initial authored
+map. Optional `ModuleContext.maps` exposes `prepare({bounds,cellSize,obstacles})`
+and `commit(token, replacementEntities)`. Preparation never changes active terrain;
+commit validates all entities before replacing geometry and retires old
+navigation requests/results. Tokens are scoped to one session and one pending
+layout; prepare again supersedes the old token. Modules provide their own terrain,
+connectivity, clearance and spawn rules; no game-specific rules live in the engine.
+
+Dots and Squares `generateDensityMap(seed, level, density)` uses a private stream
+derived from all three inputs, independent of gameplay RNG. It reserves authored
+spawns' radii plus 64-unit terrain clearance, joins them with connected routes,
+then grows a seeded connected free region until the solid-area target is met.
+Each of the 4096 cells enters the growth frontier at most once; total growth is
+bounded to 4096 operations. Solid cells merge into disjoint horizontal rectangle
+runs, keeping object/collision/radar counts bounded. Every candidate goes through
+the same map loader. If protected clear area prevents the target, the generator
+uses the best valid layout rather than a Fixed fallback and sets budgetExhausted.
+Unexpected schema/placement errors propagate to the normal session failure path.
+
+Intermission prepares/validates the next map without switching it. At the wave
+boundary the module commits safe living-player and retained-pickup placements,
+updates simulator/respawn references and places the full next NPC wave. Player
+health, points, effects, identity and dead/disconnected timers survive; no
+projectiles or obsolete NPC paths survive. Rendering, radar, collision, shots and
+navigation use the committed map, with no across-level position interpolation.
+Density does not alter Fixed, NPC wandering or other difficulty settings.
+
+`map.terrain` in each generated snapshot and both HUD roles reports requested
+density, target and actual coverage plus a safe-route/spawn limitation message.
+Operator gauges `default.map.actual_coverage_percent` and
+`default.map.target_coverage_percent`, with counters `default.map.prepared` and
+`default.map.density_shortfall`, expose the same measured result.
+
+After the existing theme build, reproduce without a running server:
+
+```powershell
+@'
+import { generateDensityMap } from "@multiplayer-game/default-theme";
+const result = generateDensityMap(42, 2, 3); // match seed, level, resolved density
+console.log(JSON.stringify(result.terrain));
+'@ | node --input-type=module
+npm test -- tests\terrain-density.test.ts tests\integration\session-lifecycle.test.ts
+```
+
+The public SDK/protocol additions require a reviewed immutable revision for the
+external consumer's contract pin. Do not repin to an uncommitted checkout or claim
+its existing drift gate passed.
+
+### Legacy layout reproduction
+
+To reproduce a legacy layout, use the same safe-integer match seed, mode, and code
 revision. `generateMap` uses the low 32 bits of the seed; the server currently
 creates a random seed for each room and has no API to select or disclose it.
 For a persistent **local** database, an authorized developer can obtain the session

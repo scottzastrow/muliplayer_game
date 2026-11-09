@@ -497,6 +497,12 @@ function parseSettings(input: unknown, rosterSize: number): GameSettings {
     return validateMatchCapacity(input, rosterSize);
   } catch (error) {
     if (error instanceof ZodError) {
+      const terrainIssue = error.issues.find(issue =>
+        issue.path[0] === "terrainDensity" || issue.path[0] === "mapMode");
+      if (terrainIssue) {
+        throw new HttpError(422, "INVALID_SETTINGS",
+          `${terrainIssue.path.join(".")}: ${terrainIssue.message}`.slice(0, 512));
+      }
       throw new HttpError(422, "INVALID_SETTINGS", "Session settings are invalid.");
     }
     if (error instanceof RangeError) {

@@ -23,8 +23,11 @@ export {
   MAX_MAP_GENERATION_ATTEMPTS,
   MapValidationError,
   generateMap,
+  generateDensityMap,
   loadMap,
   type GeneratedMap,
+  type DensityMap,
+  type TerrainCoverage,
   type LoadedMap,
   type MapMode
 } from "./module/maps.js";

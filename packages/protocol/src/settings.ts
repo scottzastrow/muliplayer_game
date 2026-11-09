@@ -1,5 +1,37 @@
 import { z } from "zod";
 
+export const TerrainDensitySchema = z.number().int().min(0).max(10);
+export const TerrainDensityScheduleSchema = z.discriminatedUnion("mode", [
+  z.object({
+    mode: z.literal("incremental"),
+    startingDensity: TerrainDensitySchema,
+    increasePerLevel: TerrainDensitySchema
+  }).strict(),
+  z.object({
+    mode: z.literal("per-level"),
+    densities: z.array(TerrainDensitySchema).min(1).max(100)
+  }).strict()
+]);
+export type TerrainDensitySchedule = z.infer<typeof TerrainDensityScheduleSchema>;
+export const DEFAULT_TERRAIN_DENSITY: TerrainDensitySchedule = Object.freeze({
+  mode: "incremental", startingDensity: 3, increasePerLevel: 0
+});
+
+export function resolveTerrainDensity(input: unknown, level: number, maxLevels: number): number {
+  if (!Number.isSafeInteger(maxLevels) || maxLevels < 1 || maxLevels > 100 ||
+    !Number.isSafeInteger(level) || level < 1 || level > maxLevels) {
+    throw new RangeError("Terrain level must be an integer within the configured levels (1-100).");
+  }
+  const schedule = TerrainDensityScheduleSchema.parse(input === undefined ? DEFAULT_TERRAIN_DENSITY : input);
+  if (schedule.mode === "per-level") {
+    if (schedule.densities.length !== maxLevels) {
+      throw new RangeError("Per Level terrain density requires one density per configured level.");
+    }
+    return schedule.densities[level - 1]!;
+  }
+  return Math.min(10, schedule.startingDensity + schedule.increasePerLevel * (level - 1));
+}
+
 export const GameSettingsSchema = z
   .object({
     maxPlayers: z.number().int().min(1).max(32),
@@ -12,9 +44,18 @@ export const GameSettingsSchema = z
     npcDetectionRange: z.number().finite().min(0).max(700).default(512),
     respawnDelaySeconds: z.number().finite().min(0).max(60),
     maxLevels: z.number().int().min(1).max(100),
+    mapMode: z.enum(["fixed", "simple-generated"]).optional(),
+    terrainDensity: TerrainDensityScheduleSchema.optional(),
     themeRevision: z.string().regex(/^[a-z0-9][a-z0-9._-]*@[0-9]+\.[0-9]+\.[0-9]+$/)
   })
-  .strict();
+  .strict()
+  .superRefine((settings, context) => {
+    if (settings.terrainDensity?.mode === "per-level" &&
+      settings.terrainDensity.densities.length !== settings.maxLevels) {
+      context.addIssue({ code: "custom", path: ["terrainDensity", "densities"],
+        message: "Per Level terrain density requires one density per configured level." });
+    }
+  });
 
 export type GameSettings = z.infer<typeof GameSettingsSchema>;
 

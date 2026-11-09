@@ -1,5 +1,6 @@
 import {
   BoundedNavigation,
+  AuthoritativeMapTransition,
   FIXED_STEP_MS,
   SessionRunner,
   SeededRandom,
@@ -8,6 +9,7 @@ import {
 } from "@multiplayer-game/engine";
 import {
   GameSettingsSchema,
+  JsonValueSchema,
   type GameSettings,
   type JsonValue
 } from "@multiplayer-game/protocol";
@@ -20,6 +22,7 @@ import type {
 } from "@multiplayer-game/theme-sdk";
 import {
   generateMap,
+  loadMap,
   type DefaultEntity,
   type DefaultModuleSnapshot
 } from "@multiplayer-game/default-theme";
@@ -90,7 +93,15 @@ export class SessionLifecycle {
     let module: ActiveSession["module"] | undefined;
     try {
       const { settings, seed, revision, themeDigest, roster } = this.#readRuntime(sessionId);
-      const selectedMap = generateMap(seed);
+      const moduleSettings = JsonValueSchema.parse(settings);
+      if (moduleSettings === null || typeof moduleSettings !== "object" || Array.isArray(moduleSettings)) {
+        throw new TypeError("Module settings must be a JSON object.");
+      }
+      const initialMap = this.themes.resolvePinned(revision, themeDigest)
+        .moduleFactory.createInitialMap?.(moduleSettings, seed);
+      const selectedMap = initialMap
+        ? { map: loadMap(initialMap), source: "generated" }
+        : generateMap(seed);
       const map = selectedMap.map;
       const world = new SessionWorld<DefaultEntity>(
         sessionId,
@@ -125,7 +136,7 @@ export class SessionLifecycle {
       module = this.themes.createModuleInstance(
         revision,
         context,
-        settings,
+        moduleSettings,
         roster,
         seed,
         themeDigest
@@ -487,6 +498,7 @@ function createModuleContext(
       return result;
     }
   };
+  const maps = new AuthoritativeMapTransition(world, navigation, () => pathResults.clear());
   return {
     clock: new SystemMonotonicClock(),
     random: new SeededRandom(seed),
@@ -500,6 +512,7 @@ function createModuleContext(
         world.geometry.moveCircle(position, delta, radius)
     },
     navigation: contextNavigation,
+    maps,
     emit: () => {},
     requestCompletion,
     metrics

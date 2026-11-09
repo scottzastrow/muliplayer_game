@@ -43,6 +43,13 @@ export const DefaultViewSchema = z.object({
   map: z.object({
     width: z.number().finite().positive().max(2048),
     height: z.number().finite().positive().max(2048),
+    terrain: z.object({
+      level: z.number().int().min(1).max(100),
+      density: z.number().int().min(0).max(10),
+      targetCoveragePercent: z.number().min(0).max(80),
+      actualCoveragePercent: z.number().min(0).max(80),
+      budgetExhausted: z.boolean()
+    }).optional(),
     obstacles: z.array(z.object({
       x: z.number().finite(), y: z.number().finite(),
       width: z.number().finite().positive(), height: z.number().finite().positive()
@@ -62,6 +69,12 @@ export const DefaultViewSchema = z.object({
     respawnBlocked: z.boolean().optional()
   })).max(32)
 }).superRefine((view, context) => {
+  if (view.map.terrain && (view.map.terrain.level !== view.level ||
+    view.map.terrain.targetCoveragePercent !== view.map.terrain.density * 8 ||
+    view.map.terrain.actualCoveragePercent > view.map.terrain.targetCoveragePercent)) {
+    context.addIssue({ code: "custom", path: ["map", "terrain"],
+      message: "Terrain coverage must match the current level and density target." });
+  }
   if ((view.startingNpcCount === undefined) !== (view.livingNpcCount === undefined)) {
     context.addIssue({ code: "custom", path: ["startingNpcCount"],
       message: "Wave counts must be supplied together." });

@@ -90,6 +90,8 @@ describe("Dots and Squares presentation", () => {
     });
     const snapshot = {
       ...view(100), viewerRole: role, startingNpcCount: 10, livingNpcCount: 7,
+      map: { ...view(100).map, terrain: { level: 1, density: 10, targetCoveragePercent: 80,
+        actualCoveragePercent: 60, budgetExhausted: true } },
       levelStandings: [
         { accountId: "bob", username: "Bob", rank: 1, points: 500, levelPoints: 300, kills: 5, deaths: 0 },
         { accountId: "alice", username: "Alice", rank: 2, points: 200, levelPoints: 100, kills: 2, deaths: 0 }
@@ -106,6 +108,8 @@ describe("Dots and Squares presentation", () => {
       const count = elements.find(element => element.className === "default-enemy-count")!;
       const summary = elements.find(element => element.className === "default-level-summary")!;
       expect(count.textContent).toBe("Level 1 \u00b7 7 of 10 enemies remaining");
+      expect(elements.find(element => element.className === "default-terrain-coverage")!.textContent)
+        .toBe("Terrain density 10: 60.00% coverage (target 80%) - limited by safe routes/spawns");
       expect(summary.hidden).toBe(true);
       const filter = elements.find(element => element.name === "radar-enemy")!;
       filter.checked = false;
@@ -127,9 +131,15 @@ describe("Dots and Squares presentation", () => {
       skin.handleSnapshot({ ...cleared, tick: 123 });
       skin.render(120, cleared);
       expect(summary.children[2]!.textContent).toBe("Level 2 starts in 1\u2026");
-      const next = { ...snapshot, tick: 153, level: 2, startingNpcCount: 12, livingNpcCount: 12 };
+      const next = { ...snapshot, tick: 153, level: 2, startingNpcCount: 12, livingNpcCount: 12,
+        map: { ...snapshot.map, terrain: { ...snapshot.map.terrain, level: 2 },
+          obstacles: [{ x: 96, y: 96, width: 32, height: 32 }] } };
       skin.handleSnapshot(next);
       skin.render(160, next);
+      const canvas = (host.slots.get("world") as unknown as HudElement).children[0]!;
+      expect(canvas.drawnRects).toEqual(expect.arrayContaining([
+        expect.objectContaining({ x: 396, y: 296, width: 32, height: 32 })
+      ]));
       expect(summary.hidden).toBe(true);
       expect(count.textContent).toBe("Level 2 \u00b7 12 of 12 enemies remaining");
       skin.handleSnapshot({ ...next, tick: 154, phase: "complete" });

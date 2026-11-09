@@ -137,6 +137,15 @@ Snapshots include protocol and module state schema versions; an unsupported clie
 must fail with a clear compatibility error before receiving malformed state.
 Module payloads are validated on both boundaries and scoped to the pinned module.
 
+Explicit Simple Generated sessions add optional `map.terrain` with level,
+density (integer 0-10), targetCoveragePercent (density times 8),
+actualCoveragePercent and budgetExhausted. Full map obstacles and radar terrain
+footprints are published together in the same authoritative snapshot for both
+roles. Intermission keeps the completed level's map; the boundary snapshot
+contains the next level and committed geometry. Late spectators/reconnects
+receive current geometry without relying on an earlier map-change event.
+No client map mutation or separate geometry transport is introduced.
+
 Dots and Squares schema v4 adds optional `waveRemainingSeconds` (finite, 0-300)
 at the snapshot root. Player and selected-target spectator views retain the same
 authoritative wave time, independent of player death countdowns. It is omitted

@@ -6,6 +6,8 @@ import {
   type MapSpawn
 } from "@multiplayer-game/theme-sdk";
 import { PICKUP_RADIUS } from "./tuning.js";
+import { SAFE_SPAWN_MARGIN } from "./tuning.js";
+import { TerrainDensitySchema } from "@multiplayer-game/protocol";
 
 export const DEFAULT_MAP_WIDTH = 2_048;
 export const DEFAULT_MAP_HEIGHT = 2_048;
@@ -86,6 +88,120 @@ export interface GeneratedMap {
   readonly map: LoadedMap;
   readonly source: "fixed" | "generated" | "fallback";
   readonly attempts: number;
+}
+
+export interface TerrainCoverage {
+  readonly level: number;
+  readonly density: number;
+  readonly targetCoveragePercent: number;
+  readonly actualCoveragePercent: number;
+  readonly budgetExhausted: boolean;
+}
+
+export interface DensityMap {
+  readonly map: LoadedMap;
+  readonly terrain: TerrainCoverage;
+}
+
+export function generateDensityMap(seed: number, level: number, density: number): DensityMap {
+  TerrainDensitySchema.parse(density);
+  if (!Number.isSafeInteger(seed) || !Number.isSafeInteger(level) || level < 1 || level > 100) {
+    throw new RangeError("Density map requires a safe integer seed and level 1-100.");
+  }
+  const columns = DEFAULT_MAP_WIDTH / MAP_CELL_SIZE;
+  const rows = DEFAULT_MAP_HEIGHT / MAP_CELL_SIZE;
+  const count = columns * rows;
+  const clear = new Uint8Array(count);
+  const spawns = createDefaultSpawns();
+  let state = (seed >>> 0) ^ Math.imul(level, 0x9e3779b9) ^ Math.imul(density + 1, 0x85ebca6b);
+  const random = () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let value = Math.imul(state ^ (state >>> 15), state | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
+  };
+  const rootX = Math.floor(columns / 2) - 7 + Math.floor(random() * 13);
+  const rootY = Math.floor(rows / 2) - 1;
+  for (const spawn of spawns) {
+    const x = Math.floor(spawn.position.x / MAP_CELL_SIZE);
+    const y = Math.floor(spawn.position.y / MAP_CELL_SIZE);
+    for (let column = Math.min(x, rootX); column <= Math.max(x, rootX); column += 1) {
+      clear[y * columns + column] = 1;
+    }
+    for (let row = Math.min(y, rootY); row <= Math.max(y, rootY); row += 1) {
+      clear[row * columns + rootX] = 1;
+    }
+    const radius = spawn.radius + SAFE_SPAWN_MARGIN;
+    for (let row = Math.max(0, Math.floor((spawn.position.y - radius) / MAP_CELL_SIZE));
+      row <= Math.min(rows - 1, Math.floor((spawn.position.y + radius) / MAP_CELL_SIZE)); row += 1) {
+      for (let column = Math.max(0, Math.floor((spawn.position.x - radius) / MAP_CELL_SIZE));
+        column <= Math.min(columns - 1, Math.floor((spawn.position.x + radius) / MAP_CELL_SIZE)); column += 1) {
+        if (circleIntersectsRect(spawn.position, radius, {
+          x: column * MAP_CELL_SIZE, y: row * MAP_CELL_SIZE, width: MAP_CELL_SIZE, height: MAP_CELL_SIZE
+        })) clear[row * columns + column] = 1;
+      }
+    }
+  }
+
+  const desiredSolid = Math.floor(count * density * 8 / 100);
+  const desiredClear = count - desiredSolid;
+  let clearCount = clear.reduce((sum, value) => sum + value, 0);
+  const frontier: number[] = [];
+  const queued = new Uint8Array(count);
+  const enqueueNeighbors = (index: number) => {
+    for (const next of [
+      index % columns > 0 ? index - 1 : -1, index % columns + 1 < columns ? index + 1 : -1,
+      index >= columns ? index - columns : -1, index + columns < count ? index + columns : -1
+    ]) {
+      if (next >= 0 && !clear[next] && !queued[next]) {
+        queued[next] = 1;
+        frontier.push(next);
+      }
+    }
+  };
+  for (let index = 0; index < count; index += 1) if (clear[index]) enqueueNeighbors(index);
+  // Each cell enters the frontier once; growing only adjacent cells keeps all free space connected.
+  for (let work = 0; work < count && clearCount < desiredClear && frontier.length > 0; work += 1) {
+    const pick = Math.floor(random() * frontier.length);
+    const index = frontier[pick]!;
+    frontier[pick] = frontier[frontier.length - 1]!;
+    frontier.pop();
+    clear[index] = 1;
+    clearCount += 1;
+    enqueueNeighbors(index);
+  }
+
+  const rectangles: Rect[] = [];
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns;) {
+      if (clear[row * columns + column]) { column += 1; continue; }
+      const first = column;
+      while (column < columns && !clear[row * columns + column]) column += 1;
+      rectangles.push({ x: first * MAP_CELL_SIZE, y: row * MAP_CELL_SIZE,
+        width: (column - first) * MAP_CELL_SIZE, height: MAP_CELL_SIZE });
+    }
+  }
+  const definition: MapDefinition = {
+    formatVersion: 1, id: `dots-and-squares-density-level-${level}`, name: "Simple Generated",
+    bounds: { width: DEFAULT_MAP_WIDTH, height: DEFAULT_MAP_HEIGHT }, cellSize: MAP_CELL_SIZE,
+    objects: rectangles.map((rect, index) => ({
+      id: `terrain-${index}`, typeId: "terrain.tetris-tile",
+      position: { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 },
+      tags: ["obstacle"], properties: { material: "stone" }
+    })),
+    collisions: rectangles.map((rect, index) => ({
+      id: `collision-${index}`, objectId: `terrain-${index}`,
+      shape: { type: "rect", width: rect.width, height: rect.height }
+    })),
+    spawns
+  };
+  const map = loadMap(definition);
+  const actualCoveragePercent = rectangles.reduce((area, rect) =>
+    area + rect.width * rect.height, 0) / (DEFAULT_MAP_WIDTH * DEFAULT_MAP_HEIGHT) * 100;
+  return Object.freeze({ map, terrain: Object.freeze({
+    level, density, targetCoveragePercent: density * 8, actualCoveragePercent,
+    budgetExhausted: count - clearCount < desiredSolid
+  }) });
 }
 
 export function loadMap(input: unknown): LoadedMap {

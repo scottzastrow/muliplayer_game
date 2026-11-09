@@ -68,6 +68,8 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     waveTime.className = "default-wave-time";
     const enemyCount = document.createElement("div");
     enemyCount.className = "default-enemy-count";
+    const terrainCoverage = document.createElement("div");
+    terrainCoverage.className = "default-terrain-coverage";
     const levelSummary = document.createElement("section");
     levelSummary.className = "default-level-summary";
     levelSummary.style.flexBasis = "100%";
@@ -91,7 +93,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     standings.append(standingsCaption, standingsHead, standingsBody);
     levelSummary.append(levelTitle, levelPoints, nextLevel, standings);
     levelSummary.hidden = true;
-    hud.append(points, health, waveTime, enemyCount, life, levelSummary);
+    hud.append(points, health, waveTime, enemyCount, terrainCoverage, life, levelSummary);
     const help = document.createElement("p");
     help.textContent = controlMode === "keyboard-only"
       ? "Click the game to focus. WASD: move and face. Left/Right arrows: turn in place. Space: fire."
@@ -436,6 +438,11 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
         enemyCount.textContent = current.startingNpcCount === undefined
           ? `Level ${current.level} \u00b7 ${living} enemies remaining`
           : `Level ${current.level} \u00b7 ${living} of ${current.startingNpcCount} enemies remaining`;
+        const terrain = current.map.terrain;
+        terrainCoverage.textContent = terrain
+          ? `Terrain density ${terrain.density}: ${terrain.actualCoveragePercent.toFixed(2)}% coverage ` +
+            `(target ${terrain.targetCoveragePercent}%)${terrain.budgetExhausted ? " - limited by safe routes/spawns" : ""}`
+          : "";
         levelSummary.hidden = current.phase !== "intermission";
         if (current.phase === "intermission") {
           levelTitle.textContent = `Level ${current.level} Complete`;
@@ -483,6 +490,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
         waveTime.remove();
         life.remove();
         enemyCount.remove();
+        terrainCoverage.remove();
         levelSummary.remove();
         help.remove();
         radarFilters.remove();
