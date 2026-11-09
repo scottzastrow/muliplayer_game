@@ -11,7 +11,7 @@ explicitly confirmed 10:1, five-second delay and five-session cap.
 | maxSpectators | 8 | Integer 0–64 |
 | initialNpcsPerPlayer | 10 | Integer 1–100 |
 | npcPopulationGrowthPercent | 20 | Number 0–100 percent per level |
-| baseNpcHealth | 100 | Integer 1–100000 |
+| baseNpcHealth | 50 | Integer 1–100000 |
 | npcHealthGrowthPercent | 10 | Number 0–100 percent per level |
 | npcMovementSpeed | 67.5 | Finite number 0–180 world units/second, fractions allowed; 0 keeps NPCs stationary |
 | npcDetectionRange | 512 | Finite number 0–700 world units; 0 disables automatic pursuit |
@@ -28,6 +28,13 @@ maximum instead of silently truncating difficulty. On any unexpected runtime cei
 breach fail the session explicitly; never falsely declare a level cleared.
 
 One player with the defaults above starts waves 1/2 with exactly 10/12 NPCs.
+Default level-1 NPC health is 50, so two unboosted 25-damage projectile hits
+kill one NPC. The unchanged 10% health growth gives level 2 NPCs 55 health.
+Host health overrides remain authoritative. Existing saved room/result settings
+with explicit `baseNpcHealth` (including the former 100 default) retain that value;
+they are not migrated or clamped. Newly created default sessions use 50.
+The API still requires `baseNpcHealth`; omitting it is invalid, while the
+default module's partial-settings preview uses the current default.
 Living count decreases as enemies die; no NPC replacement occurs within a wave.
 The next full count spawns only after zero living NPCs and the existing
 five-second intermission. Wave starting totals remain frozen in the HUD while

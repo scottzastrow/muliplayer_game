@@ -13,7 +13,7 @@ export async function verifyLevelTransitions({ newWindow, signIn, evaluate, clic
       [input.name.slice(8), input.value]))`);
   assert.equal(defaults.initialNpcsPerPlayer, "10");
   assert.equal(defaults.npcPopulationGrowthPercent, "20");
-  assert.equal(defaults.baseNpcHealth, "100");
+  assert.equal(defaults.baseNpcHealth, "50");
   assert.equal(defaults.maxLevels, "5");
   await click(player, "Create session");
   const id = await evaluate(player, `(async () =>

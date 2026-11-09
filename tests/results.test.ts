@@ -40,7 +40,7 @@ describe("persistent match progression and results", () => {
   it("normalizes legacy saved-result NPC settings without rewriting them", () => {
     const matchId = createRunningMatch(1, 1);
     const { npcMovementSpeed: _speed, npcDetectionRange: _range, ...legacySettings } = {
-      ...DEFAULT_GAME_SETTINGS, maxLevels: 1
+      ...DEFAULT_GAME_SETTINGS, maxLevels: 1, baseNpcHealth: 100
     };
     database!.prepare("UPDATE matches SET settings_json = ? WHERE id = ?")
       .run(JSON.stringify(legacySettings), matchId);
@@ -48,6 +48,7 @@ describe("persistent match progression and results", () => {
       matchId, status: "finished", finalLevel: 1,
       standings: [{ accountId: "account-a", points: 100, kills: 1, deaths: 0 }]
     })).toBe(true);
+    expect(getMatchResult(database!, matchId)?.settings).toMatchObject({ baseNpcHealth: 100 });
     expect(MatchResultSchema.shape.settings.parse(getMatchResult(database!, matchId)?.settings).npcMovementSpeed)
       .toBe(67.5);
     expect(MatchResultSchema.shape.settings.parse(getMatchResult(database!, matchId)?.settings).npcDetectionRange)
@@ -61,6 +62,9 @@ describe("persistent match progression and results", () => {
       .toBe(512);
     expect(database!.prepare("SELECT settings_summary_json FROM match_results WHERE match_id = ?")
       .get(matchId)).toEqual({ settings_summary_json: legacyJson });
+    expect(getMatchResult(database!, matchId)?.settings).toMatchObject({ baseNpcHealth: 100 });
+    expect(database!.prepare("SELECT settings_json FROM matches WHERE id = ?").get(matchId))
+      .toEqual({ settings_json: legacyJson });
   });
 
   it("persists ranked standings and finalizes duplicate completion requests once", () => {

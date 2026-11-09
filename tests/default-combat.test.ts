@@ -27,6 +27,71 @@ const roster: readonly RosterMember[] = [
 ];
 
 describe("default combat", () => {
+  it.each([
+    { label: "default", settings: {}, healthTrace: [50, 25, 0] },
+    { label: "host 100 HP", settings: { baseNpcHealth: 100 }, healthTrace: [100, 75, 50, 25, 0] },
+    { label: "host 75 HP", settings: { baseNpcHealth: 75 }, healthTrace: [75, 50, 25, 0] }
+  ])("measures unboosted projectile hits in a clear lane: $label", ({ label, settings, healthTrace }) => {
+    const { context, module } = createSimulation(generateMap(42).map.obstacles, {
+      ...settings, npcMovementSpeed: 0, npcDetectionRange: 0
+    });
+    try {
+      const npcs = context.entities.values().filter(entity => entity.state.kind === "npc");
+      expect(npcs).toHaveLength(20);
+      const target = npcs[0]!;
+      if (target.state.kind !== "npc") throw new TypeError("Expected a spawned NPC.");
+      const remainingHealth = (): number => {
+        const current = context.entities.get(target.id);
+        if (!current) return 0;
+        if (current.state.kind !== "npc") throw new TypeError("Expected an NPC target.");
+        return current.state.health;
+      };
+      for (const entity of context.entities.values()) {
+        if ((entity.state.kind === "npc" && entity.id !== target.id) ||
+            entity.state.kind === "pickup") context.entities.remove(entity.id);
+      }
+      moveEntity(context, "player:player-a", { x: 272, y: 272 });
+      moveEntity(context, target.id, { x: 472, y: 272 });
+      for (let x = 272; x <= 472; x += 1) {
+        expect(context.geometry.isWalkable(x, 272, 3)).toBe(true);
+        expect(context.geometry.intersectsObstacle(x, 272, 3)).toBe(false);
+      }
+
+      const observedHealth = [target.state.health];
+      let tick = 0;
+      let hits = 0;
+      while (context.entities.get(target.id) && hits < 10) {
+        expect(context.entities.get("player:player-a")?.state.effects).toBeUndefined();
+        module.applyInput("player-a", combatInput(472, 272));
+        module.step(1 / 30, ++tick);
+        const projectiles = context.entities.values().filter(entity => entity.state.kind === "projectile");
+        expect(projectiles).toHaveLength(1);
+        expect(projectiles[0]?.state).toMatchObject({
+          damage: 25, velocity: { x: 600, y: 0 }, ownerAccountId: "player-a"
+        });
+        module.applyInput("player-a", { ...combatInput(472, 272), fire: false });
+        const previousHealth = observedHealth.at(-1)!;
+        for (let travel = 0; travel < 20; travel += 1) {
+          module.step(1 / 30, ++tick);
+          const health = remainingHealth();
+          if (health !== previousHealth) break;
+        }
+        const health = remainingHealth();
+        expect(health).toBe(Math.max(0, previousHealth - 25));
+        expect(countProjectiles(context)).toBe(0);
+        observedHealth.push(health);
+        hits += 1;
+      }
+      console.info(`${label}: shot damage=25; observed HP=${observedHealth.join(" -> ")}; hits to kill=${hits}`);
+      expect(observedHealth).toEqual(healthTrace);
+      expect(context.entities.get(target.id)).toBeUndefined();
+      expect(module.results().standings.find(standing => standing.accountId === "player-a"))
+        .toMatchObject({ kills: 1, points: 100 });
+    } finally {
+      module.dispose();
+    }
+  });
+
   it("uses the configured firing cadence and never damages another player", () => {
     const simulation = createSimulation();
     const { context, module } = simulation;

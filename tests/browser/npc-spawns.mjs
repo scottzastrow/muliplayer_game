@@ -39,7 +39,7 @@ export async function verifyNpcSpawns({
     return (await response.json()).settings;
   })()`);
   assert.equal(settings.initialNpcsPerPlayer, 10);
-  assert.equal(settings.baseNpcHealth, 100);
+  assert.equal(settings.baseNpcHealth, 50);
   assert.equal(settings.npcMovementSpeed, 67.5);
   assert.equal(settings.npcDetectionRange, 512);
   await clickSessionButton(alice, creator, "Start Session");
@@ -50,7 +50,7 @@ export async function verifyNpcSpawns({
   const enemies = view.snapshot.entities.filter(entity => entity.state.kind === "npc");
   assert.equal(enemies.length, 10, "unchanged one-player default NPC count");
   assert.deepEqual(view.snapshot.map.obstacles, expected.map.obstacles, "unchanged selected terrain");
-  assert.ok(enemies.every(entity => entity.state.health === 100), "unchanged default NPC health");
+  assert.ok(enemies.every(entity => entity.state.health === 50), "default NPC health");
   const zones = new Set(enemies.map(entity =>
     `${Math.floor(entity.position.x / 512)},${Math.floor(entity.position.y / 512)}`));
   const quadrants = new Set(enemies.map(entity =>

@@ -23,7 +23,7 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = Object.freeze({
   maxSpectators: 8,
   initialNpcsPerPlayer: 10,
   npcPopulationGrowthPercent: 20,
-  baseNpcHealth: 100,
+  baseNpcHealth: 50,
   npcHealthGrowthPercent: 10,
   npcMovementSpeed: 67.5,
   npcDetectionRange: 512,

@@ -223,3 +223,15 @@ level during intermission and persist it only when the module starts that wave.
 Verify denial, disk reopen, host-first/completion-first races and confirmation in
 visible local Chrome. Preserve the existing countdown verification note, feature
 pointer and T042; leave the scoped changes local and uncommitted.
+
+### Scoped NPC-health measurement follow-up
+
+T049 extends completed T004/T020/T021. Measure a spawned level-1 NPC using
+standard firing inputs and projectile collision, isolating movement/pickups in
+a clear lane. Only if more than two hits are observed, set the shared lobby and
+default-theme manifest health default to 50 for the unchanged 25-damage shot.
+Preserve explicit host/saved settings, count and health growth formulas, NPC
+counts, weapon tuning and lifecycle. Verify both default and overridden health,
+saved-room/result JSON, create/edit UI and wave progression with focused checks.
+Do not repin uncommitted public-package changes, alter the Theme Credits pointer,
+complete T042, commit, push or deploy.

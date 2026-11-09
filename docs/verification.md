@@ -190,6 +190,61 @@ Owned local services/profile/database were stopped/cleaned; screenshots were
 retained outside tracked source. T046 is complete; **T042 remains unchecked**.
 No deployment, server-setting changes or capacity runs were performed.
 
+## Default NPC projectile hits to kill (2026-11-08)
+
+**Measured before changing health:** the initialized level-1 default NPC had
+100 HP; normal, unboosted firing produced 25-damage projectiles and observed
+100 -> 75 -> 50 -> 25 -> dead: **four hits**. After lowering only the default
+`baseNpcHealth` to 50 in protocol defaults and the default-theme manifest,
+the same firing/collision path observed **50 -> 25 -> dead: two hits**.
+
+`tests/default-combat.test.ts` stages an initialized NPC 200 world units east
+of the player, fires one projectile at a time and waits for collision/removal.
+The final fixture uses the actual seed-42 Fixed arena obstacles and checks every
+unit of the radius-3 firing lane. Diagnostic movement/detection are zero so
+aim stays fixed; health is never written, pickups are removed and no effects
+are active. Each shot is checked for 25 damage and 600 units/second velocity;
+kill/score accounting is also checked. This is executed module simulation
+evidence, not browser, human playtesting or IDE-breakpoint evidence. The IDE
+had no run configuration and could not bind the TypeScript hit breakpoint;
+the user authorized executable projectile checks instead.
+
+Host overrides still observe 100 HP/four hits and 75 HP/three hits. NPC counts,
+population growth, health growth and weapon tuning are unchanged: one-player
+default waves remain 10 then 12 NPCs, now with 50 then 55 HP. Saved room/result
+settings containing explicit 100 HP retain that value and their stored JSON
+is not rewritten; changing defaults is not a saved-settings migration.
+New default rooms and create UI use 50. Existing-room edit displays saved 100
+and permits a host-selected 75. The API still requires `baseNpcHealth`;
+partial settings passed directly to the module resolve omitted health to 50.
+Restart/rebuild a local application before expecting new defaults in its UI/runtime.
+
+Checks executed:
+
+```powershell
+npm run theme:build
+npm test -- tests\default-combat.test.ts -t 'measures unboosted projectile hits'
+npm run check
+npm test -- tests\default-combat.test.ts tests\default-theme.test.ts tests\protocol.test.ts tests\npc-spawns.test.ts tests\lobby-settings.test.ts tests\results.test.ts tests\integration\accounts-lobby.test.ts tests\integration\session-lifecycle.test.ts tests\integration\gameplay.test.ts
+node --check tests\browser\level-transitions.mjs
+node --check tests\browser\npc-spawns.mjs
+git diff --check
+```
+
+Baseline selection: 3 cases passed, 11 skipped. Workspace check passed. Final
+focused selection: **9 files, 63 tests passed**, including actual projectile
+collisions, overridden health, saved settings, counts and lifecycle.
+The first post-change selection had 1 failure/61 passes because the new
+integration test was accidentally nested inside another test; moving it to
+suite scope fixed registration, and both final reruns passed 63 tests.
+Both browser harnesses passed syntax checks only; browser scenarios were not
+executed. The existing immutable external-theme pin was not changed; its
+protocol-source drift gate awaits a reviewed commit and is not claimed passing.
+
+The pre-existing countdown note above is preserved. T042 remains unchecked,
+the Theme Credits pointer and `.idea` are untouched, and changes are uncommitted.
+No push, deployment, server-setting change or capacity run.
+
 ## Seed-42 walk-around diagnostic resume (2026-11-08)
 
 **Passed once.** The focused `node tests\browser\default-game.mjs

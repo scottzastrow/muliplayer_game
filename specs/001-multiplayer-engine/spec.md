@@ -217,10 +217,10 @@ explicit conversation decisions are user-confirmed.
   global matchmaking, distributed hosting, and arbitrary untrusted-code sandboxing are outside this feature.
 - WASD movement, mouse aim, hold left button to fire; no friendly fire. A final hit
   earns one kill and 100 points; leaderboard ties use kills descending, deaths ascending,
-  then normalized username. Health 100; default shot damage 25, enemy health 100,
+  then normalized username. Health 100; default shot damage 25, enemy health 50,
   enemy contact damage 10 at most once per second per player. Tune in the default module.
 - Settings defaults: 4 players, 8 spectators, 10 NPCs/player, 20% population growth,
-  100 base NPC health, 10% health growth, 5-second respawn, 5 levels. Growth compounds
+  50 base NPC health, 10% health growth, 5-second respawn, 5 levels. Growth compounds
   from level 1: population is ceiling(roster × initial ratio × (1 + population rate)^(level−1));
   enemy health is ceiling(base health × (1 + health rate)^(level−1)). Spectators/disconnects do not change roster size.
 - Owner-only settings/start while waiting; creator is a participating player.

@@ -261,6 +261,30 @@ describe("accounts and lobby integration", () => {
     expect((await read()).json().settings.npcDetectionRange).toBe(320);
   });
 
+  it("retains saved 100-HP rooms while new default rooms use 50 HP", async () => {
+    const creator = await registerLogin("HealthSettingsHost");
+    const savedSettings = { ...DEFAULT_GAME_SETTINGS, baseNpcHealth: 100 };
+    const created = await createSession(creator.cookie, savedSettings);
+    expect(created.statusCode).toBe(201);
+    const id = created.json().session.id as string;
+    const savedJson = JSON.stringify(savedSettings);
+    database.prepare("UPDATE matches SET settings_json = ? WHERE id = ?").run(savedJson, id);
+    const read = await app.inject({
+      url: `/api/v1/sessions/${id}`, headers: { cookie: creator.cookie }
+    });
+    expect(read.statusCode).toBe(200);
+    expect(read.json().settings.baseNpcHealth).toBe(100);
+    expect((await startSession(creator.cookie, id, 0)).statusCode).toBe(200);
+    expect(database.prepare("SELECT settings_json FROM matches WHERE id = ?").get(id))
+      .toEqual({ settings_json: savedJson });
+    const fresh = await createSession(creator.cookie, DEFAULT_GAME_SETTINGS);
+    expect(fresh.statusCode).toBe(201);
+    const freshId = fresh.json().session.id as string;
+    expect((await app.inject({
+      url: `/api/v1/sessions/${freshId}`, headers: { cookie: creator.cookie }
+    })).json().settings.baseNpcHealth).toBe(50);
+  });
+
   it("admits exactly five concurrently-created active sessions and rejects overflow", async () => {
     const creator = await registerLogin("RoomMaker");
     const attempts = await Promise.all(

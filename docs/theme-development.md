@@ -316,6 +316,16 @@ targets only within this radius and still uses bounded spatial queries. Zero dis
 automatic pursuit. The host exposes it on create/edit; values lock on start, and the
 additive v1 schema supplies 512 for older rooms/results that omit it.
 
+Dots and Squares defaults level-1 NPCs to **50 HP**: two standard, unboosted
+25-damage projectile hits kill one. The default 10% health growth yields 55 HP
+at level 2; population stays 10 then 12 for one player with 20% count growth.
+Host `baseNpcHealth` overrides and saved rooms/results keep their explicit health
+values, including the previous 100 default. No saved settings are rewritten.
+New default sessions use 50; the API still requires an explicit health setting.
+Partial settings passed directly to the default module resolve omitted health
+from the current default. Rebuild/restart the local application before using
+the changed default; do not assume an already-running build has picked it up.
+
 ## Dots and Squares map modes
 
 The theme developer selects the source-code constant `DEFAULT_MAP_MODE` in

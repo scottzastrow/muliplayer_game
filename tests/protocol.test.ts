@@ -48,6 +48,22 @@ describe("protocol v1 validation", () => {
     ).toBe(false);
   });
 
+  it("uses 50 default NPC health without changing explicit host health or growth", () => {
+    expect(DEFAULT_GAME_SETTINGS.baseNpcHealth).toBe(50);
+    expect(calculateLevelDifficulty(DEFAULT_GAME_SETTINGS, 1, 1))
+      .toEqual({ npcCount: 10, npcHealth: 50 });
+    expect(calculateLevelDifficulty(DEFAULT_GAME_SETTINGS, 1, 2))
+      .toEqual({ npcCount: 12, npcHealth: 55 });
+    for (const baseNpcHealth of [1, 75, 100, 100_000]) {
+      const settings = { ...DEFAULT_GAME_SETTINGS, baseNpcHealth };
+      expect(GameSettingsSchema.parse(settings).baseNpcHealth).toBe(baseNpcHealth);
+      expect(calculateLevelDifficulty(settings, 1, 1))
+        .toEqual({ npcCount: 10, npcHealth: baseNpcHealth });
+    }
+    const { baseNpcHealth: _health, ...missingHealth } = DEFAULT_GAME_SETTINGS;
+    expect(GameSettingsSchema.safeParse(missingHealth).success).toBe(false);
+  });
+
   it("validates client envelopes strictly", () => {
     const valid = {
       v: 1,
@@ -195,11 +211,11 @@ describe("protocol v1 validation", () => {
     const settings = { ...DEFAULT_GAME_SETTINGS, initialNpcsPerPlayer: 3, maxLevels: 3 };
     expect(calculateLevelDifficulty(settings, 2, 1)).toEqual({
       npcCount: 6,
-      npcHealth: 100
+      npcHealth: 50
     });
     expect(calculateLevelDifficulty(settings, 2, 3)).toEqual({
       npcCount: 9,
-      npcHealth: 121
+      npcHealth: 61
     });
     expect(() =>
       validateMatchCapacity({ ...settings, maxPlayers: 32, maxLevels: 100 }, 32)

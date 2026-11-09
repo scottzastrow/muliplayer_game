@@ -64,7 +64,7 @@ describe("scattered NPC wave placement", () => {
         const original = first.snapshot();
         const positions = npcs(first).map(entity => entity.position);
         expect(npcs(first)).toHaveLength(40);
-        expect(npcs(first).map(entity => entity.state.health)).toEqual(Array(40).fill(100));
+        expect(npcs(first).map(entity => entity.state.health)).toEqual(Array(40).fill(50));
         expect(positions).toEqual(npcs(repeat).map(entity => entity.position));
         expect(positions).not.toEqual(npcs(other).map(entity => entity.position));
         const counts = new Map<string, number>();
@@ -81,7 +81,7 @@ describe("scattered NPC wave placement", () => {
         }
         const next = npcs(first);
         expect(next).toHaveLength(50);
-        expect(next.map(entity => entity.state.health)).toEqual(Array(50).fill(110));
+        expect(next.map(entity => entity.state.health)).toEqual(Array(50).fill(55));
         expect(next.map(entity => entity.position)).toEqual(npcs(repeat).map(entity => entity.position));
         expect(next.slice(0, 40).map(entity => entity.position)).not.toEqual(positions);
         expect(new Set(next.map(entity => zone(entity.position))).size).toBe(16);

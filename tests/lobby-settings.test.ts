@@ -97,7 +97,7 @@ describe("host NPC settings", () => {
       json: async () => url === "/api/v1/sessions" && !init?.method
         ? { sessions: [session] }
         : url === "/api/v1/sessions/room"
-          ? { settings: { ...DEFAULT_GAME_SETTINGS, npcMovementSpeed: 90 } }
+          ? { settings: { ...DEFAULT_GAME_SETTINGS, npcMovementSpeed: 90, baseNpcHealth: 100 } }
           : {}
     }));
     vi.stubGlobal("fetch", fetch);
@@ -109,6 +109,7 @@ describe("host NPC settings", () => {
     const elements = () => createdElements[0]!.descendants();
     const createSpeed = elements().find(element => element.name === "setting-npcMovementSpeed")!;
     const createRange = elements().find(element => element.name === "setting-npcDetectionRange")!;
+    expect(elements().find(element => element.name === "setting-baseNpcHealth")!.value).toBe("50");
     expect(createSpeed.value).toBe("67.5");
     expect([createSpeed.min, createSpeed.max, createSpeed.step]).toEqual(["0", "180", "any"]);
     expect(elements().find(element => element.htmlFor === createSpeed.id)?.textContent)
@@ -132,7 +133,7 @@ describe("host NPC settings", () => {
     const create = fetch.mock.calls.find(([url, init]) => url === "/api/v1/sessions" &&
       init?.method === "POST")!;
     expect(JSON.parse(String(create[1]!.body)).settings).toMatchObject({
-      npcMovementSpeed: 33.75, npcDetectionRange: 300
+      npcMovementSpeed: 33.75, npcDetectionRange: 300, baseNpcHealth: 50
     });
 
     await vi.waitFor(() => expect(elements().some(element => element.tagName === "details")).toBe(true));
@@ -142,10 +143,13 @@ describe("host NPC settings", () => {
     await vi.waitFor(() => expect(controls.children.length).toBe(3));
     const editSpeed = controls.querySelector('[name="setting-npcMovementSpeed"]')!;
     const editRange = controls.querySelector('[name="setting-npcDetectionRange"]')!;
+    const editHealth = controls.querySelector('[name="setting-baseNpcHealth"]')!;
+    expect(editHealth.value).toBe("100");
     expect(editSpeed.value).toBe("90");
     expect(editRange.value).toBe("512");
     editSpeed.value = "0";
     editRange.value = "0";
+    editHealth.value = "75";
     controls.children.find(element => element.textContent === "Save settings")!
       .dispatchEvent(new Event("click"));
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/v1/sessions/room/settings",
@@ -153,7 +157,7 @@ describe("host NPC settings", () => {
     const update = fetch.mock.calls.find(([url]) => url === "/api/v1/sessions/room/settings")!;
     expect(JSON.parse(String(update[1]!.body))).toEqual({
       settings: {
-        ...DEFAULT_GAME_SETTINGS, npcMovementSpeed: 0, npcDetectionRange: 0
+        ...DEFAULT_GAME_SETTINGS, npcMovementSpeed: 0, npcDetectionRange: 0, baseNpcHealth: 75
       }, expectedRevision: 2
     });
     const requestCount = fetch.mock.calls.filter(([url]) =>

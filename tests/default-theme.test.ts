@@ -111,6 +111,8 @@ describe("default theme registration", () => {
       module.initialize();
       counts.push(living().length);
       expect(living()).toHaveLength(10);
+      expect(living().map(entity => entity.state.health)).toEqual(Array(10).fill(50));
+      expect(defaultThemeDefinition.settingsDefaults.baseNpcHealth).toBe(50);
       expect(module.snapshot({ accountId: "alice", role: "player" })).toMatchObject({
         startingNpcCount: 10, livingNpcCount: 10,
         levelStandings: [{ accountId: "alice", levelPoints: 0, points: 0 }]
@@ -133,6 +135,7 @@ describe("default theme registration", () => {
       module.step(0, clearedAt + 150);
       expect(module.state).toMatchObject({ phase: "active", level: 2 });
       expect(living()).toHaveLength(12);
+      expect(living().map(entity => entity.state.health)).toEqual(Array(12).fill(55));
       expect(module.snapshot({ accountId: "alice", role: "player" })).toMatchObject({
         startingNpcCount: 12, livingNpcCount: 12,
         levelStandings: [{ accountId: "alice", levelPoints: 0, points: 1000, kills: 10 }]

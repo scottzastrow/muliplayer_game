@@ -304,6 +304,7 @@ started.
 - [X] T046 [US2] Implement placement-only scattered NPC waves for FR-024 in themes/default/src/module/npc-spawns.ts, entities.ts and index.ts; use match seed/wave, reachable zones, terrain/player/NPC clearance and bounded explicit fallback without changing counts, health, terrain or detection settings; verify both map modes in tests/npc-spawns.test.ts and tests/browser/npc-spawns.mjs, and document reproduction/fallback in docs/theme-development.md and actual evidence in docs/verification.md.
 - [X] T047 [US2] Trace default one-player waves in tests/default-theme.test.ts (10 then 12, no replacement, five-second intermission); add authoritative wave totals and per-level points/standings in themes/default/src/module/progression.ts and index.ts, render persistent enemy totals and player/spectator intermission summaries in themes/default/src/skin/view.ts and index.ts; extend focused skin/preview/lifecycle coverage and tests/browser/level-transitions.mjs with a loopback-only staged-combat server fixture, update FR-009/FR-011, contracts and evidence; keep T042 open and changes uncommitted without push/deployment.
 - [X] T048 [US2] Add confirmed host-only End Session beside running lobby status in apps/client/src/lobby.ts; authorize creator account ID in apps/server/src/lobby/registry.ts and routes.ts, sharing SessionLifecycle finished-result persistence/release/notification with normal completion. Keep intermission finalLevel on the reached wave. Cover denial, repeated/concurrent end, both normal-completion orderings and disk reload in tests/integration/end-session.test.ts; verify lobby confirmation and player/spectator results in tests/browser/end-session.mjs, record focused checks/browser evidence in docs/verification.md and retain the existing countdown note. Leave T042 open and changes local/uncommitted.
+- [X] T049 [US2] Measure unboosted projectile hits against an initialized level-1 NPC in tests/default-combat.test.ts; after observing four 25-damage hits at 100 HP, lower only the baseNpcHealth default in packages/protocol/src/settings.ts and themes/default/theme.json to 50 and verify two actual projectile collisions. Preserve host overrides, saved settings, NPC counts/growth and weapon damage; extend focused protocol/lobby/results/wave checks and synchronize default browser assertions and directly related docs. Preserve the countdown note and Theme Credits pointer, leave T042 open and changes uncommitted without push/deployment.
 
 T047 local evidence (2026-11-08): the pre-change one-player default trace passed
 10 initial NPCs, declining counts with real combat, no replacement and 12 NPCs
@@ -366,6 +367,8 @@ T047 depends on completed T021/T023/T024/T027 and extends their existing paths;
 it does not depend on or complete T042.
 T048 depends on completed T021/T024/T027 and the existing lobby authority/UI;
 it does not depend on or complete T042 or any blocked Theme Credits tasks.
+T049 depends on completed T004/T020/T021 and existing settings persistence;
+it does not depend on or complete T042 or blocked Theme Credits work.
 
 T048 local evidence (2026-11-08): workspace check passed and the final focused
 9-file/38-test selection passed, including four host-end cases with non-host
@@ -379,6 +382,27 @@ The existing countdown note is preserved; T042 remains unchecked. Changes stay
 local/uncommitted, with no push, deployment or capacity run.
 
 ## Parallel Opportunities
+
+T049 local evidence (2026-11-08): baseline clear-lane projectile checks passed
+3 cases (11 unrelated combat tests skipped), observing default HP
+100 → 75 → 50 → 25 → dead, four standard 25-damage hits. Final checks use
+seed-42 Fixed arena collision geometry and observe default 50 → 25 → dead
+(two hits), explicit host 100 → 75 → 50 → 25 → dead (four) and host
+75 → 50 → 25 → dead (three). Only diagnostic movement/detection are zero;
+targets retain their initialized health, shots come from normal module input,
+each projectile is checked for 25 damage/600 speed and consumed on collision,
+and no pickups/effects or direct health writes are used.
+`npm run check` passed; the final focused 9-file/63-test selection passed.
+Both updated browser harness syntax checks and `git diff --check` passed;
+browser scenarios were not run. An initial integration run failed because
+the new health-settings test was accidentally nested; moving it to suite scope
+resolved that test-registration error. Saved room/result JSON retains explicit
+100 HP without rewriting, new rooms/create UI use 50, host edit/75-HP override
+is retained, and default one-player wave counts remain 10/12 with 50/55 HP.
+The immutable external-consumer pin is unchanged; its protocol drift gate
+remains pending a reviewed commit and was not run or claimed passing.
+The countdown note and feature pointer are preserved; T042 stays unchecked.
+Changes remain uncommitted; no push, deployment or capacity run.
 
 Default execution remains sequential. After shared contracts are stable, optional
 file-isolated work could pair US1 auth tests with client forms, US2 map tests with
