@@ -1,5 +1,49 @@
 # Local verification
 
+## Fixed-arena minimal browser and slot-19 simulation (2026-11-09)
+
+The separate minimal browser check passed in a fresh loopback room with one
+player, one spectator and Fixed seed 42 (headless Chrome 156.0.8078.80,
+Windows/Node 24.11.0). Both roles passed attached, same-color radar nose
+geometry at 0, 45, 90, 135, 180, 225, 270 and 315 degrees: body radius 4,
+nose radius 2, center offset 4.5 pixels and overlapping circles. The player
+moved diagonally from `(272,272)` to `(374.3856,373.8234)` toward the added
+tile at `(384,384)`; the position stayed fixed through another 500 ms of
+movement input and remained walkable. The spectator saw the same terrain and
+sent no gameplay input. The disposable room was left successfully (HTTP 204)
+and its browser contexts were disposed.
+
+The first browser attempt used WASD with a keyboard-mouse account and stopped
+at the movement assertion; switching the fixture to its arrow-key controls
+made the rerun pass. The first simulation assertion counted the returned
+player as its own clearance blocker; the corrected check excludes that entity.
+The deterministic seed-42 simulation then passed twice with the same slot-19
+fallback `(368,1232)` from authored spawn `(1136,1776)`, required terrain and
+entity clearance (`radius 14 + margin 64`), and a found navigation path of 42
+points.
+
+`tests/fixed-arena-spawn.test.ts` adds the repeatable simulation check, and
+`tests/browser/fixed-arena-minimal.mjs` plus the `--fixed-arena-minimal` runner
+entry add the separate browser check. The 32-player browser scenario was not
+rerun during this focused verification and remains pending, including its
+slot-19 browser placement assertion. Its local harness edits are not included
+in the Fixed-arena terrain/radar commit.
+
+The reviewed expansion adds 31 cover clusters to the existing 16, giving 641
+unique solid tiles across 47 clusters and 15.6494140625% arena coverage.
+Related regressions cover connected player-radius routes, authored spawn
+clearance, nearby cover in every region, deterministic NPC placement, respawn
+hazards and the normalized same-color radar nose at eight headings. The radar
+body/nose radii remain 4/2; only the nose offset changes from 12 to 4.5 pixels.
+Review also aligned the existing obstacle-browser tile count and seed-4315
+NPC expectation with the map/NPC regression fixtures; that browser scenario
+was not rerun and is not claimed passing.
+
+This commit handoff reuses the recorded focused browser and simulation passes;
+tests were not rerun. T042 remains unchecked. Existing rooms, unrelated edits
+and local artifacts are preserved. No push, deployment or capacity run was
+performed.
+
 ## Default wave counts and level-completion presentation, T047 (2026-11-08)
 
 The first trace ran before production changes, using one player, all default

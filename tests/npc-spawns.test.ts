@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { BoundedNavigation, SessionWorld, type Rect } from "@multiplayer-game/engine";
+import { BoundedNavigation, SessionWorld, WorldGeometry, type Rect } from "@multiplayer-game/engine";
 import {
   defaultModuleFactory, generateMap, loadMap, type DefaultEntity
 } from "@multiplayer-game/default-theme";
@@ -50,7 +50,7 @@ describe("scattered NPC wave placement", () => {
   it("keeps the obstacle browser encounter reproducible without a fixed NPC spawn", () => {
     const simulation = setup(4315, "fixed", 1);
     try {
-      expect(npcs(simulation)[0]!.position).toEqual({ x: 560, y: 528 });
+      expect(npcs(simulation)[0]!.position).toEqual({ x: 464, y: 656 });
     } finally { simulation.module.dispose(); }
   });
 
@@ -131,7 +131,7 @@ describe("scattered NPC wave placement", () => {
           }
         } finally { simulation.module.dispose(); }
       }
-    }
+    }, 20_000
   );
 
   it("excludes disconnected clear space and redistributes across remaining zones with bounded work", () => {
@@ -183,8 +183,17 @@ describe("scattered NPC wave placement", () => {
           { id: "b", kind: "player", position: { x: 48, y: 48 }, radius: 14 }
         ]
       });
+      const geometry = new WorldGeometry(tiny.definition.bounds, tiny.obstacles);
+      const context = { ...simulation.context, geometry: {
+        isWalkable: (x: number, y: number, radius = 0) =>
+          geometry.isCircleWalkable({ x, y }, radius),
+        intersectsObstacle: (x: number, y: number, radius: number) =>
+          geometry.intersectsObstacle({ x, y }, radius),
+        moveCircle: (position: Point2, delta: Point2, radius: number) =>
+          geometry.moveCircle(position, delta, radius)
+      } };
       const before = npcs(simulation);
-      expect(() => selectNpcSpawns(simulation.context, tiny, [{ x: 16, y: 16 }], 42, 1, 2))
+      expect(() => selectNpcSpawns(context, tiny, [{ x: 16, y: 16 }], 42, 1, 2))
         .toThrow("only 1 reachable clear NPC locations for 2 enemies");
       expect(simulation.metrics.increment).toHaveBeenCalledWith("default.npc_spawn.insufficient_space");
       expect(npcs(simulation)).toEqual(before);

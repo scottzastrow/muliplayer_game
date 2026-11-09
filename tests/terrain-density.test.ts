@@ -41,7 +41,7 @@ describe("terrain density schedules", () => {
       terrainDensity: { mode: "incremental", startingDensity: 10, increasePerLevel: 10 } }, 42);
     const fixedWithoutDensity = defaultModuleFactory.createInitialMap?.({ mapMode: "fixed" }, 42);
     expect(fixed).toEqual(fixedWithoutDensity);
-    expect(fixed!.collisions).toHaveLength(64);
+    expect(fixed!.collisions).toHaveLength(641);
     expect(defaultModuleFactory.createInitialMap?.({ mapMode: "simple-generated" }, 42))
       .toEqual(generateDensityMap(42, 1, 3).map.definition);
   });

@@ -149,7 +149,7 @@ describe("default player respawn", () => {
       });
       simulation.world.addEntity({
         id: "projectile:spawn-hazard", typeId: "projectile.player", radius: 3,
-        position: { x: 400, y: 80 },
+        position: { x: 496, y: 240 },
         state: {
           kind: "projectile", ownerAccountId: "alice", damage: 25,
           velocity: { x: 0, y: 0 }, expiresAtTick: 1_000

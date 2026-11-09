@@ -169,8 +169,8 @@ export function drawRadar(
     const facingY = facingLength === 0 ? 0 : options.facing.y / facingLength;
     context.beginPath();
     context.arc(
-      options.x + facingX * 12,
-      options.y + facingY * 12,
+      options.x + facingX * 4.5,
+      options.y + facingY * 4.5,
       2,
       0,
       Math.PI * 2

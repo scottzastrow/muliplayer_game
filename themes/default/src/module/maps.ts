@@ -48,6 +48,13 @@ const TETROMINO_CLUSTERS: readonly {
     tiles: [[1, 0], [1, 1], [0, 2], [1, 2]]
   }
 ];
+const COVER_SHAPES = {
+  block: ["11111", "11111", "11111", "11111", "11111"],
+  t: ["11111", "11111", "00100", "00100", "00100"],
+  l: ["11000", "11000", "11000", "11111", "11111"],
+  steps: ["11100", "11100", "11111", "00111", "00111"],
+  cross: ["01110", "11111", "11111", "11111", "01110"]
+} as const;
 const FIXED_ARENA_CLUSTERS = [
   ...TETROMINO_CLUSTERS,
   ...([
@@ -66,6 +73,24 @@ const FIXED_ARENA_CLUSTERS = [
   ] as const).map(([id, tileX, tileY]) => ({
     id, tileX, tileY,
     tiles: [[0, 0], [1, 0], [2, 0], [1, 1]] as const
+  })),
+  ...([
+    ["block", 1, 1], ["t", 10, 1], ["l", 19, 1], ["steps", 26, 1],
+    ["cross", 34, 1], ["block", 52, 1], ["t", 58, 1],
+    ["l", 1, 12], ["steps", 19, 12], ["cross", 26, 12], ["block", 34, 12],
+    ["t", 52, 12], ["l", 58, 12],
+    ["steps", 1, 26], ["cross", 10, 26], ["block", 58, 26],
+    ["t", 1, 34], ["l", 58, 34],
+    ["steps", 1, 44], ["cross", 10, 44], ["block", 43, 44], ["t", 52, 44], ["l", 58, 44],
+    ["steps", 1, 58], ["cross", 10, 58], ["block", 19, 58], ["t", 26, 58],
+    ["l", 34, 58], ["steps", 43, 58], ["cross", 52, 58], ["block", 58, 58]
+  ] as const).map(([shape, tileX, tileY]) => ({
+    id: `cover-${shape}-${tileX}-${tileY}`,
+    tileX,
+    tileY,
+    tiles: COVER_SHAPES[shape].flatMap((row, y) =>
+      [...row].flatMap((solid, x): (readonly [number, number])[] =>
+        solid === "1" ? [[x, y]] : []))
   }))
 ];
 

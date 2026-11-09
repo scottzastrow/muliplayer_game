@@ -71,7 +71,7 @@ describe("default theme maps", () => {
     expect(first.map.definition.bounds).toEqual({ width: 2_048, height: 2_048 });
     expect(first.map.definition.cellSize).toBe(32);
     expect(first.map.definition.spawns.filter((spawn) => spawn.kind === "player")).toHaveLength(32);
-    expect(first.map.obstacles).toHaveLength(64);
+    expect(first.map.obstacles).toHaveLength(641);
     expect(otherSeed.map.obstacles).toEqual(first.map.obstacles);
     for (const spawn of first.map.definition.spawns) {
       expect(first.map.isWalkable(spawn.position, spawn.radius)).toBe(true);
@@ -111,12 +111,23 @@ describe("default theme maps", () => {
       const cell = navigation.grid.cellByIndex(index);
       if (navigation.grid.isWalkable(cell)) expect(visited.has(index)).toBe(true);
     }
-    expect(new Set(map.definition.objects.map(object => object.properties?.clusterId)).size).toBe(16);
+    expect(new Set(map.definition.objects.map(object => object.properties?.clusterId)).size).toBe(47);
+    expect(new Set(map.obstacles.map(obstacle => `${obstacle.x},${obstacle.y}`)).size).toBe(641);
+    const area = map.obstacles.reduce((sum, obstacle) => sum + obstacle.width * obstacle.height, 0);
+    expect(area / (2_048 * 2_048) * 100).toBe(15.6494140625);
     for (const [x, y] of [[0, 0], [1_024, 0], [0, 1_024], [1_024, 1_024]] as const) {
       expect(map.obstacles.filter(obstacle =>
         obstacle.x >= x && obstacle.x < x + 1_024 &&
         obstacle.y >= y && obstacle.y < y + 1_024
-      )).toHaveLength(16);
+      ).length).toBeGreaterThan(100);
+    }
+    for (const spawn of map.definition.spawns.filter(spawn => spawn.kind === "player")) {
+      const nearby = map.definition.objects.filter(object =>
+        Math.hypot(object.position.x - spawn.position.x, object.position.y - spawn.position.y) < 512);
+      expect(new Set(nearby.map(object => object.properties?.clusterId)).size).toBeGreaterThanOrEqual(3);
+      expect(nearby.some(object =>
+        Math.hypot(object.position.x - spawn.position.x, object.position.y - spawn.position.y) < 256))
+        .toBe(true);
     }
   });
 

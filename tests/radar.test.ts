@@ -95,9 +95,28 @@ describe("shared radar SDK", () => {
       { x: 145, y: 80, radius: 3, color: "#00ff00" }
     ]);
     expect(arcs).toContainEqual({ x: 100, y: 80, radius: 4, color: "#ffffff" });
-    expect(arcs).toContainEqual({ x: 112, y: 80, radius: 2, color: "#ffffff" });
+    expect(arcs).toContainEqual({ x: 104.5, y: 80, radius: 2, color: "#ffffff" });
     expect(labels).toContain("N");
   });
+
+  it.each(Array.from({ length: 8 }, (_, index) => index * Math.PI / 4))(
+    "attaches the same-color nose at heading %s, including non-unit facing vectors",
+    (heading) => {
+      const { context, arcs } = renderingContext();
+      drawRadar(context, { categories: [], markers: [] }, {
+        x: 100, y: 80, radius: 72, range: 512, center: { x: 0, y: 0 },
+        facing: { x: Math.cos(heading) * 3, y: Math.sin(heading) * 3 },
+        markerColors: {}, anchorColor: "#12ab34"
+      });
+      const body = arcs.find(arc => arc.radius === 4)!;
+      const nose = arcs.find(arc => arc.radius === 2)!;
+      expect(nose.color).toBe(body.color);
+      expect(nose.x).toBeCloseTo(body.x + Math.cos(heading) * 4.5);
+      expect(nose.y).toBeCloseTo(body.y + Math.sin(heading) * 4.5);
+      expect(Math.hypot(nose.x - body.x, nose.y - body.y))
+        .toBeLessThan(body.radius + nose.radius);
+    }
+  );
 
   it("fails explicitly when a tracked marker has no configured color", () => {
     const radar = RadarViewSchema.parse({

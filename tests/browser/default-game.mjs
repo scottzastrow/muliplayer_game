@@ -310,7 +310,7 @@ async function verifyRadarFilters(page) {
     assert.ok(hidden.arcs.some(arc => arc.x === hidden.width - 84 && arc.y === 84 && arc.r === 4),
       "own dot stays centered with every filter");
     assert.ok(hidden.arcs.some(arc => arc.r === 2 &&
-      Math.abs(Math.hypot(arc.x - (hidden.width - 84),arc.y - 84) - 12) < 0.1),
+      Math.abs(Math.hypot(arc.x - (hidden.width - 84),arc.y - 84) - 4.5) < 0.1),
     "facing stays centered with every filter");
     assert.ok(hidden.fillTexts.some(label => label.text === `Enemies remaining: ${counts.enemy}`),
       "enemy count is independent of NPC visibility");
@@ -698,7 +698,20 @@ async function fireWhileAiming(page, targetForView, duration, npcTrace) {
 }
 
 try {
-  if (process.argv.includes("--end-session")) {
+  if (process.argv.includes("--fixed-arena-minimal")) {
+    const playerPage = await newWindow();
+    const observer = await newWindow();
+    const suffix = Date.now().toString(36);
+    const password = randomUUID();
+    const creator = `Fixed_${suffix}`;
+    await signIn(playerPage, creator, password);
+    await signIn(observer, `Watch_${suffix}`, password);
+    const { verifyFixedArenaMinimal } = await import("./fixed-arena-minimal.mjs");
+    await verifyFixedArenaMinimal({
+      playerPage, observer, creator, cdp, evaluate, waitFor, click, clickSessionButton,
+      state, own, aim, moveKeys, delay, browser: version.Browser, origin
+    });
+  } else if (process.argv.includes("--end-session")) {
     const { verifyEndSession } = await import("./end-session.mjs");
     await verifyEndSession({ newWindow, signIn, evaluate, click, clickSessionButton,
       waitFor, cdp, waitForDialog, version });
@@ -827,9 +840,9 @@ try {
     const arena = initial.snapshot.map;
     const playerAtStart = own(initial).position;
     const npcAtStart = initial.snapshot.entities.find(entity => entity.state.kind === "npc");
-    assert.equal(arena.obstacles.length, 64, "sixteen solid tetromino clusters are in the map");
+    assert.equal(arena.obstacles.length, 641, "47 distributed solid clusters are in the map");
     assert.deepEqual(playerAtStart, { x: 272, y: 272 });
-    assert.ok(Math.hypot(npcAtStart.position.x - 528, npcAtStart.position.y - 528) < 60,
+    assert.ok(Math.hypot(npcAtStart.position.x - 464, npcAtStart.position.y - 656) < 60,
       `Seed 4315 places the NPC near the northwest encounter (${JSON.stringify(npcAtStart.position)})`);
     assert.ok(segmentHitsObstacles(playerAtStart, npcAtStart.position, arena.obstacles, 3),
       "the player and NPC start across a solid cluster with no direct shot");

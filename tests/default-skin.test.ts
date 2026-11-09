@@ -497,7 +497,7 @@ describe("Dots and Squares presentation", () => {
           if (other !== index) expect(visible).toContain(color);
         });
         expect(drawing.drawnArcs).toContainEqual({ x: 716, y: 84, radius: 4 });
-        expect(drawing.drawnArcs).toContainEqual({ x: 716, y: 72, radius: 2 });
+        expect(drawing.drawnArcs).toContainEqual({ x: 716, y: 79.5, radius: 2 });
         expect(drawing.drawnText).toContain("Enemies remaining: 1");
         input.checked = true;
         input.dispatchEvent(new Event("change"));
