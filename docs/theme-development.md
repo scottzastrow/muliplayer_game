@@ -1,5 +1,41 @@
 # Game Theme Development
 
+## Default-theme wave status and transitions
+
+The module emits `startingNpcCount`, `livingNpcCount` and ranked `levelStandings`
+for players and spectators. The HUD shows `Level 1 · 7 of 10 enemies remaining`
+independently of radar filters. On a non-final clear, the existing five-second
+intermission shows the completed level, viewed player's level-earned points,
+running standings and next-level countdown. Totals persist across waves; only
+the per-level score baseline resets at the next spawn. Final clears retain the
+existing saved final-standings route. The preview includes an `intermission`
+scenario; older snapshot fixtures without the additive fields still render.
+
+The focused real-browser check is `node tests\browser\default-game.mjs
+--level-transitions`, using the existing Chrome debugging setup and
+`BROWSER_TEST_ORIGIN`/`BROWSER_DEBUG_URL`. It must target the **test-only**
+`tests\browser\level-transitions-server.ts`, not a normal developer or deployed
+server. The server requires `NODE_ENV=test` and `HOST=127.0.0.1`, opens a disposable
+database, and stages one real NPC at a time at (400,272) in a verified clear lane.
+It leaves default wave settings, health, scoring, combat and progression intact;
+the staging is not evidence of unassisted play or natural NPC navigation.
+
+For example, create an ignored `var\wave-check.env` with test mode, loopback host,
+unused server port, matching client `PUBLIC_ORIGIN` and a new database path.
+Start the fixture and Vite in separate terminals using that same env file:
+
+```powershell
+node --env-file=var\wave-check.env --import tsx tests\browser\level-transitions-server.ts
+node --env-file=var\wave-check.env node_modules\vite\bin\vite.js apps\client --config apps\client\vite.config.ts --host 127.0.0.1 --port 15178 --strictPort
+```
+
+Set the file's `PUBLIC_ORIGIN` to `http://127.0.0.1:15178` for those commands.
+The scenario registers a player and observer, keeps all lobby defaults, clears
+wave 1 through mouse firing, checks both role summaries and filtered counts,
+and verifies wave 2 starts with 12 NPCs at the intermission deadline. It leaves
+its room in cleanup. Stop owned services and remove only their disposable
+database/profile/env after the check; never use this fixture on Lightsail.
+
 ## Default-theme held movement controls
 
 A fresh movement-key press sets facing to the current screen-direction movement

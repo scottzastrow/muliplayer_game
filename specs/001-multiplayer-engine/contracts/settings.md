@@ -27,6 +27,13 @@ Reject start/settings whose requested NPCs or health exceed ceilings; show a use
 maximum instead of silently truncating difficulty. On any unexpected runtime ceiling
 breach fail the session explicitly; never falsely declare a level cleared.
 
+One player with the defaults above starts waves 1/2 with exactly 10/12 NPCs.
+Living count decreases as enemies die; no NPC replacement occurs within a wave.
+The next full count spawns only after zero living NPCs and the existing
+five-second intermission. Wave starting totals remain frozen in the HUD while
+the living count falls, regardless of radar filters; this presentation change
+does not retune growth, health, speeds, detection or the wave countdown.
+
 Operator defaults: maxSessions=5 (fixed POC cap), maxNpcsPerSession=2000,
 maxNpcHealth=1000000, maxProjectilesPerSession=1000, maxPickupsPerSession=100,
 maxPathSearchesPerTick=8, maxPathNodesPerSearch=2048. Bounds are configuration ceilings,

@@ -1,5 +1,68 @@
 # Local verification
 
+## Default wave counts and level-completion presentation, T047 (2026-11-08)
+
+The first trace ran before production changes, using one player, all default
+settings, seed 42 and real module combat with test-staged projectile encounters.
+It passed: wave 1 started with **10 NPCs**, kills reduced living counts through
+**9,8,7,6,5,4,3,2,1,0**, no killed NPC was replaced, tick +149 remained empty in
+intermission, and tick +150 spawned **12 NPCs** for wave 2. No spawn/count bug was
+reproduced; frozen-roster growth and spawning were not changed.
+
+The default module now publishes starting/living counts and per-level earned
+points alongside running ranked standings. HUD totals are independent of radar
+filters. During the same five-second intermission both roles see completed-level
+heading, selected player's earned points, roster standings and next-level
+countdown. Next spawn resets only level-earned points; final clear retains normal
+saved-result finalization. Fields are additive to default schema 4; legacy
+fixtures remain accepted, with count pairs validated when supplied. The theme
+preview gained an intermission fixture.
+
+`npm run check` passed. The final focused selection passed **8 files, 57 tests**:
+default-theme, default-skin, default-combat, wave-countdown, integrated gameplay,
+spectator-view, theme-preview and session-lifecycle. Coverage includes default
+counts/no replacement, exact intermission deadline, 1000 earned points from ten
+kills and reset at wave 2, player/spectator HUD/counts with NPC radar disabled,
+running standings ordering, countdown, legacy snapshot compatibility, invalid
+count pairs, final clear without another intermission, and actual integrated
+combat/result persistence. Browser harness syntax and `git diff --check` passed.
+An early command included nonexistent `wave-timeout.test.ts`; that selector is
+not evidence of an additional file/test run.
+
+Visible Chrome **156.0.8078.80**, Windows, Node **24.11.0**, npm **11.6.1**:
+`node tests\browser\default-game.mjs --level-transitions` passed twice. The final
+run observed:
+
+| Boundary | Level | Starting NPCs | Living NPCs | Tick |
+| --- | --- | --- | --- | --- |
+| Initial active wave | 1 | 10 | 10 | Initial snapshot |
+| Three kills, NPC radar filtered | 1 | 10 | 7 | During combat |
+| First intermission snapshot | 1 | 10 | 0 | 266 |
+| Next wave / intermission deadline | 2 | 12 | 12 | 416 |
+
+Every living count 10 down to 0 was observed. All intermission samples stayed
+level 1 with zero NPCs; level 2 first appeared at the exact deadline, **150 ticks
+later**. Player and spectator views both showed Level 1 Complete, **1000** earned
+points, identical one-player running standings (10 kills, 0 deaths), next-level
+countdown and the filtered `7 of 10` label. Wave 2 showed `12 of 12`, retained
+1000 running points, reset level-earned points to zero and hid the summary.
+The browser reaches wave 2; final-result correctness is covered by the focused
+module and real HTTP/WebSocket lifecycle tests, not by this browser scenario.
+
+Used disposable loopback fixture server **18088**, Vite **15178**, Chrome debugging
+**19228**, a new owned database/profile and local ignored env file. All three
+endpoints returned HTTP 200 before execution. The test-only server stages one
+NPC at a time in the verified clear (400,272) firing lane but preserves all lobby
+defaults, wave counts, NPC health, scoring, combat and progression. Real mouse
+input clears the wave; this is **not** an unassisted-play or natural-navigation
+claim. The server refuses non-test/non-loopback configuration. Rooms are left
+in harness cleanup; owned processes and disposable env/database/profile are
+removed after verification.
+
+Changes remain uncommitted. The pre-existing countdown note below and `.idea`
+were preserved. T042 remains open; no push, deployment, Lightsail load or capacity
+run occurred.
+
 ## Held movement and independent facing, T023/T045 (2026-11-08)
 
 The already-uncommitted screen-direction controls passed both requested cases;

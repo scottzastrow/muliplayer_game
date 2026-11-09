@@ -52,8 +52,8 @@ async function evaluate(page, expression) {
   }
   return result.result.value;
 }
-async function waitFor(page, expression) {
-  for (let attempt = 0; attempt < 80; attempt++) {
+async function waitFor(page, expression, timeoutMs = 8000) {
+  for (let attempt = 0; attempt < Math.ceil(timeoutMs / 100); attempt++) {
     if (await evaluate(page, expression)) return;
     await delay(100);
   }
@@ -683,7 +683,11 @@ async function fireWhileAiming(page, targetForView, duration, npcTrace) {
 }
 
 try {
-  if (process.argv.includes("--held-controls")) {
+  if (process.argv.includes("--level-transitions")) {
+    const { verifyLevelTransitions } = await import("./level-transitions.mjs");
+    await verifyLevelTransitions({ newWindow, signIn, evaluate, click, clickSessionButton,
+      waitFor, cdp, delay, state, aim, version });
+  } else if (process.argv.includes("--held-controls")) {
     await verifyHeldControls();
   } else {
   const alice = await newWindow();

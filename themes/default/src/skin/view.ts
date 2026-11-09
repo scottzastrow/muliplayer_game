@@ -32,6 +32,13 @@ export const DefaultViewSchema = z.object({
   phase: z.enum(["active", "intermission", "complete"]),
   intermissionEndsAtTick: counter.optional(),
   waveRemainingSeconds: z.number().finite().nonnegative().max(360).optional(),
+  startingNpcCount: counter.max(2000).optional(),
+  livingNpcCount: counter.max(2000).optional(),
+  levelStandings: z.array(z.object({
+    accountId: z.string().min(1), username: z.string().min(1),
+    rank: z.number().int().positive(), points: counter, levelPoints: counter,
+    kills: counter, deaths: counter
+  })).max(32).optional(),
   radar: RadarViewSchema.optional(),
   map: z.object({
     width: z.number().finite().positive().max(2048),
@@ -54,6 +61,16 @@ export const DefaultViewSchema = z.object({
     respawnAtTick: counter.optional(),
     respawnBlocked: z.boolean().optional()
   })).max(32)
+}).superRefine((view, context) => {
+  if ((view.startingNpcCount === undefined) !== (view.livingNpcCount === undefined)) {
+    context.addIssue({ code: "custom", path: ["startingNpcCount"],
+      message: "Wave counts must be supplied together." });
+  }
+  if (view.startingNpcCount !== undefined && view.livingNpcCount !== undefined &&
+      view.livingNpcCount > view.startingNpcCount) {
+    context.addIssue({ code: "custom", path: ["livingNpcCount"],
+      message: "Living NPC count cannot exceed the starting wave count." });
+  }
 });
 
 export type DefaultView = z.infer<typeof DefaultViewSchema>;

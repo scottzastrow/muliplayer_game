@@ -128,8 +128,19 @@ players, enemies, and spectators; produce a reproducible measured report.
 - **FR-007**: Players MUST traverse one shared generated map with independent centered cameras, collision with simple obstacles, and consistent nearby player visibility.
 - **FR-008**: The default game module MUST provide range-triggered enemy pursuit, obstacle navigation, weapons, projectiles, damage, health/power/weapon pickups, and authoritative scoring.
 - **FR-009**: Level enemy totals MUST use the roster frozen at start and the configured growth formula. Killed enemies MUST not be continuously replaced. Clearing a level MUST advance once; clearing the maximum level MUST finish with a points-ranked leaderboard.
+  For one player with default settings, waves 1 and 2 MUST start with 10 and 12
+  NPCs respectively. A next wave MUST NOT spawn until the living count reaches
+  zero and the existing five-second intermission ends.
 - **FR-010**: Death MUST disable participation for the configured delay, preserve points, then choose a random safe spawn without damage immunity. Other players continue earning points.
 - **FR-011**: The HUD MUST show running match points most prominently and current health; spectators MUST see the selected player's values and death state.
+  During play, players and spectators MUST see authoritative level, living NPC
+  count and starting wave count (for example, `Level 1 · 7 of 10 enemies remaining`),
+  independent of radar marker filters. Non-final wave completion MUST show
+  `Level 1 Complete`, the viewed player's points earned that level, running
+  points-ranked standings for the roster, and `Level 2 starts in 5…` counting
+  down through the existing intermission. The next wave hides that summary and
+  resets only level-earned points, not running scores. Clearing the final level
+  MUST go directly to final standings, without promising another wave.
 - **FR-012**: Spectators MUST be able to select/switch targets and return to the lobby. They MUST have no gameplay control and MUST NOT affect enemy population.
 - **FR-013**: A Game Theme MUST bind a versioned game module and skin, selected by the creator for the whole session and pinned for its duration. The default theme MUST use the public developer interfaces.
 - **FR-014**: Developers MUST be able to extend gameplay and replace presentation through documented interfaces without changing core account, lobby, or transport code. Include working default source, a second fixture demonstrating behavior/presentation changes, and a preview/reference workflow.

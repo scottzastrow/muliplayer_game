@@ -60,6 +60,91 @@ function createContext(): ModuleContext<DefaultEntity> {
 }
 
 describe("default theme registration", () => {
+  it("completes a final wave without promising another level or an intermission", () => {
+    const completions: Array<{ kind: "level" | "match"; reason: string }> = [];
+    const context: ModuleContext<DefaultEntity> = {
+      ...createContext(), requestCompletion: request => completions.push(request)
+    };
+    const module = DEFAULT_THEME_REGISTRATION.moduleFactory.create(context, {
+      maxLevels: 1
+    }, [{ accountId: "alice", username: "Alice", joinedOrder: 0 }], 42);
+    try {
+      module.initialize();
+      for (const npc of context.entities.values().filter(entity => entity.state.kind === "npc")) {
+        context.entities.remove(npc.id);
+      }
+      module.step(0, 1);
+      module.step(0, 2);
+      expect(completions).toEqual([{ kind: "match", reason: "maximum-level-cleared" }]);
+      expect(module.state).toMatchObject({ level: 1, phase: "complete", livingNpcCount: 0 });
+      expect(module.state).not.toHaveProperty("intermissionEndsAtTick");
+      expect(module.results()).toMatchObject({
+        finalLevel: 1, status: "finished",
+        standings: [{ rank: 1, accountId: "alice", username: "Alice", points: 0 }]
+      });
+    } finally {
+      module.dispose();
+    }
+  });
+
+  it("traces the first two default one-player waves without replacing killed enemies", () => {
+    const context = createContext();
+    const module = DEFAULT_THEME_REGISTRATION.moduleFactory.create(context, {}, [
+      { accountId: "alice", username: "Alice", joinedOrder: 0 }
+    ], 42);
+    const living = () => context.entities.values().filter(entity => entity.state.kind === "npc");
+    const counts: number[] = [];
+    let tick = 0;
+    const kill = () => {
+      const npc = living()[0]!;
+      const position = { x: 800, y: 272 };
+      context.entities.update(npc.id, entity => ({ ...entity, position }));
+      context.entities.add({
+        id: `projectile:trace-${tick}`, typeId: "projectile.player", position, radius: 3,
+        state: { kind: "projectile", ownerAccountId: "alice", damage: 1000,
+          velocity: { x: 600, y: 0 }, expiresAtTick: tick + 60 }
+      });
+      module.step(0, ++tick);
+      counts.push(living().length);
+    };
+    try {
+      module.initialize();
+      counts.push(living().length);
+      expect(living()).toHaveLength(10);
+      expect(module.snapshot({ accountId: "alice", role: "player" })).toMatchObject({
+        startingNpcCount: 10, livingNpcCount: 10,
+        levelStandings: [{ accountId: "alice", levelPoints: 0, points: 0 }]
+      });
+      kill();
+      expect(living()).toHaveLength(9);
+      module.step(0, ++tick);
+      expect(living()).toHaveLength(9);
+      expect(module.state).toMatchObject({ phase: "active", level: 1 });
+      while (living().length) kill();
+      expect(module.state).toMatchObject({ phase: "intermission", level: 1 });
+      expect(module.snapshot({ accountId: "alice", role: "spectator" })).toMatchObject({
+        startingNpcCount: 10, livingNpcCount: 0,
+        levelStandings: [{ accountId: "alice", levelPoints: 1000, points: 1000, kills: 10 }]
+      });
+      const clearedAt = tick;
+      module.step(0, clearedAt + 149);
+      expect(living()).toHaveLength(0);
+      expect(module.state).toMatchObject({ phase: "intermission", level: 1 });
+      module.step(0, clearedAt + 150);
+      expect(module.state).toMatchObject({ phase: "active", level: 2 });
+      expect(living()).toHaveLength(12);
+      expect(module.snapshot({ accountId: "alice", role: "player" })).toMatchObject({
+        startingNpcCount: 12, livingNpcCount: 12,
+        levelStandings: [{ accountId: "alice", levelPoints: 0, points: 1000, kills: 10 }]
+      });
+      console.log("Default one-player wave trace:", JSON.stringify({
+        wave1LivingCounts: counts, intermissionTicks: 150, wave2StartingCount: living().length
+      }));
+    } finally {
+      module.dispose();
+    }
+  });
+
   it("loads the public theme definition and creates isolated module instances", () => {
     const loader = createThemeLoader();
     const loaded = loader.resolve("default@1.0.0");

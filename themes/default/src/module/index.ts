@@ -29,6 +29,9 @@ export interface DefaultModuleState extends Record<string, JsonValue> {
   readonly tick: number;
   readonly level: number;
   readonly phase: DefaultLevelPhase;
+  readonly startingNpcCount: number;
+  readonly livingNpcCount: number;
+  readonly levelStandings: JsonValue[];
   readonly intermissionEndsAtTick?: number;
   readonly waveRemainingSeconds?: number;
 }
@@ -44,6 +47,9 @@ export interface DefaultModuleSnapshot extends Record<string, JsonValue> {
   readonly viewerRole: "player" | "spectator";
   readonly level: number;
   readonly phase: DefaultLevelPhase;
+  readonly startingNpcCount: number;
+  readonly livingNpcCount: number;
+  readonly levelStandings: JsonValue[];
   readonly intermissionEndsAtTick?: number;
   readonly waveRemainingSeconds?: number;
 }
@@ -98,6 +104,7 @@ export const defaultModuleFactory: GameModuleFactory<
     let acceptedInputs = 0;
     let currentTick = 0;
     let disposed = false;
+    let levelStartingPoints = new Map<string, number>();
     const gameSettings = resolveDefaultSettings(settings, roster.length);
     const simulator = new DefaultEntitySimulator(
       _context,
@@ -131,6 +138,8 @@ export const defaultModuleFactory: GameModuleFactory<
         } else {
           simulator.startLevel(level, difficulty.npcCount, difficulty.npcHealth);
         }
+        levelStartingPoints = new Map(respawn.playerStates().map(player =>
+          [player.accountId, player.points]));
       }
     );
     return {
@@ -145,6 +154,7 @@ export const defaultModuleFactory: GameModuleFactory<
           tick: currentTick,
           level: progressionState.level,
           phase: progressionState.phase,
+          ...waveSummary(),
           ...(progressionState.waveRemainingSeconds === undefined
             ? {}
             : { waveRemainingSeconds: progressionState.waveRemainingSeconds }),
@@ -215,6 +225,7 @@ export const defaultModuleFactory: GameModuleFactory<
           viewerRole: viewer.role,
           level: progressionState.level,
           phase: progressionState.phase,
+          ...waveSummary(),
           ...(progressionState.waveRemainingSeconds === undefined
             ? {}
             : { waveRemainingSeconds: progressionState.waveRemainingSeconds }),
@@ -244,6 +255,22 @@ export const defaultModuleFactory: GameModuleFactory<
       if (disposed) {
         throw new Error("Default theme module instance has been disposed.");
       }
+    }
+
+    function waveSummary() {
+      const players = respawn.playerStates();
+      return {
+        startingNpcCount: progression.state.startingNpcCount,
+        livingNpcCount: _context.entities.values().filter(entity =>
+          entity.state.kind === "npc" && entity.state.health > 0).length,
+        levelStandings: collectStandings(roster, players).map(standing => {
+          const player = players.find(item => item.accountId === standing.accountId);
+          return {
+            ...standing,
+            levelPoints: (player?.points ?? 0) - (levelStartingPoints.get(standing.accountId) ?? 0)
+          };
+        })
+      };
     }
   }
 });
@@ -307,7 +334,7 @@ function serializeRadar(
 function collectStandings(
   roster: readonly RosterMember[],
   states: readonly DefaultPlayerState[]
-): JsonValue[] {
+) {
   const players = new Map(states.map((state) => [state.accountId, state]));
   const standings = roster.map((member) => {
     const player = players.get(member.accountId);

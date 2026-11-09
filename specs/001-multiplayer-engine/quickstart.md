@@ -64,6 +64,12 @@ installs executable code from an uploaded archive.
    mode, rotate with either arrow and fire Space; movement must stay down while
    facing/firing follows rotation, including browser key auto-repeat.
 2. Move apart and meet; verify independent centered cameras and nearby visibility.
+   In a one-player default match, verify wave 1 starts with 10 enemies, kills
+   reduce the total without replacement, and the HUD total remains visible with
+   NPC radar disabled. On clear, verify Level 1 Complete, earned points, running
+   standings and the five-second Level 2 countdown in player/spectator views.
+   Wave 2 must start with 12 enemies only after that deadline; a final-level
+   clear must use final standings, not another next-level countdown.
    Attract only nearby NPCs; navigate around obstacles and claim pickups.
 3. Kill one player and time the five-second absence. Verify the other keeps playing,
    score persists, a random safe return occurs, and no immunity follows it.

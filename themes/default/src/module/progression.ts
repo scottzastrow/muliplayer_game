@@ -31,6 +31,7 @@ export interface DefaultProgressionState {
   readonly phase: DefaultLevelPhase;
   readonly intermissionEndsAtTick?: number;
   readonly waveRemainingSeconds?: number;
+  readonly startingNpcCount: number;
 }
 
 export class DefaultProgression {
@@ -40,6 +41,7 @@ export class DefaultProgression {
   #lastTick = -1;
   #initialized = false;
   #waveCountdown: Countdown | undefined;
+  #startingNpcCount = 0;
 
   constructor(
     readonly context: ModuleContext<DefaultEntity>,
@@ -54,6 +56,7 @@ export class DefaultProgression {
     return Object.freeze({
       level: this.#level,
       phase: this.#phase,
+      startingNpcCount: this.#startingNpcCount,
       ...(this.#waveCountdown === undefined
         ? {}
         : { waveRemainingSeconds: this.#waveCountdown.remainingSeconds }),
@@ -125,6 +128,7 @@ export class DefaultProgression {
   #beginLevel(level: number): void {
     const difficulty = calculateLevelDifficulty(this.settings, this.rosterSize, level);
     this.startLevel(level, difficulty);
+    this.#startingNpcCount = difficulty.npcCount;
     this.#level = level;
     this.#phase = "active";
     this.#intermissionEndsAtTick = undefined;

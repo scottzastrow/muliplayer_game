@@ -35,8 +35,10 @@ class HudElement extends EventTarget {
   className = "";
   textContent = "";
   removed = false;
+  hidden = false;
   setAttribute(): void {}
   append(...children: HudElement[]): void { this.children.push(...children); }
+  replaceChildren(...children: HudElement[]): void { this.children.splice(0, this.children.length, ...children); }
   remove(): void { this.removed = true; }
   focus(): void { this.dispatchEvent(new Event("focus")); }
   getBoundingClientRect() { return { left: 0, top: 0, width: 800, height: 600 }; }
@@ -64,6 +66,80 @@ class HudElement extends EventTarget {
 
 describe("Dots and Squares presentation", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it.each(["player", "spectator"] as const)("shows authoritative wave counts and intermission standings for %s", role => {
+    const elements: HudElement[] = [];
+    vi.stubGlobal("document", Object.assign(new EventTarget(), {
+      createTextNode: (text: string) => Object.assign(new HudElement(), { textContent: text }),
+      createElement: () => {
+        const element = new HudElement();
+        elements.push(element);
+        return element;
+      }
+    }));
+    vi.stubGlobal("window", new EventTarget());
+    const host: SkinHost = {
+      slots: new Map(["world", "hud", "controls"].map(name => [name, document.createElement("div")])),
+      selectedTarget: { accountId: "alice", username: "Alice" },
+      cameraAnchor: undefined, setCameraAnchor(anchor) { this.cameraAnchor = anchor; },
+      dispatchInput: vi.fn(), navigate: () => {}
+    };
+    const skin = defaultSkinFactory.mount(host, {
+      image: async () => { throw new Error("No images used."); },
+      audio: async () => { throw new Error("No audio used."); }
+    });
+    const snapshot = {
+      ...view(100), viewerRole: role, startingNpcCount: 10, livingNpcCount: 7,
+      levelStandings: [
+        { accountId: "bob", username: "Bob", rank: 1, points: 500, levelPoints: 300, kills: 5, deaths: 0 },
+        { accountId: "alice", username: "Alice", rank: 2, points: 200, levelPoints: 100, kills: 2, deaths: 0 }
+      ],
+      ...(role === "spectator" ? { spectatorView: {
+        targetAccountId: "alice", cameraAnchor: { x: 100, y: 100 },
+        hud: { points: 200, health: 90 }, death: { alive: true, remainingSeconds: 0 }
+      } } : {})
+    };
+    try {
+      skin.handleViewport(800, 600, 1);
+      skin.handleSnapshot(snapshot);
+      skin.render(0, snapshot);
+      const count = elements.find(element => element.className === "default-enemy-count")!;
+      const summary = elements.find(element => element.className === "default-level-summary")!;
+      expect(count.textContent).toBe("Level 1 \u00b7 7 of 10 enemies remaining");
+      expect(summary.hidden).toBe(true);
+      const filter = elements.find(element => element.name === "radar-enemy")!;
+      filter.checked = false;
+      filter.dispatchEvent(new Event("change"));
+      skin.render(40, snapshot);
+      expect(count.textContent).toBe("Level 1 \u00b7 7 of 10 enemies remaining");
+      const cleared = { ...snapshot, tick: 3, livingNpcCount: 0,
+        phase: "intermission", intermissionEndsAtTick: 153 };
+      skin.handleSnapshot(cleared);
+      skin.render(80, cleared);
+      expect(summary.hidden).toBe(false);
+      expect(summary.children[0]!.textContent).toBe("Level 1 Complete");
+      expect(summary.children[1]!.textContent).toBe("Points earned this level: 100");
+      expect(summary.children[2]!.textContent).toBe("Level 2 starts in 5\u2026");
+      const rows = summary.children[3]!.children[2]!.children;
+      expect(rows.map(row => row.children.map(cell => cell.textContent))).toEqual([
+        ["1", "Bob", "300", "500", "5", "0"], ["2", "Alice", "100", "200", "2", "0"]
+      ]);
+      skin.handleSnapshot({ ...cleared, tick: 123 });
+      skin.render(120, cleared);
+      expect(summary.children[2]!.textContent).toBe("Level 2 starts in 1\u2026");
+      const next = { ...snapshot, tick: 153, level: 2, startingNpcCount: 12, livingNpcCount: 12 };
+      skin.handleSnapshot(next);
+      skin.render(160, next);
+      expect(summary.hidden).toBe(true);
+      expect(count.textContent).toBe("Level 2 \u00b7 12 of 12 enemies remaining");
+      skin.handleSnapshot({ ...next, tick: 154, phase: "complete" });
+      skin.render(200, next);
+      expect(summary.hidden).toBe(true);
+      expect(host.dispatchInput).not.toHaveBeenCalled();
+    } finally {
+      skin.dispose();
+    }
+  });
 
   it.each([
     { mode: "keyboard-mouse", right: "ArrowRight", up: "ArrowUp" },
@@ -461,6 +537,10 @@ describe("Dots and Squares presentation", () => {
   });
 
   it("rejects malformed/nonfinite snapshots and preserves dead HUD state", () => {
+    expect(DefaultViewSchema.safeParse({ ...view(100), startingNpcCount: 10 }).success).toBe(false);
+    expect(DefaultViewSchema.safeParse({
+      ...view(100), startingNpcCount: 10, livingNpcCount: 11
+    }).success).toBe(false);
     for (const seconds of [-1, 361, Infinity, NaN]) {
       expect(DefaultViewSchema.safeParse({ ...view(100), waveRemainingSeconds: seconds }).success).toBe(false);
     }

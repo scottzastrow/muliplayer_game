@@ -197,5 +197,17 @@ its WAL. Load generators must run on a separate machine from the measured host.
 
 ## Complexity Tracking
 
+### Scoped level-transition presentation follow-up
+
+Extend completed T021/T023/T024 through the default module/skin only. Preserve
+frozen-roster growth, server-authoritative combat, the existing 150-tick
+intermission and normal final-result handoff. Add starting/living wave counts and
+per-wave score baselines to default snapshots; render counts independently of
+radar filters and a roster standings table during intermission for both roles.
+Use focused default-module/skin, spectator and lifecycle tests, then a disposable
+loopback Chrome scenario with default settings and staged clear-lane combat.
+Do not change the Theme Credits pointer, shared SDK declarations, deployment or
+T042. Keep changes uncommitted for review.
+
 No constitution exceptions. Workspace packages exist to enforce the requested public
 extension boundaries; further service or plugin abstraction requires a demonstrated need.

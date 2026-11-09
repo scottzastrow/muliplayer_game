@@ -66,7 +66,32 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     life.setAttribute("role", "status");
     const waveTime = document.createElement("div");
     waveTime.className = "default-wave-time";
-    hud.append(points, health, waveTime, life);
+    const enemyCount = document.createElement("div");
+    enemyCount.className = "default-enemy-count";
+    const levelSummary = document.createElement("section");
+    levelSummary.className = "default-level-summary";
+    levelSummary.style.flexBasis = "100%";
+    levelSummary.setAttribute("aria-label", "Level completion");
+    const levelTitle = document.createElement("h2");
+    const levelPoints = document.createElement("p");
+    const nextLevel = document.createElement("p");
+    const standings = document.createElement("table");
+    standings.setAttribute("aria-label", "Running standings");
+    const standingsCaption = document.createElement("caption");
+    standingsCaption.textContent = "Running standings";
+    const headings = document.createElement("tr");
+    for (const text of ["Rank", "Player", "Level points", "Total points", "Kills", "Deaths"]) {
+      const heading = document.createElement("th");
+      heading.textContent = text;
+      headings.append(heading);
+    }
+    const standingsHead = document.createElement("thead");
+    standingsHead.append(headings);
+    const standingsBody = document.createElement("tbody");
+    standings.append(standingsCaption, standingsHead, standingsBody);
+    levelSummary.append(levelTitle, levelPoints, nextLevel, standings);
+    levelSummary.hidden = true;
+    hud.append(points, health, waveTime, enemyCount, life, levelSummary);
     const help = document.createElement("p");
     help.textContent = controlMode === "keyboard-only"
       ? "Click the game to focus. WASD: move and face. Left/Right arrows: turn in place. Space: fire."
@@ -274,6 +299,17 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
           ? Math.min(250, Math.max(1, (current.tick - previous.tick) * 1000 / 30))
           : SNAPSHOT_INTERVAL_MS;
         receivedAt = performance.now();
+        if (current.phase === "intermission" && current.levelStandings) standingsBody.replaceChildren();
+        for (const standing of current.phase === "intermission" ? current.levelStandings ?? [] : []) {
+          const row = document.createElement("tr");
+          for (const value of [standing.rank, standing.username, standing.levelPoints,
+            standing.points, standing.kills, standing.deaths]) {
+            const cell = document.createElement("td");
+            cell.textContent = String(value);
+            row.append(cell);
+          }
+          standingsBody.append(row);
+        }
         const player = current.players.find((item) => item.accountId === current?.viewerAccountId);
         if (!player) throw new Error("The snapshot is missing this player's life state.");
         if (player.facing && (current.viewerRole === "spectator" || !localFacing)) {
@@ -387,7 +423,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
           context.textAlign = "center";
           context.textBaseline = "top";
           context.fillText(
-            `Enemies remaining: ${current.radar.markers.filter((marker) =>
+            `Enemies remaining: ${current.livingNpcCount ?? current.radar.markers.filter((marker) =>
               marker.category === "enemy").length}`,
             radarX,
             RADAR_Y + RADAR_RADIUS + 8
@@ -395,6 +431,21 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
         }
         points.textContent = `Points: ${observed?.hud.points ?? player.points}`;
         health.textContent = `Health: ${observed?.hud.health ?? player.health}`;
+        const living = current.livingNpcCount ?? current.radar?.markers.filter(marker =>
+          marker.category === "enemy").length ?? 0;
+        enemyCount.textContent = current.startingNpcCount === undefined
+          ? `Level ${current.level} \u00b7 ${living} enemies remaining`
+          : `Level ${current.level} \u00b7 ${living} of ${current.startingNpcCount} enemies remaining`;
+        levelSummary.hidden = current.phase !== "intermission";
+        if (current.phase === "intermission") {
+          levelTitle.textContent = `Level ${current.level} Complete`;
+          const earned = current.levelStandings?.find(row => row.accountId === player.accountId)?.levelPoints;
+          levelPoints.textContent = earned === undefined ? "" : `Points earned this level: ${earned}`;
+          const seconds = Math.max(0, Math.ceil(
+            ((current.intermissionEndsAtTick ?? current.tick) - current.tick) / 30
+          ));
+          nextLevel.textContent = `Level ${current.level + 1} starts in ${seconds}\u2026`;
+        }
         waveTime.textContent = current.phase === "active" && current.waveRemainingSeconds !== undefined
           ? `Wave time remaining: ${Math.ceil(current.waveRemainingSeconds)}s` : "";
         const remaining = observed ? Math.ceil(observed.death.remainingSeconds)
@@ -431,6 +482,8 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
         health.remove();
         waveTime.remove();
         life.remove();
+        enemyCount.remove();
+        levelSummary.remove();
         help.remove();
         radarFilters.remove();
         previous = undefined;

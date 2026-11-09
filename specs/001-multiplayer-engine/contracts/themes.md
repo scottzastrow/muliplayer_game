@@ -140,6 +140,34 @@ match completion once and returns deterministic score/kills/deaths standings. Co
 persists final standings and terminal state together, with compare-and-set level
 updates and one result row per match.
 
+Default state/snapshots add authoritative `startingNpcCount`, `livingNpcCount`
+and `levelStandings`. The starting count is frozen from the current wave's
+preflighted difficulty; living counts only positive-health NPCs still in the
+entity store. Both counts are safe nonnegative integers bounded by 2000, with
+living <= starting. The module always emits both counts. The default skin renders
+`Level L · living of starting enemies remaining` outside radar/filter visibility.
+Counts must not be inferred from enabled radar categories.
+
+`levelStandings` contains the frozen roster in the existing descending-points,
+descending-kills, ascending-deaths, case-insensitive-name order, with
+`accountId`, `username`, `rank`, `points`, `kills`, `deaths` and `levelPoints`.
+`levelPoints` is the nonnegative difference from each account's score at wave
+start; death/respawn does not reset it. At next-wave spawn the baseline resets,
+while total scores remain. Player and spectator snapshots carry identical wave
+counts and standings; spectators display their selected target's earned points.
+During `intermission`, level remains the completed level and
+`intermissionEndsAtTick` is the authoritative deadline. The skin shows the
+completion heading, earned points, running standings and next-level countdown
+`ceil(max(0, deadline - tick) / 30)`. No new lobby setting or delay is introduced.
+Final clear retains the existing match-completion/saved-results route, not an
+intermission promising an additional level.
+
+These are additive default-module schema-4 fields, not a shared SDK/protocol
+change. Older skins ignore the additions. This skin accepts legacy snapshots
+without the new fields for installed themes/preview compatibility, using the
+legacy count label when no starting total is available; supplied counts must be
+paired and valid. No immutable package revision is repinned by this change.
+
 Dots and Squares starts a new countdown after spawning each wave, provisionally
 `min(360, 120 + 6 * starting NPC count)` seconds. The monotonic deadline keeps running
 through death, blocked respawn and disconnection, without depending on accumulated

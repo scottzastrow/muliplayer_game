@@ -14,6 +14,7 @@ export const PREVIEW_SCENARIOS = [
   "combat",
   "pickup",
   "spectator",
+  "intermission",
   "results"
 ] as const;
 
@@ -67,6 +68,11 @@ export function createPreviewSnapshot(scenario: SnapshotScenario): JsonValue {
   if (isDead) {
     entities.splice(0, 1);
   }
+  if (scenario === "intermission") {
+    const npcIndex = entities.findIndex(entity => typeof entity === "object" &&
+      entity !== null && !Array.isArray(entity) && entity.id === "npc:preview");
+    entities.splice(npcIndex, 1);
+  }
 
   const targetAccountId = isSpectator ? OTHER_PLAYER_ID : PREVIEW_PLAYER_ID;
   const targetPosition = isSpectator ? { x: 628, y: 556 } : { x: 512, y: 512 };
@@ -94,7 +100,18 @@ export function createPreviewSnapshot(scenario: SnapshotScenario): JsonValue {
     viewerAccountId: targetAccountId,
     viewerRole: isSpectator ? "spectator" : "player",
     level: 2,
-    phase: "active",
+    phase: scenario === "intermission" ? "intermission" : "active",
+    ...(scenario === "intermission" ? { intermissionEndsAtTick: 450 } : {}),
+    startingNpcCount: 10,
+    livingNpcCount: scenario === "intermission" ? 0 : 1,
+    levelStandings: [
+      { accountId: PREVIEW_PLAYER_ID, username: "PreviewPlayer",
+        points: isSpectator ? 100 : targetPoints, levelPoints: isSpectator ? 100 : 250,
+        kills: 12, deaths: Number(isDead) },
+      { accountId: OTHER_PLAYER_ID, username: "PreviewGuest",
+        points: 460, levelPoints: 60, kills: 4, deaths: 0 }
+    ].sort((left, right) => right.points - left.points)
+      .map((standing, index) => ({ ...standing, rank: index + 1 })),
     map: {
       width: 2_048,
       height: 2_048,

@@ -11,10 +11,10 @@ import {
 describe("deterministic theme preview fixtures", () => {
   it("provides schema-valid snapshots for life, death, combat, pickup and spectator views", () => {
     const snapshotScenarios: readonly SnapshotScenario[] = [
-      "life", "death", "combat", "pickup", "spectator"
+      "life", "death", "combat", "pickup", "spectator", "intermission"
     ];
     expect(PREVIEW_SCENARIOS).toEqual([
-      "life", "death", "combat", "pickup", "spectator", "results"
+      "life", "death", "combat", "pickup", "spectator", "intermission", "results"
     ]);
 
     for (const scenario of snapshotScenarios) {
@@ -51,6 +51,11 @@ describe("deterministic theme preview fixtures", () => {
     expect(createPreviewSnapshot("spectator")).toMatchObject({
       viewerRole: "spectator",
       spectatorView: { targetAccountId: "00000000-0000-4000-8000-000000000002" }
+    });
+    expect(createPreviewSnapshot("intermission")).toMatchObject({
+      phase: "intermission", livingNpcCount: 0, startingNpcCount: 10,
+      intermissionEndsAtTick: 450,
+      levelStandings: [expect.objectContaining({ levelPoints: 250 }), expect.any(Object)]
     });
   });
 
