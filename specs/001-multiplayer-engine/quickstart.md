@@ -82,6 +82,11 @@ installs executable code from an uploaded archive.
    any other formerly active sessions are Interrupted.
 7. Exercise five waiting/running sessions and concurrent sixth creation; test player
    and spectator cap races, zero spectator allowance, and empty-session cleanup.
+   In a running match, return the host to the lobby and verify End Session beside
+   Running is absent for other accounts. Cancel once, then confirm; players and
+   spectators must see identical saved standings at the reached level, reload
+   them after refresh, and observe the room slot released. A direct non-host
+   end request must fail; a host retry must return the original result.
 8. Install the fixture through the trusted developer workflow. Run beside default;
    confirm alternate behavior/HUD, immutable theme pinning and no core file edits.
 9. As operator, test valid asset upload and reject incompatible, oversized, traversal,

@@ -203,6 +203,24 @@ export function mountLobby(
         ? "Running"
         : session.status;
     statusCell.append(state);
+    if (session.creator === account.username && session.status === "running") {
+      const end = document.createElement("button");
+      end.type = "button";
+      end.textContent = "End Session";
+      end.addEventListener("click", async () => {
+        if (!window.confirm("End this session now? Current standings will be saved as final results.")) return;
+        end.disabled = true;
+        try {
+          await api(`/api/v1/sessions/${session.id}/end`, { method: "POST", body: "{}" });
+          await refreshSessions();
+          showStatus(status, "Session ended. Final results saved.");
+        } catch (error) {
+          showStatus(status, messageOf(error), true);
+          end.disabled = false;
+        }
+      });
+      statusCell.append(end);
+    }
     if (session.creator === account.username && session.status === "waiting") {
       const start = document.createElement("button");
       start.type = "button";

@@ -11,6 +11,7 @@ await new Promise((resolve, reject) => {
 });
 let nextId = 0;
 const pending = new Map();
+const dialogs = new Map();
 socket.addEventListener("close", () => {
   for (const request of pending.values()) {
     clearTimeout(request.timeout);
@@ -20,6 +21,9 @@ socket.addEventListener("close", () => {
 });
 socket.addEventListener("message", ({ data }) => {
   const message = JSON.parse(data);
+  if (message.method === "Page.javascriptDialogOpening") {
+    dialogs.set(message.sessionId, message.params);
+  }
   const request = pending.get(message.id);
   if (!request) return;
   pending.delete(message.id);
@@ -43,6 +47,17 @@ function cdp(method, params = {}, sessionId) {
   });
 }
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function waitForDialog(page) {
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const dialog = dialogs.get(page.session);
+    if (dialog) {
+      dialogs.delete(page.session);
+      return dialog;
+    }
+    await delay(100);
+  }
+  throw new Error("Timed out waiting for the browser confirmation dialog.");
+}
 async function evaluate(page, expression) {
   const result = await cdp("Runtime.evaluate", {
     expression, returnByValue: true, awaitPromise: true
@@ -683,7 +698,11 @@ async function fireWhileAiming(page, targetForView, duration, npcTrace) {
 }
 
 try {
-  if (process.argv.includes("--level-transitions")) {
+  if (process.argv.includes("--end-session")) {
+    const { verifyEndSession } = await import("./end-session.mjs");
+    await verifyEndSession({ newWindow, signIn, evaluate, click, clickSessionButton,
+      waitFor, cdp, waitForDialog, version });
+  } else if (process.argv.includes("--level-transitions")) {
     const { verifyLevelTransitions } = await import("./level-transitions.mjs");
     await verifyLevelTransitions({ newWindow, signIn, evaluate, click, clickSessionButton,
       waitFor, cdp, delay, state, aim, version });

@@ -125,6 +125,9 @@ describe("session simulation lifecycle", () => {
       });
       socket.send(JSON.stringify(inputMessage(0, aimAtStationaryNpc(firstSnapshot))));
 
+      await nextSnapshot(socket, snapshot => snapshot.phase === "intermission", 2_500);
+      expect(database.prepare("SELECT current_level FROM matches WHERE id = ?").get(sessionId))
+        .toEqual({ current_level: 1 });
       await waitUntil(
         () =>
           (
@@ -132,7 +135,7 @@ describe("session simulation lifecycle", () => {
               | { current_level: number }
               | undefined
           )?.current_level === 2,
-        2_500
+        7_000
       );
       const secondLevel = await nextSnapshot(
         socket,

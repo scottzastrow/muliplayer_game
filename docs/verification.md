@@ -1271,3 +1271,74 @@ final focused selection passed: **5 files, 25 tests** (`session-lifecycle`,
 terminal verification only, using an in-memory database and ephemeral loopback
 WebSocket server. No browser, deployment or capacity run was performed.
 The lifecycle fixture is committed with the NPC settings change; T042 remains open.
+## Host-only End Session, T048 / FR-025 (2026-11-08)
+
+Implemented End Session directly after Running in the host's lobby status cell,
+with a native confirmation dialog. Server authorization uses creator account ID;
+players, spectators, outsiders and non-host operators cannot end the match.
+The authenticated same-origin empty-body endpoint returns the immutable saved
+result, sharing normal completion's transaction, runner disposal, membership/slot
+release and player/spectator lifecycle notification. Host retries after normal
+or explicit completion do not write or notify again.
+
+Intermission now queues the next level and persists it only when that wave
+starts. Ending during the summary therefore saves the cleared/reached level,
+not the unstarted next wave. The normal two-level integration still exercises
+both real projectile kills, the existing five-second intermission and final
+standings; its level-2 database wait now includes that actual intermission.
+
+Actual local checks:
+
+```powershell
+npm run check
+npm test -- tests\integration\end-session.test.ts tests\integration\wave-timeout.test.ts tests\integration\session-lifecycle.test.ts tests\integration\gameplay.test.ts tests\integration\spectators.test.ts tests\integration\operations.test.ts tests\results.test.ts tests\result-contract.test.ts tests\lobby-settings.test.ts
+node --check tests\browser\end-session.mjs
+node --check tests\browser\default-game.mjs
+git diff --check
+```
+
+Workspace check passed. Final focused selection passed **9 files / 38 tests**.
+The four new integration cases cover host-first and normal-completion-first
+ordering, concurrent/repeated end requests, intermission at level 1 and active
+level 2. They verify exactly one result/finalizer/disposal, ranked nonzero scores
+(275 points, 3 kills, 2 deaths), membership/capacity release, replacement creation
+and the exact result after closing and reopening a temporary disk SQLite database.
+Denial covers member, spectator, outsider and non-host operator, before and after
+completion; login/origin/body rejection is also checked. Existing timeout coverage
+continues to verify duplicate module completion and once-only result notification.
+The lobby test checks host/running-only placement, cancel without HTTP and accepted
+confirmation with the empty-body POST.
+
+`node tests\browser\default-game.mjs --end-session` passed twice in visible
+Chrome **156.0.8078.80**, with three isolated authenticated browser contexts on
+Windows, client `http://127.0.0.1:5174`, loopback server port 8093 and CDP port
+9223. The server used the existing Node `.env` startup loader with process-local
+test/origin/port/database overrides and an ignored disposable database; no
+persistent environment or production settings changed. No staged game module,
+score editing or countdown adjustment was used. Both runs used default match
+settings, two players and one spectator; the host returned to the lobby.
+
+The final run verified the rendered End Session control immediately after Running,
+absence for waiting/non-host rows, direct non-host HTTP 403, real native dialog
+cancel/accept, room removal, matching two-player final tables in player/spectator
+views, saved-result reload and full refresh in both, exact immutable retry response,
+finalLevel 1 and replacement-room creation. Both browser rows had zero scores;
+nonzero standings are verified by the automated integration fixtures, not claimed
+as browser-earned combat. The scrolled lobby screenshot was inspected and retained
+outside the repository in the session artifacts.
+
+Initial failures were retained as evidence: all three original new cases first
+failed with the missing endpoint (404); after implementation their reopen check
+failed because app.close closes the in-memory database. The fixture was corrected
+to reopen a real temporary disk database. A later type-check caught insufficient
+narrowing of the optional module level; an explicit number guard resolved it.
+The first browser attempt timed out while Vite logged page reloads during a
+concurrent workspace build; the retry hit the existing five-registration/minute
+throttle. Restarting only the owned disposable server and running browser checks
+without overlapping builds produced the two passing runs above; no throttle,
+timeout or production behavior was relaxed.
+
+T048 is complete. The pre-existing Wave HUD maximum countdown note above is
+unchanged, the Theme Credits feature pointer and `.idea` are untouched, and
+**T042 remains open**. Changes remain local and uncommitted; no push, deployment
+or capacity run was performed.

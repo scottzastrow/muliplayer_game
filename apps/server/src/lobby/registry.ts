@@ -368,6 +368,19 @@ export class LobbyRegistry {
     this.database.transaction(() => this.#markTerminal(sessionId, state, state))();
   }
 
+  authorizeEnd(account: AuthenticatedAccount, sessionId: string): boolean {
+    const row = this.#readSession(sessionId, account.id);
+    if (!row) throw new HttpError(404, "NOT_FOUND", "Session not found.");
+    if (row.creator_account_id !== account.id) {
+      throw new HttpError(403, "FORBIDDEN", "Only the host can end this session.");
+    }
+    if (row.state === "finished") return false;
+    if (row.state !== "running") {
+      throw new HttpError(409, "BAD_REQUEST", "Only running sessions can be ended.");
+    }
+    return true;
+  }
+
   advanceLevel(sessionId: string, expectedLevel: number, nextLevel: number): boolean {
     return advanceMatchLevel(this.database, sessionId, expectedLevel, nextLevel);
   }

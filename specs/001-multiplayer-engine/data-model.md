@@ -40,6 +40,11 @@ one slot and writes one result. Finished results remain accessible by ID but do 
 occupy active slots. Graceful shutdown marks active sessions Interrupted; startup
 reconciliation repairs leftover waiting/running metadata likewise.
 
+The host may explicitly finish a Running session with current module standings
+through the same once-only result transaction. The next level is queued during
+intermission, not persisted as reached until its wave starts. Host-end retries
+return the immutable Finished result; they never recapture scores or notify twice.
+
 Leaving a waiting session removes membership immediately. A creator who leaves
 transfers ownership to the earliest connected participant; empty rooms expire in
 60 seconds. In running sessions, remove disconnected avatars immediately and reserve

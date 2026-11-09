@@ -18,6 +18,7 @@ HTTPS; local HTTP development is the only Secure-cookie exception.
 | PATCH /sessions/:id/settings | Full validated settings, expectedRevision | Updated waiting session | Creator |
 | POST /sessions/:id/join | Empty | Membership and current state | Logged in, waiting only |
 | POST /sessions/:id/start | expectedRevision | Running session and pinned revision | Creator |
+| POST /sessions/:id/end | Empty | Saved `{result}` using the existing finished-result shape | Host/creator account only |
 | POST /sessions/:id/rejoin | Empty | Reserved participation and state | Eligible account |
 | POST /sessions/:id/leave | Empty | 204, immediate role release | Member |
 | POST /sessions/:id/spectate | Empty | Spectator membership, player list | Logged in, available slot |
@@ -77,10 +78,26 @@ The public protocol validates the result shape and excludes credentials. Reloadi
 is a read-only request and cannot finalize the match again.
 
 A finished result may end below `settings.maxLevels` when its module requests
-completion, for example Dots and Squares wave timeout. `finalLevel` is the level
+completion or the host explicitly ends it, for example Dots and Squares wave timeout. `finalLevel` is the level
 actually reached, not a claim that the remaining waves were cleared. It must
 remain within the configured maximum; finished standings are still complete,
 ranked and persisted through the same finalization path.
+
+`POST /sessions/:id/end` requires authenticated same-origin JSON with an empty
+body. Authorization compares the stored creator account ID, not a supplied role
+or display name. Non-host participants, spectators, outsiders and operators
+receive 403 `FORBIDDEN`, including after completion. Missing login returns 401;
+invalid/nonexistent IDs return 404; nonempty bodies return 400 `BAD_REQUEST`.
+Waiting/abandoned/interrupted/failed sessions return 409 `BAD_REQUEST`.
+Running matches synchronously capture server-owned module standings, finalize as
+Finished, dispose the runner, release player/spectator membership and the active
+slot, and publish the existing saved-result lifecycle notification. The response
+is the same `{result}` shape as the results GET. A host retry after any Finished
+completion returns that original result without finalizing or notifying again.
+Both normal completion and host end use the same once-only transaction.
+During intermission the current level stays on the cleared wave; the next level
+is persisted only when it starts. The lobby shows End Session directly after the
+Running status only for the host, and asks for confirmation before posting.
 
 Session summary: id, name, creator display name, status, level/maxLevels,
 playerCount/maxPlayers, spectatorCount/maxSpectators, theme name/revision, settingsRevision,

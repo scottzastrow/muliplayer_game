@@ -144,7 +144,7 @@ during intermission/successful completion and reaches zero on timeout. Clients
 display it without sending timer authority back to the server. Older v4 snapshots
 and renderers remain compatible because this field is additive/optional.
 
-On module-requested match completion (including wave timeout), Core commits final standings and terminal state,
+On module-requested match completion (including wave timeout) or authorized host end, Core commits final standings and terminal state,
 releases the runner, then sends `server.lifecycle` with
 `{status:"finished",resultId:<session UUID>}` to that session's connected players
 and spectators.

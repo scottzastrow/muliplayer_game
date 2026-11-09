@@ -211,3 +211,15 @@ T042. Keep changes uncommitted for review.
 
 No constitution exceptions. Workspace packages exist to enforce the requested public
 extension boundaries; further service or plugin abstraction requires a demonstrated need.
+
+### Scoped host-ended session follow-up
+
+T048 extends the existing lobby routes/UI and SessionLifecycle finalization, without
+changing the theme SDK or wire envelopes. Authorize the creator account ID before
+running or terminal retries; an already finished match returns its immutable saved
+result. Capture current module standings and share the same persistence, runner
+release and terminal notification helper as normal completion. Queue the next
+level during intermission and persist it only when the module starts that wave.
+Verify denial, disk reopen, host-first/completion-first races and confirmation in
+visible local Chrome. Preserve the existing countdown verification note, feature
+pointer and T042; leave the scoped changes local and uncommitted.

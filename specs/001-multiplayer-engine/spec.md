@@ -174,6 +174,14 @@ players, enemies, and spectators; produce a reproducible measured report.
   full wave cannot fit, it MUST fail explicitly rather than overlap, truncate NPC
   counts or falsely clear the wave. NPC growth/counts, health, terrain and detection
   settings MUST remain unchanged by this placement-only change.
+- **FR-025**: A running session's host MUST have an End Session button beside
+  its lobby status, with confirmation before sending the request. The server
+  MUST authorize by creator account ID, rejecting other players, spectators
+  and operators who are not the host. Ending MUST use the existing finished
+  result path to save current-level standings, notify players and spectators,
+  and release the room. Retries and races with normal completion MUST preserve
+  a single immutable result. During intermission, the completed wave remains
+  the current level until the next wave actually starts.
 
 ### Key Entities
 

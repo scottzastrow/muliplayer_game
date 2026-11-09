@@ -115,7 +115,8 @@ export function createApp(
       await lifecycle.start(sessionId);
       realtime?.activateSession(sessionId);
     },
-    (sessionId, accountId) => realtime?.leaveMember(sessionId, accountId)
+    (sessionId, accountId) => realtime?.leaveMember(sessionId, accountId),
+    (sessionId) => lifecycle.end(sessionId)
   );
   realtime = new RealtimeTransport(app.server, database, config, lobby, {
     ...realtimeOptions,

@@ -35,6 +35,49 @@ class ElementStub extends EventTarget {
 describe("host NPC settings", () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it("shows End Session only beside a host's running status and confirms before sending", async () => {
+    const elements: ElementStub[] = [];
+    vi.stubGlobal("document", {
+      createElement: (tag: string) => {
+        const element = new ElementStub(tag);
+        elements.push(element);
+        return element;
+      },
+      createTextNode: (text: string) => Object.assign(new ElementStub("#text"), { textContent: text })
+    });
+    const sessions = [
+      { id: "running", creator: "Host", status: "running" },
+      { id: "waiting", creator: "Host", status: "waiting" },
+      { id: "other", creator: "Guest", status: "running" }
+    ];
+    const confirm = vi.fn(() => false);
+    vi.stubGlobal("window", { confirm });
+    const fetch = vi.fn(async (_url: string, init?: RequestInit) => ({
+      ok: true, status: 200,
+      json: async () => init?.method ? {} : { sessions }
+    }));
+    vi.stubGlobal("fetch", fetch);
+    const root = document.createElement("div");
+    const status = document.createElement("div");
+    const rootStub = elements[0]!;
+    mountLobby(root, status, {
+      id: "host", username: "Host", role: "player", controlMode: "keyboard-only"
+    }, vi.fn(), vi.fn(), vi.fn(), vi.fn());
+    await vi.waitFor(() => expect(rootStub.descendants().filter(node =>
+      node.textContent === "End Session")).toHaveLength(1));
+    const end = rootStub.descendants().find(node => node.textContent === "End Session")!;
+    const cell = rootStub.descendants().find(node => node.children.includes(end))!;
+    expect(cell.children.slice(0, 2).map(node => node.textContent)).toEqual(["Running", "End Session"]);
+    end.dispatchEvent(new Event("click"));
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(fetch).not.toHaveBeenCalledWith("/api/v1/sessions/running/end", expect.anything());
+    confirm.mockReturnValue(true);
+    end.dispatchEvent(new Event("click"));
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/v1/sessions/running/end",
+      expect.objectContaining({ method: "POST", body: "{}" })));
+    await vi.waitFor(() => expect(status.textContent).toBe("Session ended. Final results saved."));
+  });
+
   it("labels, defaults and submits NPC speed on both create and creator edit", async () => {
     const createdElements: ElementStub[] = [];
     vi.stubGlobal("document", {

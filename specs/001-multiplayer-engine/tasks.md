@@ -303,6 +303,7 @@ started.
 - [X] T045 Add account-saved Dots and Squares control selection, existing-account first-sign-in prompt and lobby editing; implement keyboard-only and keyboard+mouse input, persistent per-player colors and aim-facing indicators, with account, theme, spectator and real-browser coverage.
 - [X] T046 [US2] Implement placement-only scattered NPC waves for FR-024 in themes/default/src/module/npc-spawns.ts, entities.ts and index.ts; use match seed/wave, reachable zones, terrain/player/NPC clearance and bounded explicit fallback without changing counts, health, terrain or detection settings; verify both map modes in tests/npc-spawns.test.ts and tests/browser/npc-spawns.mjs, and document reproduction/fallback in docs/theme-development.md and actual evidence in docs/verification.md.
 - [X] T047 [US2] Trace default one-player waves in tests/default-theme.test.ts (10 then 12, no replacement, five-second intermission); add authoritative wave totals and per-level points/standings in themes/default/src/module/progression.ts and index.ts, render persistent enemy totals and player/spectator intermission summaries in themes/default/src/skin/view.ts and index.ts; extend focused skin/preview/lifecycle coverage and tests/browser/level-transitions.mjs with a loopback-only staged-combat server fixture, update FR-009/FR-011, contracts and evidence; keep T042 open and changes uncommitted without push/deployment.
+- [X] T048 [US2] Add confirmed host-only End Session beside running lobby status in apps/client/src/lobby.ts; authorize creator account ID in apps/server/src/lobby/registry.ts and routes.ts, sharing SessionLifecycle finished-result persistence/release/notification with normal completion. Keep intermission finalLevel on the reached wave. Cover denial, repeated/concurrent end, both normal-completion orderings and disk reload in tests/integration/end-session.test.ts; verify lobby confirmation and player/spectator results in tests/browser/end-session.mjs, record focused checks/browser evidence in docs/verification.md and retain the existing countdown note. Leave T042 open and changes local/uncommitted.
 
 T047 local evidence (2026-11-08): the pre-change one-player default trace passed
 10 initial NPCs, declining counts with real combat, no replacement and 12 NPCs
@@ -363,6 +364,19 @@ T046 is a separate placement follow-up to completed T018/T019/T021 and the
 T036 developer guide; it does not depend on or complete T042.
 T047 depends on completed T021/T023/T024/T027 and extends their existing paths;
 it does not depend on or complete T042.
+T048 depends on completed T021/T024/T027 and the existing lobby authority/UI;
+it does not depend on or complete T042 or any blocked Theme Credits tasks.
+
+T048 local evidence (2026-11-08): workspace check passed and the final focused
+9-file/38-test selection passed, including four host-end cases with non-host
+denial, populated standings, reached levels 1/2, concurrent retries, both normal
+completion orderings and disk SQLite reopen. Visible local Chrome passed the
+three-context `--end-session` scenario twice: host-only status-cell placement,
+native cancel/accept, direct non-host 403, player/spectator final tables, saved
+reload/full refresh, immutable retry and replacement-room creation. Initial
+fixture/type/browser failures and actual conditions are in docs/verification.md.
+The existing countdown note is preserved; T042 remains unchecked. Changes stay
+local/uncommitted, with no push, deployment or capacity run.
 
 ## Parallel Opportunities
 

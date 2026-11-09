@@ -20,7 +20,8 @@ export function registerLobbyRoutes(
   registry: LobbyRegistry,
   authContext: AuthContext,
   startSession: (sessionId: string) => Promise<void>,
-  closeMember: (sessionId: string, accountId: string) => void
+  closeMember: (sessionId: string, accountId: string) => void,
+  endSession: (sessionId: string) => void
 ): void {
   app.get<{ Params: { id: string } }>("/api/v1/matches/:id/results", async (request) => {
     authenticateRequest(database, request);
@@ -101,6 +102,21 @@ export function registerLobbyRoutes(
       const result = registry.start(account, sessionId, request.body);
       await startSession(sessionId);
       return { session: result.summary, settings: result.settings };
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/api/v1/sessions/:id/end",
+    async (request) => {
+      requireJson(request);
+      requireSameOrigin(request, config);
+      const account = requireAccount(authContext, request);
+      requireEmptyBody(request.body);
+      const sessionId = parseId(request.params.id);
+      if (registry.authorizeEnd(account, sessionId)) endSession(sessionId);
+      const result = getMatchResult(database, sessionId);
+      if (!result) throw new Error("Ended session has no saved result.");
+      return { result: MatchResultSchema.parse(result) };
     }
   );
 

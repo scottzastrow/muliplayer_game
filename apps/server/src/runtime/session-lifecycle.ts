@@ -55,6 +55,7 @@ interface ActiveSession {
   readonly navigation: BoundedNavigation;
   readonly pathResults: Map<string, NavigationPathResult>;
   currentLevel: number;
+  nextLevel?: number;
   completionRequests: Array<Readonly<{ kind: "level" | "match"; reason: string }>>;
   runner?: SessionRunner<JsonValue>;
   timer?: NodeJS.Timeout;
@@ -235,6 +236,21 @@ export class SessionLifecycle {
     }
   }
 
+  end(sessionId: string): void {
+    const active = this.#sessions.get(sessionId);
+    if (!active || !active.runner) throw new Error("Running session simulation could not be found.");
+    try {
+      const results = active.module.results();
+      if (results.finalLevel !== active.currentLevel) {
+        throw new Error("Module standings do not match the current level.");
+      }
+      this.#finalize(active, active.runner.tick, parseStandings(results.standings));
+    } catch (error) {
+      this.#fail(active, error);
+      throw error;
+    }
+  }
+
   #readRuntime(sessionId: string): {
     readonly settings: GameSettings;
     readonly seed: number;
@@ -313,6 +329,15 @@ export class SessionLifecycle {
     if (this.#sessions.get(active.id) !== active) return;
     active.navigation.processTick();
     active.module.step(dtSeconds, tick);
+    const level = active.module.state?.level;
+    if (level !== active.currentLevel) {
+      if (typeof level !== "number" || level !== active.nextLevel || active.module.state?.phase !== "active" ||
+        !this.lobby.advanceLevel(active.id, active.currentLevel, level)) {
+        throw new Error("Module advanced to an invalid level.");
+      }
+      active.currentLevel = level;
+      delete active.nextLevel;
+    }
     if (tick % SNAPSHOT_INTERVAL_TICKS === 0) {
       const startedAt = performance.now();
       try {
@@ -338,12 +363,12 @@ export class SessionLifecycle {
     if (
       state?.phase !== "intermission" ||
       state.level !== active.currentLevel ||
-      active.currentLevel >= active.settings.maxLevels ||
-      !this.lobby.advanceLevel(active.id, active.currentLevel, active.currentLevel + 1)
+      active.nextLevel !== undefined ||
+      active.currentLevel >= active.settings.maxLevels
     ) {
       throw new Error("Module requested an invalid or duplicate level transition.");
     }
-    active.currentLevel += 1;
+    active.nextLevel = active.currentLevel + 1;
   }
 
   #finishMatch(active: ActiveSession, tick: number): void {
@@ -362,7 +387,11 @@ export class SessionLifecycle {
       this.#publish(active, tick);
     }
     const standings = parseStandings(results.standings);
-    if (!this.lobby.finalizeFinishedMatch(active.id, results.finalLevel, standings)) {
+    this.#finalize(active, tick, standings);
+  }
+
+  #finalize(active: ActiveSession, tick: number, standings: ReturnType<typeof parseStandings>): void {
+    if (!this.lobby.finalizeFinishedMatch(active.id, active.currentLevel, standings)) {
       throw new Error("Finished match result was already finalized or the match is no longer active.");
     }
     this.#release(active);
