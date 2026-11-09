@@ -812,7 +812,7 @@ try {
       document.querySelector('[name=setting-maxLevels]').value = '1'`);
     await click(alice, "Create session");
     const { seedWaitingRoom } = await import("./npc-spawns.mjs");
-    await seedWaitingRoom({ alice, creator, evaluate, origin }, 1011);
+    await seedWaitingRoom({ alice, creator, evaluate, origin }, 4315);
     await clickSessionButton(alice, creator, "Start Session");
     await cdp("Page.bringToFront", {}, alice.session);
     await waitFor(alice, "window.__probe.snapshot !== null");
@@ -827,10 +827,10 @@ try {
     const arena = initial.snapshot.map;
     const playerAtStart = own(initial).position;
     const npcAtStart = initial.snapshot.entities.find(entity => entity.state.kind === "npc");
-    assert.equal(arena.obstacles.length, 16, "four solid tetromino clusters are in the map");
+    assert.equal(arena.obstacles.length, 64, "sixteen solid tetromino clusters are in the map");
     assert.deepEqual(playerAtStart, { x: 272, y: 272 });
     assert.ok(Math.hypot(npcAtStart.position.x - 528, npcAtStart.position.y - 528) < 60,
-      `Seed 1011 places the NPC near the northwest encounter (${JSON.stringify(npcAtStart.position)})`);
+      `Seed 4315 places the NPC near the northwest encounter (${JSON.stringify(npcAtStart.position)})`);
     assert.ok(segmentHitsObstacles(playerAtStart, npcAtStart.position, arena.obstacles, 3),
       "the player and NPC start across a solid cluster with no direct shot");
     const radarMarker = initial.arcs.find(item => item.color === "#ed6b61" && item.r === 3);
@@ -959,7 +959,7 @@ try {
       arena: "Tile Cluster Arena",
       arenaId: "dots-and-squares-tile-arena-v1",
       seedIndependentGeometry: true,
-      encounterSeed: 1011,
+      encounterSeed: 4315,
       playerStart: playerAtStart,
       npcStart: npcAtStart.position,
       blockedShotNpcHealth: npcAfterBlockedShots.state.health,

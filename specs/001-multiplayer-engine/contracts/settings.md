@@ -76,6 +76,14 @@ Omitted fields in older requests, rooms and saved-result settings resolve to 512
 without a migration; invalid explicit values are rejected. The value freezes on
 start and other themes decide how to interpret it.
 
+Outside that radius, Dots and Squares wanders at 25% of `npcMovementSpeed`,
+choosing seeded clear cell centers within 128 units and following only found
+navigation paths. It pauses 30-60 fixed ticks between moves. All candidates and
+requests remain bounded by existing navigation limits; stale goals are discarded
+when entering pursuit or returning to wandering. Detection range 0 skips player
+acquisition entirely but permits wandering; movement speed 0 disables both modes'
+travel without changing in-range contact damage. No new lobby setting is added.
+
 Provisional Dots and Squares wave tuning is 120 seconds plus 6 seconds per NPC
 present at wave start, capped at 360 seconds. Each wave recomputes its budget from
 its full starting count, using the unchanged frozen-roster growth formula.

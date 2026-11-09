@@ -46,6 +46,26 @@ const TETROMINO_CLUSTERS: readonly {
     tiles: [[1, 0], [1, 1], [0, 2], [1, 2]]
   }
 ];
+const FIXED_ARENA_CLUSTERS = [
+  ...TETROMINO_CLUSTERS,
+  ...([
+    ["north-t", 24, 4],
+    ["north-east-t", 44, 4],
+    ["east-upper-t", 54, 18],
+    ["west-middle-t", 6, 20],
+    ["inner-west-t", 20, 28],
+    ["inner-east-t", 42, 25],
+    ["inner-south-t", 27, 35],
+    ["east-lower-t", 53, 36],
+    ["west-lower-t", 7, 46],
+    ["south-middle-t", 35, 50],
+    ["south-east-t", 47, 51],
+    ["south-west-t", 19, 55]
+  ] as const).map(([id, tileX, tileY]) => ({
+    id, tileX, tileY,
+    tiles: [[0, 0], [1, 0], [2, 0], [1, 1]] as const
+  }))
+];
 
 type Rect = Readonly<{ x: number; y: number; width: number; height: number }>;
 
@@ -230,7 +250,7 @@ function seededOffset(seed: number, attempt: number, coordinate: number): number
 }
 
 function createTileClusterArena(
-  clusters = TETROMINO_CLUSTERS,
+  clusters: typeof TETROMINO_CLUSTERS = FIXED_ARENA_CLUSTERS,
   id = DEFAULT_ARENA_ID,
   name = DEFAULT_ARENA_NAME
 ): MapDefinition {

@@ -305,6 +305,7 @@ started.
 - [X] T047 [US2] Trace default one-player waves in tests/default-theme.test.ts (10 then 12, no replacement, five-second intermission); add authoritative wave totals and per-level points/standings in themes/default/src/module/progression.ts and index.ts, render persistent enemy totals and player/spectator intermission summaries in themes/default/src/skin/view.ts and index.ts; extend focused skin/preview/lifecycle coverage and tests/browser/level-transitions.mjs with a loopback-only staged-combat server fixture, update FR-009/FR-011, contracts and evidence; keep T042 open and changes uncommitted without push/deployment.
 - [X] T048 [US2] Add confirmed host-only End Session beside running lobby status in apps/client/src/lobby.ts; authorize creator account ID in apps/server/src/lobby/registry.ts and routes.ts, sharing SessionLifecycle finished-result persistence/release/notification with normal completion. Keep intermission finalLevel on the reached wave. Cover denial, repeated/concurrent end, both normal-completion orderings and disk reload in tests/integration/end-session.test.ts; verify lobby confirmation and player/spectator results in tests/browser/end-session.mjs, record focused checks/browser evidence in docs/verification.md and retain the existing countdown note. Leave T042 open and changes local/uncommitted.
 - [X] T049 [US2] Measure unboosted projectile hits against an initialized level-1 NPC in tests/default-combat.test.ts; after observing four 25-damage hits at 100 HP, lower only the baseNpcHealth default in packages/protocol/src/settings.ts and themes/default/theme.json to 50 and verify two actual projectile collisions. Preserve host overrides, saved settings, NPC counts/growth and weapon damage; extend focused protocol/lobby/results/wave checks and synchronize default browser assertions and directly related docs. Preserve the countdown note and Theme Credits pointer, leave T042 open and changes uncommitted without push/deployment.
+- [X] T050 [US2] Expand Fixed Tile Cluster Arena terrain in themes/default/src/module/maps.ts without blocking safe spawns or routes; add seeded local slow wandering with pauses and normal range-triggered pursuit in entities.ts/tuning.ts, sharing existing navigation budgets. Verify clearance/all-region connectivity, shared terrain rendering/collision/shots/navigation/radar, idle wandering and pursuit entry/exit, range 0, speed 0, seeded reproduction and request limits in focused map/entity/gameplay tests. Preserve health/counts/wave timing and unrelated pending edits; record actual checks here, leave T042 open without push/deployment.
 
 T047 local evidence (2026-11-08): the pre-change one-player default trace passed
 10 initial NPCs, declining counts with real combat, no replacement and 12 NPCs
@@ -369,6 +370,8 @@ T048 depends on completed T021/T024/T027 and the existing lobby authority/UI;
 it does not depend on or complete T042 or any blocked Theme Credits tasks.
 T049 depends on completed T004/T020/T021 and existing settings persistence;
 it does not depend on or complete T042 or blocked Theme Credits work.
+T050 depends on completed T018/T019 and their existing geometry/navigation
+services; it does not depend on or complete T042 or blocked Theme Credits work.
 
 T048 local evidence (2026-11-08): workspace check passed and the final focused
 9-file/38-test selection passed, including four host-end cases with non-host
@@ -380,6 +383,53 @@ reload/full refresh, immutable retry and replacement-room creation. Initial
 fixture/type/browser failures and actual conditions are in docs/verification.md.
 The existing countdown note is preserved; T042 remains unchecked. Changes stay
 local/uncommitted, with no push, deployment or capacity run.
+
+T050 local evidence (2026-11-08): Fixed expanded from 16 to 64 solid tiles,
+with 16 tiles in each quadrant. Automated checks pass every authored spawn's
+radius plus 64-unit terrain margin, radius-14 central routes at x/y=1008,
+and collision-resolved connectivity of every walkable grid cell. Both map modes
+pass the shared movement, blocked-projectile, NPC-navigation, presentation-map,
+radar and across-wave geometry integration. Simple Generated's original
+four-cluster generation remains unchanged; its fallback uses expanded Fixed.
+
+NPCs use seeded nearby destinations within 128 units, found navigation paths,
+25% configured speed and 30-60-tick pauses. Checks cover repeatable/different-seed
+movement, terrain-adjacent wandering, unreachable-goal reporting/retry, normal-speed
+pursuit at the detection boundary, resumption on exit, obsolete pending paths
+(including exit/reentry to the same player), range 0 at a coincident player
+position and speed 0 in both modes with retained in-range contact damage.
+A 100-NPC idle wave verifies 8 submissions/tick and 64 pending requests;
+processed node work remains <=2048/tick. Pending-count bookkeeping is performed
+once per step, not by rescanning every NPC for each idle candidate.
+
+Final `npm run check` passed, followed by:
+
+```powershell
+npm test -- tests\maps.test.ts tests\default-entities.test.ts tests\generated-map-integration.test.ts tests\integration\gameplay.test.ts tests\npc-spawns.test.ts tests\default-combat.test.ts tests\default-theme.test.ts tests\wave-countdown.test.ts tests\default-respawn.test.ts tests\radar.test.ts tests\default-skin.test.ts tests\integration\generated-map-runtime.test.ts tests\integration\session-lifecycle.test.ts
+```
+
+Result: 13 files, 114 tests passed. Existing health/count/growth/countdown,
+respawn, combat, skin and lifecycle regressions pass without retuning those
+settings. Both maps still place the full 2000-NPC ceiling without overlap.
+`node --check tests\browser\default-game.mjs` and `git diff --check` passed.
+
+The initial pre-change selection failed 9 tests, including the expected missing
+terrain/wander behavior and a stale blocked-shot 100-HP assertion; the latter now
+compares unchanged initialized NPC state. Iteration caught exact-optional typing,
+five new spawn-margin violations (fixed by relocating those clusters), a test
+getter whose value had been copied rather than observed, and old map-dependent
+fixtures. The path-speed fixture now isolates one NPC, the staged player uses a
+verified clear position, and all-seed spawn connectivity uses one collision-checked
+grid traversal per seed instead of hundreds of repeated A* searches; no timeout
+was increased. A bounded seed search found 4315 reproduces the exact (560,528)
+browser encounter on expanded Fixed, verified by the real placement test. The
+browser harness was updated but not run. The unreachable-goal test's initial
+single-axis assertion was corrected to recognize movement along its first
+vertical waypoint rather than demand horizontal travel before that waypoint.
+
+The pending countdown note in docs/verification.md, accounts-lobby edit, .idea
+and Theme Credits feature pointer are preserved. T042 remains unchecked.
+No browser, capacity, push or deployment execution is claimed.
 
 ## Parallel Opportunities
 

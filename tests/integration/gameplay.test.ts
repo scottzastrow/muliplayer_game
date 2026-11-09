@@ -35,7 +35,7 @@ describe("integrated default gameplay", () => {
         expect(after.players).toEqual(before[index]!.players);
         expect(after.acceptedInputs).toBe(0);
         expect(after.phase).toBe("active");
-        expect(sessions[index]!.requests).toEqual([]);
+        expect(sessions[index]!.requests.length).toBeLessThanOrEqual(8);
       }
       expect(sessions[0]!.world.getEntity("player:alice")?.state).toMatchObject({ points: 0, deaths: 0 });
       sessions[1]!.step(150, 0);
@@ -76,7 +76,10 @@ describe("integrated default gameplay", () => {
       expect(positions.some((position) =>
         position.x > wall.x + wall.width && Math.abs(position.y - 1000) > wall.height / 2
       )).toBe(true);
-      expect(a.world.getEntity("npc:npc-southwest")?.position).toEqual({ x: 100, y: 100 });
+      const distant = a.world.getEntity("npc:npc-southwest")!.position;
+      expect(distant).not.toEqual({ x: 100, y: 100 });
+      expect(distant).toEqual(b.world.getEntity("npc:npc-southwest")!.position);
+      expect(Math.hypot(distant.x - 100, distant.y - 100)).toBeLessThan(135);
     } finally {
       a.module.dispose();
       b.module.dispose();

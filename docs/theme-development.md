@@ -316,6 +316,19 @@ targets only within this radius and still uses bounded spatial queries. Zero dis
 automatic pursuit. The host exposes it on create/edit; values lock on start, and the
 additive v1 schema supplies 512 for older rooms/results that omit it.
 
+Outside detection range, NPCs wander locally at one quarter of their configured
+speed. The session's seeded RNG chooses clear cell-center destinations within
+128 units; NPCs move only after the existing navigation service finds a reachable
+path, then pause for 30-60 ticks (1-2 seconds). Candidate selection is capped at
+8 attempts; wandering and pursuit share the existing 8 requests/tick, 64 pending
+requests and engine search/node budgets. Unreachable/limited paths and rejected
+requests report `default.npc_wander.*` metrics and retry with bounded delay.
+Entry into range switches immediately to normal-speed pursuit; losing all living
+in-range players discards pursuit waypoints and resumes wandering. Pending stale
+results are drained but never followed. Detection range 0 allows wandering but
+never acquires a player, including at the exact same position. Speed 0 remains
+stationary in either mode and preserves in-range contact damage.
+
 Dots and Squares defaults level-1 NPCs to **50 HP**: two standard, unboosted
 25-damage projectile hits kill one. The default 10% health growth yields 55 HP
 at level 2; population stays 10 then 12 for one player with 20% count growth.
@@ -335,6 +348,16 @@ configuration, not a lobby setting, environment variable or public session API.
 Change the constant, rebuild with `npm run theme:build`, and restart the local
 server before starting new matches. Existing running matches keep their selected
 map. The companion fixture also wraps the default module and uses this map.
+
+Fixed now has 16 solid four-tile clusters (64 tiles), with four clusters in each
+quadrant, adding cover to the previously sparse outer and inner regions. The
+32-unit cells, bounds and spawn positions are unchanged. The radius-14 central
+routes at x=1008 and y=1008 remain clear, every walkable grid cell is connected,
+and all authored spawns retain their radius plus 64 units of terrain clearance.
+The new clusters live in the same map object/collision definition, not a
+render-only decoration layer; movement, shots, NPC paths, rendering and radar
+all consume that geometry. Simple Generated still shifts its original four
+clusters; its bounded fallback uses the expanded Fixed arena.
 
 Simple Generated uses the match seed and attempt number to move the four solid
 four-tile clusters by up to six 32-unit cells in each direction. The selected
@@ -415,7 +438,7 @@ does not reduce the frozen wave count. Each NPC has radius 8; player centers are
 at least 38 units away (14 + 8 + 16 margin). One NPC per 32-unit cell center keeps
 NPC centers at least 32 units apart. Radius-14 eligible cells also clear solid
 terrain for the smaller NPC. Reachability is not restricted by detection radius;
-distant NPCs remain idle until a player approaches, as before.
+distant NPCs now wander locally until a player approaches.
 
 **Bounded fallback:** empty/exhausted zones are skipped and remaining reachable
 clear zones supply the full requested count. `default.npc_spawn.zone_fallback`
@@ -449,7 +472,7 @@ unchanged selected terrain/health/settings, matching enemy radar positions and
 and restarting between modes, then restore Fixed and rebuild. Screenshots and
 automated visible-Chrome assertions are local evidence, not human playtesting or
 capacity measurements. The separate `--arena-obstacles` fixture now uses the same
-disposable-database guard to pin its waiting room to seed 1011, placing its one
+disposable-database guard to pin its waiting room to seed 4315, placing its one
 NPC near (560,528) for the existing blocked-shot/navigation encounter instead of
 assuming a fixed NPC position. It requires `BROWSER_TEST_DATABASE_PATH`; it is not
 the scattered placement check. T042 stays open; do not deploy.

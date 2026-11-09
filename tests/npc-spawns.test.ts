@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { BoundedNavigation, SessionWorld, type PathResult, type Rect } from "@multiplayer-game/engine";
+import { BoundedNavigation, SessionWorld, type Rect } from "@multiplayer-game/engine";
 import {
   defaultModuleFactory, generateMap, loadMap, type DefaultEntity
 } from "@multiplayer-game/default-theme";
@@ -48,7 +48,7 @@ const zone = (point: Point2) => `${Math.floor(point.x / 512)},${Math.floor(point
 
 describe("scattered NPC wave placement", () => {
   it("keeps the obstacle browser encounter reproducible without a fixed NPC spawn", () => {
-    const simulation = setup(1011, "fixed", 1);
+    const simulation = setup(4315, "fixed", 1);
     try {
       expect(npcs(simulation)[0]!.position).toEqual({ x: 560, y: 528 });
     } finally { simulation.module.dispose(); }
@@ -74,7 +74,7 @@ describe("scattered NPC wave placement", () => {
         for (const simulation of [first, repeat]) {
           for (const npc of npcs(simulation)) simulation.world.removeEntity(npc.id);
           simulation.context.entities.update("player:alice", entity => ({
-            ...entity, position: { x: 700, y: 900 }
+            ...entity, position: { x: 700, y: 1_008 }
           }));
           simulation.module.step(0, 1);
           simulation.module.step(0, 151);
@@ -85,7 +85,7 @@ describe("scattered NPC wave placement", () => {
         expect(next.map(entity => entity.position)).toEqual(npcs(repeat).map(entity => entity.position));
         expect(next.slice(0, 40).map(entity => entity.position)).not.toEqual(positions);
         expect(new Set(next.map(entity => zone(entity.position))).size).toBe(16);
-        expect(next.every(entity => Math.hypot(entity.position.x - 700, entity.position.y - 900) >= 38))
+        expect(next.every(entity => Math.hypot(entity.position.x - 700, entity.position.y - 1_008) >= 38))
           .toBe(true);
         expect(first.snapshot().map).toEqual(original.map);
         expect(first.snapshot().radar!.markers.filter(marker => marker.category === "enemy"))
@@ -106,6 +106,17 @@ describe("scattered NPC wave placement", () => {
           const navigation = new BoundedNavigation(simulation.world.geometry, {
             cellSize: 32, agentRadius: 14, maxNodesPerSearch: 4_096
           });
+          const start = navigation.grid.cellAt(player.position)!;
+          expect(navigation.grid.canTraverse(player.position, start.position)).toBe(true);
+          const visited = new Set([start.index]);
+          const queue = [start];
+          for (let head = 0; head < queue.length; head += 1) {
+            for (const next of navigation.grid.neighbors(queue[head]!)) {
+              if (visited.has(next.index)) continue;
+              visited.add(next.index);
+              queue.push(next);
+            }
+          }
           for (const [index, npc] of enemies.entries()) {
             expect(simulation.map.isWalkable(npc.position, 14)).toBe(true);
             expect(Math.hypot(npc.position.x - player.position.x, npc.position.y - player.position.y))
@@ -114,11 +125,9 @@ describe("scattered NPC wave placement", () => {
               expect(Math.hypot(npc.position.x - other.position.x, npc.position.y - other.position.y))
                 .toBeGreaterThanOrEqual(32);
             }
-            let result: PathResult | undefined;
-            expect(navigation.requestPath(player.position, npc.position, value => { result = value; }))
-              .toBeDefined();
-            for (let tick = 0; tick < 20 && !result; tick += 1) navigation.processTick();
-            expect(result?.status).toBe("found");
+            const cell = navigation.grid.cellAt(npc.position)!;
+            expect(visited.has(cell.index)).toBe(true);
+            expect(navigation.grid.canTraverse(cell.position, npc.position)).toBe(true);
           }
         } finally { simulation.module.dispose(); }
       }
@@ -138,8 +147,8 @@ describe("scattered NPC wave placement", () => {
     } finally { simulation.module.dispose(); }
   });
 
-  it("fills the existing 2000-NPC ceiling without overlaps or count truncation", () => {
-    const simulation = setup(42, "simple-generated");
+  it.each(["fixed", "simple-generated"] as const)("fills the existing 2000-NPC ceiling on %s without overlaps or count truncation", mode => {
+    const simulation = setup(42, mode);
     try {
       const positions = selectNpcSpawns(simulation.context, simulation.map, [{ x: 272, y: 272 }], 42, 1, 2_000);
       expect(positions).toHaveLength(2_000);

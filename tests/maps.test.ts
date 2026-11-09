@@ -71,7 +71,7 @@ describe("default theme maps", () => {
     expect(first.map.definition.bounds).toEqual({ width: 2_048, height: 2_048 });
     expect(first.map.definition.cellSize).toBe(32);
     expect(first.map.definition.spawns.filter((spawn) => spawn.kind === "player")).toHaveLength(32);
-    expect(first.map.obstacles).toHaveLength(16);
+    expect(first.map.obstacles).toHaveLength(64);
     expect(otherSeed.map.obstacles).toEqual(first.map.obstacles);
     for (const spawn of first.map.definition.spawns) {
       expect(first.map.isWalkable(spawn.position, spawn.radius)).toBe(true);
@@ -83,6 +83,40 @@ describe("default theme maps", () => {
           0
         )
       ).toBe(false);
+    }
+  });
+
+  it("keeps expanded fixed terrain clear of spawns and every walkable region connected", () => {
+    const map = generateMap(42).map;
+    const geometry = new WorldGeometry(map.definition.bounds, map.obstacles);
+    for (const spawn of map.definition.spawns) {
+      expect(geometry.isCircleWalkable(spawn.position, spawn.radius + 64)).toBe(true);
+    }
+    for (let coordinate = 80; coordinate <= 1_968; coordinate += 16) {
+      expect(geometry.isCircleWalkable({ x: 1_008, y: coordinate }, 14)).toBe(true);
+      expect(geometry.isCircleWalkable({ x: coordinate, y: 1_008 }, 14)).toBe(true);
+    }
+    const navigation = new BoundedNavigation(geometry, { cellSize: 32, agentRadius: 14 });
+    const start = navigation.grid.cellAt(map.definition.spawns[0]!.position)!;
+    const visited = new Set([start.index]);
+    const queue = [start];
+    for (let head = 0; head < queue.length; head += 1) {
+      for (const next of navigation.grid.neighbors(queue[head]!)) {
+        if (visited.has(next.index)) continue;
+        visited.add(next.index);
+        queue.push(next);
+      }
+    }
+    for (let index = 0; index < 64 * 64; index += 1) {
+      const cell = navigation.grid.cellByIndex(index);
+      if (navigation.grid.isWalkable(cell)) expect(visited.has(index)).toBe(true);
+    }
+    expect(new Set(map.definition.objects.map(object => object.properties?.clusterId)).size).toBe(16);
+    for (const [x, y] of [[0, 0], [1_024, 0], [0, 1_024], [1_024, 1_024]] as const) {
+      expect(map.obstacles.filter(obstacle =>
+        obstacle.x >= x && obstacle.x < x + 1_024 &&
+        obstacle.y >= y && obstacle.y < y + 1_024
+      )).toHaveLength(16);
     }
   });
 

@@ -10,9 +10,8 @@ import type { ModuleContext, NavigationPathResult } from "@multiplayer-game/them
 import { DefaultViewSchema } from "../themes/default/src/skin/view.js";
 
 describe("generated Dots and Squares map integration", () => {
-  it("uses the chosen map for world movement, shots, navigation, snapshots and radar across waves", () => {
-    const map = generateMap(42, "simple-generated").map;
-    expect(map.obstacles).not.toEqual(generateMap(42, "fixed").map.obstacles);
+  it.each(["fixed", "simple-generated"] as const)("uses %s geometry for movement, shots, navigation, rendering and radar across waves", mode => {
+    const map = generateMap(42, mode).map;
     const world = new SessionWorld<DefaultEntity>("generated", map.definition.bounds, map.obstacles);
     const navigation = new BoundedNavigation(world.geometry, { cellSize: 32, agentRadius: 8 });
     const results = new Map<string, NavigationPathResult>();
@@ -102,7 +101,7 @@ describe("generated Dots and Squares map integration", () => {
         type: "combat", moveX: 0, moveY: 0, aimX: target.x, aimY: target.y, fire: true
       });
       for (let tick = 16; tick <= 30; tick += 1) module.step(1 / 30, tick);
-      expect(world.getEntity(npc.id)?.state).toMatchObject({ health: 100 });
+      expect(world.getEntity(npc.id)?.state).toEqual(npc.state);
       expect(world.entities().filter(entity => entity.state.kind === "projectile")).toHaveLength(0);
 
       world.removeEntity(npc.id);

@@ -4,6 +4,7 @@ import type {
   Point2,
   RosterMember
 } from "@multiplayer-game/theme-sdk";
+import { MAP_CELL_SIZE } from "@multiplayer-game/theme-sdk";
 import {
   DEFAULT_RUNTIME_LIMITS,
   GameSettingsSchema,
@@ -21,7 +22,11 @@ import {
   PLAYER_SPEED,
   MAX_NPC_PATH_REQUESTS_PER_TICK,
   MAX_PENDING_NPC_PATHS,
-  MAX_ATTRACTION_QUERY_CELLS
+  MAX_ATTRACTION_QUERY_CELLS,
+  NPC_WANDER_SPEED_FACTOR,
+  NPC_WANDER_RADIUS,
+  NPC_WANDER_PAUSE_TICKS,
+  MAX_NPC_WANDER_CANDIDATES
 } from "./tuning.js";
 import type { DefaultPlayerAction } from "./actions.js";
 import type {
@@ -47,8 +52,11 @@ export const defaultContactAttackCapability: DefaultContactAttackCapability =
   });
 
 interface NpcNavigationState {
+  targetId?: string;
   requestId?: string;
-  requestTargetId?: string;
+  goalVersion: number;
+  requestVersion?: number;
+  pauseUntilTick?: number;
   path?: readonly Point2[];
   nextPathPoint: number;
   lastRequestTick: number;
@@ -214,7 +222,7 @@ export class DefaultEntitySimulator {
       throw new RangeError("Entity simulation step must have a finite duration and safe tick.");
     }
     this.#movePlayers(dtSeconds);
-    this.#pursuePlayers(dtSeconds, tick);
+    this.#moveNpcs(dtSeconds, tick);
   }
 
   dispose(): void {
@@ -284,7 +292,7 @@ export class DefaultEntitySimulator {
         radius: 8,
         state
       });
-      this.#npcNavigation.set(id, { nextPathPoint: 0, lastRequestTick: -Infinity });
+      this.#npcNavigation.set(id, { nextPathPoint: 0, lastRequestTick: -Infinity, goalVersion: 0 });
     }
   }
 
@@ -304,7 +312,7 @@ export class DefaultEntitySimulator {
     }
   }
 
-  #pursuePlayers(dtSeconds: number, tick: number): void {
+  #moveNpcs(dtSeconds: number, tick: number): void {
     let pathRequests = 0;
     for (const id of this.#npcNavigation.keys()) {
       if (this.context.entities.get(id)?.state.kind !== "npc") {
@@ -315,15 +323,14 @@ export class DefaultEntitySimulator {
       (entity): entity is DefaultEntity =>
         entity.state.kind === "npc" && entity.typeId === "npc"
     );
+    let pendingPaths = this.#pendingPathCount();
     for (const npc of npcs) {
       let navigation = this.#npcNavigation.get(npc.id);
       if (!navigation) {
-        navigation = { nextPathPoint: 0, lastRequestTick: -Infinity };
+        navigation = { nextPathPoint: 0, lastRequestTick: -Infinity, goalVersion: 0 };
         this.#npcNavigation.set(npc.id, navigation);
       }
-      this.#pollPath(navigation);
-
-      const nearbyPlayers = this.context.entities
+      const nearbyPlayers = this.npcDetectionRange === 0 ? [] : this.context.entities
         .queryRadius(npc.position, this.npcDetectionRange, MAX_ATTRACTION_QUERY_CELLS)
         .filter(
           (entity): entity is DefaultEntity =>
@@ -332,20 +339,23 @@ export class DefaultEntitySimulator {
             entity.state.health > 0
         );
       const target = nearestEntity(npc.position, nearbyPlayers);
-      if (!target || target.state.kind !== "player") {
-        delete navigation.path;
-        navigation.nextPathPoint = 0;
-        delete navigation.requestTargetId;
-        continue;
-      }
-
-      if (navigation.requestId && navigation.requestTargetId !== target.id) {
-        delete navigation.path;
-      }
-      const targetChanged = navigation.requestTargetId !== target.id;
+      const targetChanged = navigation.targetId !== target?.id;
       if (targetChanged) {
+        navigation.goalVersion += 1;
         delete navigation.path;
+        delete navigation.pauseUntilTick;
         navigation.nextPathPoint = 0;
+        navigation.lastRequestTick = -Infinity;
+        if (target) navigation.targetId = target.id;
+        else delete navigation.targetId;
+      }
+      if (this.#pollPath(navigation, tick)) pendingPaths -= 1;
+      if (!target || target.state.kind !== "player") {
+        if (this.#wander(npc, navigation, dtSeconds, tick, pathRequests, pendingPaths)) {
+          pathRequests += 1;
+          pendingPaths += 1;
+        }
+        continue;
       }
 
       let destination = target.position;
@@ -366,15 +376,16 @@ export class DefaultEntitySimulator {
         blocked &&
         !navigation.requestId &&
         pathRequests < MAX_NPC_PATH_REQUESTS_PER_TICK &&
-        this.#pendingPathCount() < MAX_PENDING_NPC_PATHS &&
+        pendingPaths < MAX_PENDING_NPC_PATHS &&
         tick - navigation.lastRequestTick >= NPC_REPATH_INTERVAL_TICKS
       ) {
         const requestId = this.context.navigation.requestPath(npc.position, target.position);
         navigation.lastRequestTick = tick;
-        navigation.requestTargetId = target.id;
         if (requestId) {
           navigation.requestId = requestId;
+          navigation.requestVersion = navigation.goalVersion;
           pathRequests += 1;
+          pendingPaths += 1;
         }
       }
 
@@ -388,22 +399,89 @@ export class DefaultEntitySimulator {
     }
   }
 
-  #pollPath(navigation: NpcNavigationState): void {
+  #wander(
+    npc: DefaultEntity,
+    navigation: NpcNavigationState,
+    dtSeconds: number,
+    tick: number,
+    pathRequests: number,
+    pendingPaths: number
+  ): boolean {
+    if (this.npcMovementSpeed === 0 || dtSeconds === 0 ||
+      tick < (navigation.pauseUntilTick ?? 0)) return false;
+
+    const pathPoint = navigation.path?.[navigation.nextPathPoint];
+    if (pathPoint) {
+      const delta = normalizedDelta(
+        npc.position, pathPoint, this.npcMovementSpeed * NPC_WANDER_SPEED_FACTOR * dtSeconds
+      );
+      const moved = this.context.geometry.moveCircle(npc.position, delta, npc.radius);
+      this.context.entities.update(npc.id, current => ({ ...current, position: moved }));
+      if (distance(moved, pathPoint) < 1e-6) {
+        navigation.nextPathPoint += 1;
+        if (navigation.nextPathPoint === navigation.path!.length) {
+          delete navigation.path;
+          navigation.pauseUntilTick = tick + NPC_WANDER_PAUSE_TICKS +
+            Math.floor(this.context.random.next() * (NPC_WANDER_PAUSE_TICKS + 1));
+        }
+      }
+      return false;
+    }
+    if (navigation.requestId || pathRequests >= MAX_NPC_PATH_REQUESTS_PER_TICK ||
+      pendingPaths >= MAX_PENDING_NPC_PATHS ||
+      tick - navigation.lastRequestTick < NPC_REPATH_INTERVAL_TICKS) return false;
+
+    for (let attempt = 0; attempt < MAX_NPC_WANDER_CANDIDATES; attempt += 1) {
+      const destination = {
+        x: (Math.floor(npc.position.x / MAP_CELL_SIZE) +
+          Math.floor(this.context.random.next() * 7) - 3 + 0.5) * MAP_CELL_SIZE,
+        y: (Math.floor(npc.position.y / MAP_CELL_SIZE) +
+          Math.floor(this.context.random.next() * 7) - 3 + 0.5) * MAP_CELL_SIZE
+      };
+      const separation = distance(npc.position, destination);
+      if (separation < MAP_CELL_SIZE || separation > NPC_WANDER_RADIUS ||
+        !isWalkable(this.context, destination, npc.radius)) continue;
+      const requestId = this.context.navigation.requestPath(npc.position, destination);
+      navigation.lastRequestTick = tick;
+      if (!requestId) {
+        this.context.metrics.increment("default.npc_wander.request_rejected");
+        return false;
+      }
+      navigation.requestId = requestId;
+      navigation.goalVersion += 1;
+      navigation.requestVersion = navigation.goalVersion;
+      return true;
+    }
+    this.context.metrics.increment("default.npc_wander.no_destination");
+    navigation.pauseUntilTick = tick + NPC_WANDER_PAUSE_TICKS;
+    return false;
+  }
+
+  #pollPath(navigation: NpcNavigationState, tick: number): boolean {
     if (!navigation.requestId) {
-      return;
+      return false;
     }
     const result = this.context.navigation.getPath(navigation.requestId);
     if (!result) {
-      return;
+      return false;
     }
     delete navigation.requestId;
+    // The public service cannot cancel; drain results but never follow an obsolete goal.
+    if (navigation.requestVersion !== navigation.goalVersion) {
+      return true;
+    }
     if (result.status === "found" && result.path.length > 1) {
       navigation.path = result.path;
       navigation.nextPathPoint = 1;
     } else {
       delete navigation.path;
       navigation.nextPathPoint = 0;
+      if (!navigation.targetId) {
+        navigation.pauseUntilTick = tick + NPC_REPATH_INTERVAL_TICKS;
+        this.context.metrics.increment(`default.npc_wander.${result.status}`);
+      }
     }
+    return true;
   }
 
   #applyContactAttack(npcId: string, playerId: string, tick: number): void {

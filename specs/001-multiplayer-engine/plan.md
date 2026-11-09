@@ -235,3 +235,18 @@ counts, weapon tuning and lifecycle. Verify both default and overridden health,
 saved-room/result JSON, create/edit UI and wave progression with focused checks.
 Do not repin uncommitted public-package changes, alter the Theme Credits pointer,
 complete T042, commit, push or deploy.
+
+### Scoped terrain and idle-wander playtest follow-up
+
+T050 extends completed T018/T019 through default-theme map and entity code only.
+Expand Fixed to 16 four-tile clusters distributed evenly across quadrants;
+preserve full-radius central routes and all authored spawn radii plus 64-unit
+terrain clearance. Keep Simple Generated's four-cluster layout unchanged, using
+expanded Fixed only as its existing fallback. Verify actual collision-resolved
+connectivity and the shared rendering/shot/navigation/radar map path in both modes.
+Use the existing seeded session RNG for nearby wander destinations and pauses,
+following only found paths at 25% configured speed. Share pursuit's request and
+pending ceilings and the engine node budget, draining obsolete requests across
+range transitions. Verify idle movement, pauses, reachability, seeded repetition,
+pursuit entry/exit, range 0 and speed 0. Preserve health/counts/timing, feature
+pointer and T042; record focused evidence without browser/capacity claims.

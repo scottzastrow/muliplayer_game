@@ -44,7 +44,7 @@ respawn, complete two levels, and compare final scores.
 **Acceptance Scenarios**:
 
 1. **Given** two players, **When** they travel apart and then meet, **Then** each remains at their own screen center and sees the other only within their viewport.
-2. **Given** enemies outside the configured NPC detection range, **When** a player enters the range, **Then** those enemies pursue reachable targets at the configured movement speed and navigate around obstacles; a zero range disables automatic pursuit.
+2. **Given** enemies outside the configured NPC detection range, **When** no living player is in range, **Then** they wander slowly along seeded reachable nearby paths and pause between moves; entering range switches to configured-speed pursuit and losing all in-range players resumes wandering. Zero range allows wandering without pursuit; zero speed keeps NPCs stationary.
 3. **Given** a player at zero health, **When** death occurs, **Then** their avatar and combat input disappear for the configured delay (five seconds by default), their score persists, and they return at a random safe position without damage immunity.
 4. **Given** a level with enemies, **When** the last enemy dies, **Then** the next map and configured increases apply once; after the configured final level, the match finishes instead.
 5. **Given** a running match, **When** points or health change, **Then** the top HUD updates with points visually dominant; the final leaderboard ranks total points and includes kills and deaths.
@@ -127,6 +127,15 @@ players, enemies, and spectators; produce a reproducible measured report.
 - **FR-006**: A running match MUST reject new participants but allow eligible authenticated reconnects and spectators within capacity. It MUST isolate state from other sessions.
 - **FR-007**: Players MUST traverse one shared generated map with independent centered cameras, collision with simple obstacles, and consistent nearby player visibility.
 - **FR-008**: The default game module MUST provide range-triggered enemy pursuit, obstacle navigation, weapons, projectiles, damage, health/power/weapon pickups, and authoritative scoring.
+  Outside detection range, NPCs MUST wander locally at one quarter of configured
+  speed toward seeded reachable destinations within 128 units, pausing 1-2
+  seconds between moves. Wandering and pursuit MUST share existing navigation
+  budgets. Pursuit entry/exit MUST discard stale paths. Speed 0 remains stationary;
+  detection range 0 permits wandering without targeting any player.
+  Fixed Tile Cluster Arena MUST add solid terrain in sparse regions while retaining
+  clear region routes and safe spawn clearance. Rendering, collision, projectile
+  blocking, NPC navigation and radar MUST share the same terrain geometry.
+  This playtest slice MUST NOT retune health, counts, growth or wave timing.
 - **FR-009**: Level enemy totals MUST use the roster frozen at start and the configured growth formula. Killed enemies MUST not be continuously replaced. Clearing a level MUST advance once; clearing the maximum level MUST finish with a points-ranked leaderboard.
   For one player with default settings, waves 1 and 2 MUST start with 10 and 12
   NPCs respectively. A next wave MUST NOT spawn until the living count reaches
