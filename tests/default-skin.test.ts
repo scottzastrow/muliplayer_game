@@ -38,6 +38,8 @@ class HudElement extends EventTarget {
   setAttribute(): void {}
   append(...children: HudElement[]): void { this.children.push(...children); }
   remove(): void { this.removed = true; }
+  focus(): void { this.dispatchEvent(new Event("focus")); }
+  getBoundingClientRect() { return { left: 0, top: 0, width: 800, height: 600 }; }
   getContext() {
     let color = "";
     return {
@@ -62,6 +64,177 @@ class HudElement extends EventTarget {
 
 describe("Dots and Squares presentation", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it.each([
+    { mode: "keyboard-mouse", right: "ArrowRight", up: "ArrowUp" },
+    { mode: "keyboard-only", right: "KeyD", up: "KeyW" }
+  ] as const)("moves and faces in screen directions in $mode mode", ({ mode, right, up }) => {
+    class TestKeyboardEvent extends Event {
+      constructor(type: string, readonly code: string, readonly repeat = false) { super(type); }
+    }
+    class TestPointerEvent extends Event {
+      constructor(type: string, readonly clientX: number, readonly clientY: number,
+        readonly button = 0) { super(type); }
+    }
+    vi.stubGlobal("KeyboardEvent", TestKeyboardEvent);
+    vi.stubGlobal("PointerEvent", TestPointerEvent);
+    vi.stubGlobal("document", Object.assign(new EventTarget(), {
+      createTextNode: (text: string) => Object.assign(new HudElement(), { textContent: text }),
+      createElement: () => new HudElement()
+    }));
+    vi.stubGlobal("window", new EventTarget());
+    const slots = new Map(["world", "hud", "controls"].map(name => [name, document.createElement("div")]));
+    slots.get("controls")!.dataset.controlMode = mode;
+    const dispatchInput = vi.fn();
+    const host: SkinHost = {
+      slots, selectedTarget: { accountId: "alice", username: "Alice" },
+      cameraAnchor: undefined,
+      setCameraAnchor(anchor) { this.cameraAnchor = anchor; },
+      dispatchInput, navigate: () => {}
+    };
+    const skin = defaultSkinFactory.mount(host, {
+      image: async () => { throw new Error("No images used."); },
+      audio: async () => { throw new Error("No audio used."); }
+    });
+    const canvas = slots.get("world")!.children[0] as unknown as HudElement;
+    const snapshot = view(500);
+    snapshot.players[0]!.facing = { x: -1, y: 0 };
+    snapshot.entities[0]!.state = {
+      kind: "player", accountId: "alice", deaths: 0, facing: { x: -1, y: 0 }
+    };
+    let time = 0;
+    const render = () => {
+      canvas.drawnArcs.length = 0;
+      skin.render(time += 40, snapshot);
+      return dispatchInput.mock.lastCall![0] as {
+        moveX: number; moveY: number; aimX: number; aimY: number; fire: boolean;
+      };
+    };
+    const key = (type: string, code: string, repeat = false) =>
+      canvas.dispatchEvent(new TestKeyboardEvent(type, code, repeat));
+    const expectAim = (input: ReturnType<typeof render>, x: number, y: number) => {
+      const dx = input.aimX - 500;
+      const dy = input.aimY - 100;
+      const length = Math.hypot(dx, dy);
+      expect(dx / length).toBeCloseTo(x);
+      expect(dy / length).toBeCloseTo(y);
+      const dot = canvas.drawnArcs.find(arc => arc.radius === 3)!;
+      expect((dot.x - 400) / 16).toBeCloseTo(x);
+      expect((dot.y - 300) / 16).toBeCloseTo(y);
+    };
+    try {
+      skin.handleViewport(800, 600, 1);
+      skin.handleSnapshot(snapshot);
+      canvas.focus();
+      if (mode === "keyboard-mouse") {
+        canvas.dispatchEvent(new TestPointerEvent("pointermove", 300, 300));
+        expectAim(render(), -1, 0);
+      }
+      key("keydown", right);
+      const moved = render();
+      expect(moved.moveX).toBeCloseTo(1);
+      expect(moved.moveY).toBeCloseTo(0);
+      expectAim(moved, 1, 0);
+      skin.handleSnapshot({ ...snapshot, tick: 3 });
+      expectAim(render(), 1, 0);
+      key("keydown", up);
+      const diagonal = render();
+      expect(diagonal.moveX).toBeCloseTo(Math.SQRT1_2);
+      expect(diagonal.moveY).toBeCloseTo(-Math.SQRT1_2);
+      expect(Math.hypot(diagonal.moveX, diagonal.moveY)).toBeCloseTo(1);
+      expectAim(diagonal, Math.SQRT1_2, -Math.SQRT1_2);
+      key("keyup", up);
+      expectAim(render(), 1, 0);
+      key("keyup", right);
+      const stopped = render();
+      expect(stopped.moveX).toBe(0);
+      expect(stopped.moveY).toBe(0);
+      expectAim(stopped, 1, 0);
+      skin.handleSnapshot({ ...snapshot, tick: 4 });
+      expectAim(render(), 1, 0);
+      if (mode === "keyboard-only") key("keydown", "Space");
+      else {
+        canvas.dispatchEvent(new TestPointerEvent("pointermove", 300, 300));
+        expectAim(render(), 1, 0);
+        canvas.dispatchEvent(new TestPointerEvent("pointerdown", 300, 300));
+      }
+      const firing = render();
+      expect(firing.fire).toBe(true);
+      expectAim(firing, 1, 0);
+      if (mode === "keyboard-mouse") {
+        canvas.dispatchEvent(new TestPointerEvent("pointermove", 300, 200));
+        const aimed = render();
+        expect(aimed.fire).toBe(true);
+        expectAim(aimed, -Math.SQRT1_2, -Math.SQRT1_2);
+        key("keydown", right);
+        expectAim(render(), 1, 0);
+        canvas.dispatchEvent(new TestPointerEvent("pointermove", 300, 400));
+        const aimedWhileMoving = render();
+        expect(aimedWhileMoving.moveX).toBeCloseTo(1);
+        expectAim(aimedWhileMoving, -Math.SQRT1_2, Math.SQRT1_2);
+        key("keyup", right);
+        expectAim(render(), -Math.SQRT1_2, Math.SQRT1_2);
+        window.dispatchEvent(new Event("pointerup"));
+        expect(render().fire).toBe(false);
+      } else {
+        key("keyup", "Space");
+        key("keydown", "ArrowRight");
+        render();
+        const turned = render();
+        expect(turned.moveX).toBe(0);
+        expect(turned.moveY).toBe(0);
+        expect(turned.aimY).toBeGreaterThan(100);
+        key("keyup", "ArrowRight");
+        key("keydown", "ArrowLeft");
+        const leftTurned = render();
+        expect(leftTurned.aimY).toBeLessThan(turned.aimY);
+        key("keyup", "ArrowLeft");
+      }
+
+      const down = mode === "keyboard-only" ? "KeyS" : "ArrowDown";
+      let snapshotTick = 4;
+      for (const turn of mode === "keyboard-only" ? ["ArrowLeft", "ArrowRight"] : ["mouse"]) {
+        key("keydown", down);
+        const movingDown = render();
+        expect(movingDown).toMatchObject({ moveX: 0, moveY: 1, fire: false });
+        expectAim(movingDown, 0, 1);
+        let angle: number;
+        if (turn === "mouse") {
+          canvas.dispatchEvent(new TestPointerEvent("pointermove", 200, 300));
+          angle = Math.PI;
+        } else {
+          key("keydown", turn);
+          for (let frame = 0; frame < 5; frame++) render();
+          key("keyup", turn);
+          angle = Math.PI / 2 + (turn === "ArrowLeft" ? -1 : 1) * Math.PI * 0.2;
+        }
+        const x = Math.cos(angle);
+        const y = Math.sin(angle);
+        expectAim(render(), x, y);
+        if (mode === "keyboard-only") key("keydown", "Space");
+        else canvas.dispatchEvent(new TestPointerEvent("pointerdown", 200, 300));
+        for (let frame = 0; frame < 6; frame++) {
+          // Duplicate keydowns must not reassert facing, even without a repeat flag.
+          key("keydown", down, frame % 2 === 0);
+          skin.handleSnapshot({ ...snapshot, tick: ++snapshotTick });
+          const held = render();
+          expect(held).toMatchObject({ moveX: 0, moveY: 1, fire: true });
+          expectAim(held, x, y);
+        }
+        if (mode === "keyboard-only") key("keyup", "Space");
+        else window.dispatchEvent(new Event("pointerup"));
+        key("keyup", down);
+        const released = render();
+        expect(released).toMatchObject({ moveX: 0, moveY: 0, fire: false });
+        expectAim(released, x, y);
+        key("keydown", down);
+        expectAim(render(), 0, 1);
+        key("keyup", down);
+      }
+    } finally {
+      skin.dispose();
+    }
+  });
 
   it("draws the generated snapshot's collision rectangles at their world positions", () => {
     const elements: HudElement[] = [];

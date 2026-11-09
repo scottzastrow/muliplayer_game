@@ -1,5 +1,54 @@
 # Local verification
 
+## Held movement and independent facing, T023/T045 (2026-11-08)
+
+The already-uncommitted screen-direction controls passed both requested cases;
+no additional production controls change was necessary. Fresh movement presses
+set facing, repeated keydowns are ignored for facing, and render dispatch keeps
+the held movement vector separate from mouse aim/keyboard rotation.
+
+Extended `tests/default-skin.test.ts` to hold Down Arrow while mouse aiming/firing
+left and to hold S while rotating both left and right and firing Space. Checks
+cover unchanged down movement, exact aim/facing-dot direction, repeat-flagged
+and duplicate unflagged keydowns, repeated snapshots, release and a fresh press
+setting downward facing again. Default-theme build/type-check passed; the focused
+skin/theme/combat/entities selection passed **4 files, 43 tests**. Browser harness
+syntax and `git diff --check` passed.
+
+Visible Chrome **156.0.8078.80** passed two consecutive final runs of
+`node tests\browser\default-game.mjs --held-controls` on Windows, Node **24.11.0**,
+npm **11.6.1**, with disposable server **18087**, client **15177**, debugging
+**19227**, and an owned fresh database/profile. All three endpoints returned
+HTTP 200 before execution. Each of the mouse-left, keyboard-left-rotation and
+keyboard-right-rotation cases received four real browser `repeat=true` events,
+continued down **48-60 world units** with no sideways displacement, sent **5**
+firing inputs and observed **1-2** new authoritative projectiles in the aimed
+direction. Releasing stopped movement/firing; keyboard facing remained stable.
+
+Initial harness attempts incorrectly compared shots created at different server
+positions to one earlier facing sample and sampled a stale rendered frame.
+Diagnostic inputs showed snapshot-relative aim coordinates versus the newer
+moving server position, not movement-key facing reassertion. The final harness
+waits two render frames, checks local keyboard-facing stability within 0.01,
+and checks server/projectile heading separately: mouse shots have normalized
+x < -0.97 and |y| < 0.25; keyboard server/shot vectors are within 0.35 of the
+displayed rotated heading. These are directional live-network checks, not
+claims of exact server-angle stability. Exact control intent and local direction
+are asserted by the deterministic skin tests. Earlier wiring/cleanup mistakes
+were corrected; failing fixture rooms were released by restarting only the
+owned disposable server, and the final harness leaves rooms in `finally`.
+A subsequent run exposed shots already removed by terrain at the final sample:
+the bounded probe now records new projectiles across incoming snapshots instead
+of requiring them to survive to that sample. An unrelated stationary-view
+centering assertion was removed from this moving scenario; its facing-dot checks
+remain. Repeated diagnostic registrations also triggered the normal auth throttle;
+only the owned disposable server was restarted before the two final runs.
+
+The existing production-control edits and other prior work were preserved.
+T042 remains open; no deployment, capacity or cross-browser result is claimed.
+Pre-commit review also passed `npm run check`, the focused 4-file/43-test selection
+and syntax checks for both modified browser harnesses. Gamepad remains separate.
+
 ## Scattered NPC placement, T046 / FR-024 (2026-11-08)
 
 Implemented on `001-multiplayer-engine` over `720529e` as a placement-only

@@ -91,7 +91,18 @@ const probe = `(() => {
       super(...args);
       this.addEventListener('message', event => {
         const message = JSON.parse(event.data);
-        if (message.type === 'server.snapshot') window.__probe.snapshot = message.payload;
+        if (message.type === 'server.snapshot') {
+          window.__probe.snapshot = message.payload;
+          if (window.__heldShots) {
+            for (const entity of message.payload.entities) {
+              if (entity.state.kind === 'projectile' &&
+                  !window.__heldShots.some(shot => shot.id === entity.id)) {
+                window.__heldShots.push(entity);
+                if (window.__heldShots.length > 40) window.__heldShots.shift();
+              }
+            }
+          }
+        }
         if (message.type === 'server.spectate.target') window.__probe.target = message.payload;
       });
     }
@@ -376,13 +387,146 @@ async function aim(page, horizontal, vertical) {
   await cdp("Input.dispatchMouseEvent", { type: "mouseMoved", buttons: 0, ...point }, page.session);
   await delay(350);
 }
-async function turnToward(page, angle) {
-  const facing = own(await state(page)).facing ?? { x: 1, y: 0 };
-  const currentAngle = Math.atan2(facing.y, facing.x);
-  const difference = Math.atan2(Math.sin(angle - currentAngle), Math.cos(angle - currentAngle));
-  if (Math.abs(difference) < 0.05) return;
-  const direction = difference > 0 ? "ArrowRight" : "ArrowLeft";
-  await move(page, direction, Math.ceil(Math.abs(difference) / Math.PI * 1000) + 80);
+async function verifyHeldControls() {
+  const results = [];
+  for (const mode of ["keyboard-mouse", "keyboard-only"]) {
+    const page = await newWindow();
+    const username = `Held_${mode === "keyboard-only" ? "K" : "M"}_${Date.now().toString(36)}`;
+    await signIn(page, username, randomUUID(), mode);
+    await evaluate(page, `document.querySelector('[name=setting-initialNpcsPerPlayer]').value = '1';
+        document.querySelector('[name=setting-baseNpcHealth]').value = '100000';
+        document.querySelector('[name=setting-npcMovementSpeed]').value = '0';
+        document.querySelector('[name=setting-npcDetectionRange]').value = '0';
+        document.querySelector('[name=setting-maxLevels]').value = '1'`);
+    await click(page, "Create session");
+    const sessionId = await evaluate(page, `(async () =>
+        (await (await fetch('/api/v1/sessions')).json()).sessions
+          .find(session => session.creator === ${JSON.stringify(username)}).id)()`);
+    try {
+      await clickSessionButton(page, username, "Start Session");
+      await waitFor(page, "window.__probe.snapshot !== null");
+      await cdp("Page.bringToFront", {}, page.session);
+      await evaluate(page, `document.querySelector('canvas').focus();
+        window.__heldRepeats = 0;
+        document.querySelector('canvas').addEventListener('keydown', event => {
+          if (event.repeat) window.__heldRepeats++;
+        })`);
+      const down = mode === "keyboard-only" ? "KeyS" : "ArrowDown";
+      const key = (code, type = "keyDown", autoRepeat = false) => cdp("Input.dispatchKeyEvent", {
+        type, code, key: ({ KeyS: "s", Space: " " })[code] ?? code, autoRepeat
+      }, page.session);
+      for (const turn of mode === "keyboard-only" ? ["ArrowLeft", "ArrowRight"] : ["mouse"]) {
+        await key(down);
+        await waitFor(page, `window.__probe.snapshot.players.find(p =>
+          p.accountId === window.__probe.snapshot.viewerAccountId).facing.y > 0.99`);
+        if (turn === "mouse") await aim(page, -300, 0);
+        else {
+          await key(turn);
+          await waitFor(page, `Math.abs(window.__probe.snapshot.players.find(p =>
+            p.accountId === window.__probe.snapshot.viewerAccountId).facing.x) > 0.9`);
+          await key(turn, "keyUp");
+          await delay(150);
+        }
+        await evaluate(page, "new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+        const before = await state(page);
+        const facing = own(before).facing;
+        const displayedFacing = view => {
+          const color = view.colors[own(view).accountId];
+          const body = view.arcs.find(arc => arc.r === 14 && arc.color === color);
+          const dot = view.arcs.find(arc => arc.r === 3 && arc.color === color &&
+            Math.abs(Math.hypot(arc.x - body.x, arc.y - body.y) - 16) < 0.1);
+          assert.ok(dot, "own facing dot is rendered");
+          return { x: (dot.x - body.x) / 16, y: (dot.y - body.y) / 16 };
+        };
+        const localFacing = displayedFacing(before);
+        const existingShots = new Set(before.snapshot.entities.filter(entity =>
+          entity.state.kind === "projectile").map(entity => entity.id));
+        assert.ok(turn === "mouse" ? facing.x < -0.99
+          : turn === "ArrowLeft" ? facing.x > 0.9 : facing.x < -0.9,
+          `${mode} independent aim/rotation overrides the initial downward facing`);
+        const bounds = await evaluate(page, `(() => {
+          const r = document.querySelector('canvas').getBoundingClientRect();
+          return { x: r.left + r.width / 2 - 300, y: r.top + r.height / 2 };
+        })()`);
+        await evaluate(page, "window.__probe.actions = []; window.__heldShots = []");
+        if (mode === "keyboard-only") await key("Space");
+        else await cdp("Input.dispatchMouseEvent", {
+          type: "mousePressed", button: "left", buttons: 1, clickCount: 1, ...bounds
+        }, page.session);
+        for (let repeat = 0;repeat < 4;repeat++) {
+          await key(down, "keyDown", true);
+          await delay(60);
+        }
+        const held = await state(page);
+        assert.ok(own(held).position.y > own(before).position.y + 20,
+          `${mode} keeps moving down while firing after repeats`);
+        assert.ok(Math.abs(own(held).position.x - own(before).position.x) < 0.01);
+        assert.ok(turn === "mouse"
+          ? own(held).facing.x < -0.99 && Math.abs(own(held).facing.y) < 0.15
+          : Math.hypot(displayedFacing(held).x - localFacing.x,
+            displayedFacing(held).y - localFacing.y) < 0.01,
+          `${mode} auto-repeat preserves independent facing: ${JSON.stringify({
+            turn, before: facing, after: own(held).facing, actions: held.actions
+          })}`);
+        const firing = held.actions.filter(input => input.payload.action.fire);
+        assert.ok(turn === "mouse" || Math.hypot(own(held).facing.x - localFacing.x,
+          own(held).facing.y - localFacing.y) < 0.35, "server facing follows the rotated heading");
+        assert.ok(firing.length >= 3, `${mode} sends sustained firing intent`);
+        for (const { payload: { action } } of firing) {
+          assert.equal(action.moveX, 0);
+          assert.equal(action.moveY, 1);
+        }
+        const observedShots = await evaluate(page, "window.__heldShots");
+        const shots = observedShots.filter(entity =>
+          entity.state.kind === "projectile" && entity.state.ownerAccountId === own(held).accountId &&
+          !existingShots.has(entity.id));
+        assert.ok(shots.length > 0, `${mode} creates authoritative projectiles`);
+        for (const shot of shots) {
+          const velocity = shot.state.velocity;
+          const speed = Math.hypot(velocity.x, velocity.y);
+          // Mouse aim uses an interpolated camera; each shot starts at the server's newer position.
+          assert.ok(turn === "mouse"
+            ? velocity.x / speed < -0.97 && Math.abs(velocity.y / speed) < 0.25
+            : Math.hypot(velocity.x / speed - localFacing.x, velocity.y / speed - localFacing.y) < 0.35,
+            `${mode} projectiles follow aim rather than downward movement: ${JSON.stringify({
+              facing, velocity, currentFacing: own(held).facing,
+              inputs: firing.map(input => input.payload.action)
+            })}`);
+        }
+        if (mode === "keyboard-only") await key("Space", "keyUp");
+        else await cdp("Input.dispatchMouseEvent", {
+          type: "mouseReleased", button: "left", buttons: 0, clickCount: 1, ...bounds
+        }, page.session);
+        await key(down, "keyUp");
+        await delay(150);
+        await evaluate(page, "new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+        const released = await state(page);
+        assert.equal(released.actions.at(-1).payload.action.moveY, 0);
+        assert.equal(released.actions.at(-1).payload.action.fire, false);
+        assert.ok(turn === "mouse" ? own(released).facing.x < -0.99
+          : Math.hypot(displayedFacing(released).x - localFacing.x,
+            displayedFacing(released).y - localFacing.y) < 0.01,
+          `release preserves facing: ${JSON.stringify({
+            mode, turn, localFacing, displayed: displayedFacing(released),
+            serverFacing: own(released).facing
+          })}`);
+        results.push({
+          mode, turn, repeats: 4, facing,
+          downwardDisplacement: own(held).position.y - own(before).position.y,
+          firingInputs: firing.length, projectiles: shots.length
+        });
+      }
+      assert.equal(await evaluate(page, "window.__heldRepeats"), mode === "keyboard-only" ? 8 : 4);
+    } finally {
+      const leave = await evaluate(page, `(async () => {
+        return (await fetch('/api/v1/sessions/${sessionId}/leave', {
+          method: 'POST', headers: {'content-type':'application/json'}, body:'{}'
+        })).status;
+      })()`);
+      assert.equal(leave, 204);
+    }
+  }
+  console.log(JSON.stringify({ browser: version.Browser, heldControls: results }, null, 2));
 }
 
 async function shootUntil(page, level, remaining) {
@@ -467,8 +611,11 @@ async function observeNpcMovement(page, duration, trace) {
 async function moveAndSample(page, code, duration, playerTrace, npcTrace) {
   await cdp("Page.bringToFront", {}, page.session);
   await evaluate(page, "document.querySelector('canvas').focus()");
-  const key = ({ KeyW: "w", KeyA: "a", KeyS: "s", KeyD: "d" })[code] ?? code;
-  await cdp("Input.dispatchKeyEvent", { type: "keyDown", key, code }, page.session);
+  const codes = Array.isArray(code) ? code : [code];
+  for (const item of codes) {
+    const key = ({ KeyW: "w", KeyA: "a", KeyS: "s", KeyD: "d" })[item] ?? item;
+    await cdp("Input.dispatchKeyEvent", { type: "keyDown", key, code: item }, page.session);
+  }
   try {
     const deadline = Date.now() + duration;
     while (Date.now() < deadline) {
@@ -480,7 +627,10 @@ async function moveAndSample(page, code, duration, playerTrace, npcTrace) {
       await delay(100);
     }
   } finally {
-    await cdp("Input.dispatchKeyEvent", { type: "keyUp", key, code }, page.session);
+    for (const item of codes) {
+      const key = ({ KeyW: "w", KeyA: "a", KeyS: "s", KeyD: "d" })[item] ?? item;
+      await cdp("Input.dispatchKeyEvent", { type: "keyUp", key, code: item }, page.session);
+    }
   }
   await delay(200);
   const current = await state(page);
@@ -533,6 +683,9 @@ async function fireWhileAiming(page, targetForView, duration, npcTrace) {
 }
 
 try {
+  if (process.argv.includes("--held-controls")) {
+    await verifyHeldControls();
+  } else {
   const alice = await newWindow();
   const bob = await newWindow();
   const observer = await newWindow();
@@ -725,7 +878,7 @@ try {
 
     const playerTrace = [playerAtStart];
     await aim(alice, 256, 256);
-    await moveAndSample(alice, "ArrowUp", 900, playerTrace, npcTrace);
+    await moveAndSample(alice, ["ArrowDown", "ArrowRight"], 900, playerTrace, npcTrace);
     const blockedMove = await state(alice);
     const playerAtBlock = own(blockedMove).position;
     assert.ok(playerAtBlock.x < 384 || playerAtBlock.y < 384,
@@ -744,7 +897,7 @@ try {
     assert.ok(own(northRoute).position.y < 370 && own(northRoute).position.x < 384,
       "the player reaches the open route above the cluster");
     await aim(alice, 140, 0);
-    await moveAndSample(alice, "ArrowUp",
+    await moveAndSample(alice, "ArrowRight",
       Math.ceil((510 - own(northRoute).position.x) / 180 * 1000) + 120,
       playerTrace, npcTrace);
     const aroundCluster = await state(alice);
@@ -971,13 +1124,13 @@ try {
   assert.deepEqual(own(startA).facing, { x: 1, y: 0 }, "Alice starts facing screen-right");
   await move(alice, "ArrowUp", 450);
   const aliceForward = await state(alice);
-  assert.ok(own(aliceForward).position.x > alicePositionBeforeForward.x + 30,
-    "keyboard + mouse Up moves screen-right when facing screen-right");
-  assert.ok(Math.abs(own(aliceForward).position.y - alicePositionBeforeForward.y) < 3,
-    "keyboard + mouse forward movement follows facing instead of world-up");
-  assert.ok(aliceForward.actions.some(input => input.payload.action.moveX > 0.99 &&
-    Math.abs(input.payload.action.moveY) < 0.01),
-  "keyboard + mouse input uses the facing vector");
+  assert.ok(own(aliceForward).position.y < alicePositionBeforeForward.y - 30,
+    "keyboard + mouse Up moves screen-up");
+  assert.ok(Math.abs(own(aliceForward).position.x - alicePositionBeforeForward.x) < 3,
+    "keyboard + mouse Up does not move sideways");
+  assert.ok(aliceForward.actions.some(input => input.payload.action.moveY < -0.99 &&
+    Math.abs(input.payload.action.moveX) < 0.01),
+  "keyboard + mouse input uses screen directions");
   await moveKeys(alice, ["ArrowUp", "ArrowRight"], 350);
   const diagonalA = await state(alice);
   const diagonalMouseInput = diagonalA.actions.find(input => input.payload.action.moveX !== 0 &&
@@ -989,8 +1142,8 @@ try {
   const beforeStrafe = own(diagonalA).position;
   await move(alice, "ArrowRight", 450);
   const strafedA = await state(alice);
-  assert.ok(own(strafedA).position.y > beforeStrafe.y + 30,
-    "keyboard + mouse Right strafes relative to the facing direction");
+  assert.ok(own(strafedA).position.x > beforeStrafe.x + 30,
+    "keyboard + mouse Right moves screen-right");
   centered(strafedA);
 
   await click(observer, "Refresh sessions");
@@ -1078,12 +1231,12 @@ try {
   assert.deepEqual(own(startB).facing, { x: 1, y: 0 }, "Bob starts facing screen-right");
   await move(bob, "KeyW", 1400);
   let movedB = await state(bob);
-  assert.ok(own(movedB).position.x > own(startB).position.x + 100,
-    "keyboard-only Up moves screen-right when facing screen-right");
-  assert.ok(Math.abs(own(movedB).position.y - own(startB).position.y) < 3,
-    "forward movement follows facing instead of world-up");
-  assert.ok(movedB.actions.some(input => input.payload.action.moveX > 0.99 &&
-    Math.abs(input.payload.action.moveY) < 0.01), "keyboard-only input uses the facing vector");
+  assert.ok(own(movedB).position.y < own(startB).position.y - 100,
+    "keyboard-only W moves screen-up");
+  assert.ok(Math.abs(own(movedB).position.x - own(startB).position.x) < 3,
+    "keyboard-only W does not move sideways");
+  assert.ok(movedB.actions.some(input => input.payload.action.moveY < -0.99 &&
+    Math.abs(input.payload.action.moveX) < 0.01), "keyboard-only input uses screen directions");
   await moveKeys(bob, ["KeyW", "KeyD"], 350);
   movedB = await state(bob);
   const diagonal = movedB.actions.find(input => input.payload.action.moveX !== 0 &&
@@ -1092,7 +1245,7 @@ try {
   assert.ok(Math.abs(Math.hypot(diagonal.payload.action.moveX, diagonal.payload.action.moveY) - 1) < 0.01,
     "keyboard-only diagonal movement remains normalized");
   const stationaryA = await state(alice);
-  assert.ok(own(movedB).position.x > own(startB).position.x + 100,
+  assert.ok(own(movedB).position.y < own(startB).position.y - 100,
     "Bob moves using his keyboard intent");
   const bobFacingBefore = own(movedB).facing;
   const bobPositionBeforeTurn = own(movedB).position;
@@ -1117,14 +1270,16 @@ try {
     const dx = alicePosition.x - bobPosition.x;
     const dy = alicePosition.y - bobPosition.y;
     if (Math.hypot(dx, dy) < 280) break;
-    await turnToward(bob, Math.atan2(dy, dx));
-    await move(bob, "KeyW", 450);
+    const keys = [];
+    if (Math.abs(dx) > 30) keys.push(dx > 0 ? "KeyD" : "KeyA");
+    if (Math.abs(dy) > 30) keys.push(dy > 0 ? "KeyS" : "KeyW");
+    await moveKeys(bob, keys, 450);
   }
   const bobNearby = await state(bob);
   assert.ok(Math.hypot(
     own(bobNearby).position.x - own(await state(alice)).position.x,
     own(bobNearby).position.y - own(await state(alice)).position.y
-  ) < 300, "keyboard-only forward movement can approach another player");
+  ) < 300, "keyboard-only movement can approach another player");
 
   const movedA = await state(alice);
   const stoppedB = await state(bob);
@@ -1179,10 +1334,8 @@ try {
     await new Promise(resolve => setTimeout(resolve, 120));
     const square = canvas.__draw.squares[0];
     const dot = canvas.__draw.arcs.find(item => item.color === targetColor && item.r === 14);
-    const facing = target.facing ?? { x: 1, y: 0 };
     const moved = actions.some(action =>
-      Math.abs(action.moveX + facing.y) < 0.02 &&
-      Math.abs(action.moveY - facing.x) < 0.02);
+      Math.abs(action.moveX - 1) < 0.02 && Math.abs(action.moveY) < 0.02);
     const cameraOwn = Math.abs(mounted.host.cameraAnchor.x - target.position.x) < 0.1;
     let compatibilityRejected = false;
     try { mounted.handleSnapshot(fixture, 3); } catch { compatibilityRejected = true; }
@@ -1324,7 +1477,7 @@ try {
   })()`);
   assert.deepEqual(capacityBefore, { count: 5, overflow: 409, code: "SESSION_CAPACITY" });
   await aim(alice, 256, 256);
-  await move(alice, "ArrowUp", 850);
+  await moveKeys(alice, ["ArrowDown", "ArrowRight"], 850);
   const approach = own(await state(alice)).position;
   if (approach.y > 350) {
     await aim(alice, 0, -140);
@@ -1332,14 +1485,14 @@ try {
   }
   const northRoute = own(await state(alice)).position;
   await aim(alice, 140, 0);
-  await move(alice, "ArrowUp", Math.ceil((510 - northRoute.x) / 180 * 1000) + 120);
+  await move(alice, "ArrowRight", Math.ceil((510 - northRoute.x) / 180 * 1000) + 120);
   await shootUntil(alice, 1, 1);
   const bobStart = own(await state(bob)).position;
   await aim(bob, 140, 0);
-  await move(bob, "ArrowUp", Math.ceil((780 - bobStart.x) / 180 * 1000) + 120);
+  await move(bob, "ArrowRight", Math.ceil((780 - bobStart.x) / 180 * 1000) + 120);
   const bobEast = own(await state(bob)).position;
   await aim(bob, 0, 140);
-  await move(bob, "ArrowUp", Math.ceil((1100 - bobEast.y) / 180 * 1000) + 120);
+  await move(bob, "ArrowDown", Math.ceil((1100 - bobEast.y) / 180 * 1000) + 120);
   await shootUntil(bob, 1, 0);
   await waitFor(alice, "window.__probe.snapshot.level === 2 && window.__probe.snapshot.phase === 'active'");
   await shootUntil(alice, 2, 0);
@@ -1469,6 +1622,7 @@ try {
     twoPlayerTwoLevelCompletion: true, sharedStandingsAfterBothRefreshes: true,
     fullCapacitySlotRelease: true, matchId, finalStandings: tableRows
   }, null, 2));
+  }
   }
 } finally {
   for (const browserContextId of contexts) {

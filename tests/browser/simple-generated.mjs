@@ -94,7 +94,7 @@ export async function verifySimpleGenerated({
     from: own(assumedAim).position,
     to: own(assumedMovement).position
   };
-  console.log("Initial facing-relative approach:", JSON.stringify(directionDiagnostic));
+  console.log("Initial screen-direction approach:", JSON.stringify(directionDiagnostic));
 
   async function aimInside(horizontal, vertical) {
     const view = await state(alice);
@@ -150,7 +150,10 @@ export async function verifySimpleGenerated({
       axis === "y" ? Math.sign(delta) * 300 : 0);
     const aimed = await state(alice);
     const sequence = aimed.actions.at(-1)?.payload.sequence ?? -1;
-    await moveAndSample(alice, "ArrowUp", Math.abs(delta) / 180 * 1000, playerTrace, npcTrace);
+    const key = axis === "x"
+      ? (delta >= 0 ? "ArrowRight" : "ArrowLeft")
+      : (delta >= 0 ? "ArrowDown" : "ArrowUp");
+    await moveAndSample(alice, key, Math.abs(delta) / 180 * 1000, playerTrace, npcTrace);
     const end = await state(alice);
     const after = own(end).position;
     const inputs = end.actions.filter(message => message.payload.sequence > sequence &&
@@ -223,14 +226,14 @@ export async function verifySimpleGenerated({
     "wall removes shots well before their two-second lifetime");
 
   await aimInside(300, 0);
-  await moveAndSample(alice, "ArrowUp", 1200, playerTrace, npcTrace);
+  await moveAndSample(alice, "ArrowRight", 1200, playerTrace, npcTrace);
   const blocked = await state(alice);
   const stop = own(blocked).position;
   assert.ok(stop.x <= obstacle.x - 14 + 0.2 && stop.x >= obstacle.x - 20,
     "player radius stops at the visible obstacle's west face");
   assert.ok(stop.y > obstacle.y && stop.y < obstacle.y + obstacle.height);
   const firstStop = {...stop};
-  await moveAndSample(alice, "ArrowUp", 600, playerTrace, npcTrace);
+  await moveAndSample(alice, "ArrowRight", 600, playerTrace, npcTrace);
   const held = await state(alice);
   assert.ok(Math.hypot(own(held).position.x - firstStop.x, own(held).position.y - firstStop.y) < 0.2,
     "continued movement remains blocked");

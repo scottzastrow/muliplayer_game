@@ -104,9 +104,14 @@ avatar, retains the death anchor while absent, and culls off-viewport entities.
 Players are dots, NPCs squares; projectiles, pickups and map obstacles are also
 visible. Points are visually largest, with current health and life/level status.
 The host sets `controls.dataset.controlMode` to the authenticated account preference.
-Keyboard Only maps WASD to movement, left/right arrows to stationary turning and
-Space to firing. Keyboard + Mouse maps all arrows to movement, the mouse to aim and
-left click to firing. Inputs dispatch only module-defined `combat` intent through
+Keyboard Only maps WASD to screen-direction movement and facing, left/right arrows
+to turning in place, and Space to firing. Keyboard + Mouse maps all arrows to
+screen-direction movement and facing, mouse movement to aim and left click to firing.
+Movement is normalized diagonally. A newly pressed movement key sets facing once;
+holding it, including browser key auto-repeat, maintains movement without overriding
+subsequent mouse aim or keyboard rotation. Turning and firing do not change the held
+screen-direction movement vector. Release preserves facing. A keyboard turn persists
+until actual mouse movement takes over aiming. Inputs dispatch only module-defined `combat` intent through
 the shared action envelope, at no more than 30 scheduled sends/second. Each room
 assigns distinct player colors and one separate NPC-square color; player facing is
 serialized with player state and rendered as a small same-color dot beyond the

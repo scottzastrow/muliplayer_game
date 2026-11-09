@@ -303,6 +303,33 @@ started.
 - [X] T045 Add account-saved Dots and Squares control selection, existing-account first-sign-in prompt and lobby editing; implement keyboard-only and keyboard+mouse input, persistent per-player colors and aim-facing indicators, with account, theme, spectator and real-browser coverage.
 - [X] T046 [US2] Implement placement-only scattered NPC waves for FR-024 in themes/default/src/module/npc-spawns.ts, entities.ts and index.ts; use match seed/wave, reachable zones, terrain/player/NPC clearance and bounded explicit fallback without changing counts, health, terrain or detection settings; verify both map modes in tests/npc-spawns.test.ts and tests/browser/npc-spawns.mjs, and document reproduction/fallback in docs/theme-development.md and actual evidence in docs/verification.md.
 
+T023/T045 controls follow-up (2026-11-08): screen-direction movement now turns
+the default-theme player, with normalized diagonals, preserved facing on release,
+keyboard-only in-place rotation and mouse aiming resumed by actual pointer movement.
+The first focused skin run failed both new control-mode cases against the old
+facing-relative implementation. After the change, default-theme build and
+type-check passed, as did `npm test -- tests\default-skin.test.ts
+tests\default-theme.test.ts tests\default-combat.test.ts tests\default-entities.test.ts`
+(4 files, 43 tests). Both modified browser harness files passed `node --check`;
+their interactive browser scenarios were not run for this follow-up. The local
+development client and server responded successfully on `http://127.0.0.1:5173/`.
+No deployment or capacity run was performed; T042 remains open.
+
+T023/T045 held-key verification follow-up (2026-11-08): both requested cases
+already work with the pending controls implementation; no additional production
+fix was needed. Focused regressions now hold Down Arrow while aiming/firing left,
+and S while rotating either arrow direction and firing Space, including browser
+repeat flags, duplicate keydowns, snapshots, release and fresh-press facing.
+Default-theme build/type-check and the focused 4-file/43-test selection passed.
+The new `--held-controls` Chrome scenario passed all three cases in two consecutive
+final runs: four real repeat events each, 48-60 units continued downward movement,
+five firing inputs and one or two observed new projectiles following aim/rotation
+rather than movement. Live snapshot/camera
+timing and initial harness corrections are recorded in docs/verification.md.
+Pre-commit review passed `npm run check`, the same 4-file/43-test selection and
+both browser harness syntax checks. T042 remains open; Gamepad is a separate
+future task. No deployment or capacity run.
+
 T046 local evidence (2026-11-08): focused checks passed (11 files, 69 tests),
 and `npm run check` passed. Visible local Chrome 156.0.8078.80 passed the
 seed-42 `--npc-spawns` scenario once per map mode: unchanged default 10 NPCs,

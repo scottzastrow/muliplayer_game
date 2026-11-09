@@ -53,10 +53,16 @@ installs executable code from an uploaded archive.
 1. Open two separate browser profiles. Register Alice and Bob using distinct passwords;
    choose a different control mode for each, verify invalid login fails. Create a
    two-level session, have Bob join, and start.
-   Verify keyboard-only WASD movement, arrow-key turning and Space fire; verify
-   keyboard+mouse arrow movement, pointer aim and left-click fire. Turn/aim while
+   Verify keyboard-only WASD screen-direction movement/facing, arrow-key turning and
+   Space fire; verify keyboard+mouse screen-direction arrow movement/facing, pointer
+   aim and left-click fire. Check diagonals, release, stationary mouse after a
+   keyboard turn, and mouse movement taking over again. Turn/aim while
    stationary and confirm the same-color facing dot follows; confirm room player
    colors differ and spectator views show the same colors and facing.
+   Hold Down Arrow, aim left with the mouse and fire without releasing Down;
+   movement must stay down while facing/firing left. Hold S in keyboard-only
+   mode, rotate with either arrow and fire Space; movement must stay down while
+   facing/firing follows rotation, including browser key auto-repeat.
 2. Move apart and meet; verify independent centered cameras and nearby visibility.
    Attract only nearby NPCs; navigate around obstacles and claim pickups.
 3. Kill one player and time the five-second absence. Verify the other keeps playing,

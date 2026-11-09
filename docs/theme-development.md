@@ -1,5 +1,23 @@
 # Game Theme Development
 
+## Default-theme held movement controls
+
+A fresh movement-key press sets facing to the current screen-direction movement
+vector. Holding the key, including browser auto-repeat, maintains movement without
+reasserting facing. In Keyboard + Mouse mode, hold Down Arrow, move the pointer
+left and click to keep moving down while aiming/firing left. In Keyboard Only
+mode, hold S, rotate with Left/Right Arrow and press Space: movement remains down
+while facing/firing follows the rotation.
+
+With the existing disposable local server/client and Chrome debugging setup,
+set `BROWSER_TEST_ORIGIN` and `BROWSER_DEBUG_URL` to those loopback endpoints and run
+`node tests\browser\default-game.mjs --held-controls`. This focused scenario creates
+two disposable accounts and sequential one-player rooms, disables NPC pursuit,
+checks real repeated keyboard events, movement/facing and authoritative projectile
+directions, and leaves each room in cleanup. It does not change map mode or require
+database seed edits. Exact facing stability is also covered in
+`tests\default-skin.test.ts` without network/snapshot timing.
+
 The engine repository owns the public Theme SDK, protocol, default theme, fixture
 theme, compatibility policy, and server/client registration. A Game Theme supplies
 developer-reviewed gameplay and presentation modules through those contracts. The
@@ -450,10 +468,10 @@ one NPC, 100000 NPC health, NPC movement/detection zero and one level. Before st
 it updates **only that waiting room's seed** to 42 in the disposable database and
 reads it back. This is a local test fixture, not a seed-selection session API.
 It checks the initial clear (272,272) spawn and exact generated geometry, records
-the original aim's actual facing/movement, then attempts the northern approach
-via y=400, x=430. Aim offsets are scaled into the canvas, authoritative facing is
-checked before moving, and ArrowUp means forward relative to that facing, not
-world north. Planned axis-aligned route segments are checked against the continuous
+the initial aim's actual facing/movement, then attempts the northern approach
+via y=400, x=430. Aim offsets are scaled into the canvas and authoritative facing is
+checked before moving. Arrow keys move in screen directions and turn the player;
+later mouse movement takes over aiming. Planned axis-aligned route segments are checked against the continuous
 swept radius-14 circle, as well as loader walkability at one-unit intervals. Each
 leg logs its start/end, target, authoritative facing, observed displacement,
 sent movement/aim inputs and nearby obstacle bounds before its endpoint assertion.
