@@ -123,7 +123,7 @@ players, enemies, and spectators; produce a reproducible measured report.
 - **FR-002**: Any logged-in player MUST be able to create a session and, as its creator, configure/start it with at least one player. All player/spectator membership mutations MUST be authorized.
 - **FR-003**: The server MUST atomically enforce a five-session cap across waiting/running sessions. Finished/abandoned/failed sessions MUST release their slot once.
 - **FR-004**: The lobby MUST show session state, creator, theme, current/max level, players/max players, spectators/max spectators, and state-appropriate Join/Spectate controls.
-- **FR-005**: Session settings MUST include maximum players/spectators, starting NPCs per player (default 10), population increase rate, base NPC health, health increase rate, NPC movement speed (Dots and Squares: default 67.5 world units/second, finite 0–180 with fractions allowed), NPC detection range (default 512 world units, finite 0–700; zero disables automatic pursuit), respawn delay (default 5 seconds), maximum levels, and selected Game Theme. Invalid values MUST fail before start; settings lock on start. Older configs omitting either NPC setting MUST load with its new default; zero movement speed keeps NPCs stationary without disabling contact damage.
+- **FR-005**: Session settings MUST include maximum players/spectators, starting NPCs per player (default 5), population increase rate, base NPC health, health increase rate, NPC movement speed (Dots and Squares: default 67.5 world units/second, finite 0–180 with fractions allowed), NPC detection range (default 512 world units, finite 0–700; zero disables automatic pursuit), respawn delay (default 5 seconds), maximum levels, and selected Game Theme. Invalid values MUST fail before start; settings lock on start. Older configs omitting either NPC setting MUST load with its new default; zero movement speed keeps NPCs stationary without disabling contact damage.
 - **FR-006**: A running match MUST reject new participants but allow eligible authenticated reconnects and spectators within capacity. It MUST isolate state from other sessions.
 - **FR-007**: Players MUST traverse one shared generated map with independent centered cameras, collision with simple obstacles, and consistent nearby player visibility.
 - **FR-008**: The default game module MUST provide range-triggered enemy pursuit, obstacle navigation, weapons, projectiles, damage, health/power/weapon pickups, and authoritative scoring.
@@ -228,7 +228,7 @@ players, enemies, and spectators; produce a reproducible measured report.
 ## Assumptions
 
 These are editable planning defaults chosen to keep the first implementation concrete;
-only the 10:1 initial ratio, five-second respawn default, five-session cap, and other
+only the 5:1 initial ratio, five-second respawn default, five-session cap, and other
 explicit conversation decisions are user-confirmed.
 
 - Desktop keyboard/mouse browser POC; mobile controls, chat, email/password recovery,
@@ -237,7 +237,7 @@ explicit conversation decisions are user-confirmed.
   earns one kill and 100 points; leaderboard ties use kills descending, deaths ascending,
   then normalized username. Health 100; default shot damage 25, enemy health 50,
   enemy contact damage 10 at most once per second per player. Tune in the default module.
-- Settings defaults: 4 players, 8 spectators, 10 NPCs/player, 20% population growth,
+- Settings defaults: 4 players, 8 spectators, 5 NPCs/player, 20% population growth,
   50 base NPC health, 10% health growth, 5-second respawn, 5 levels. Growth compounds
   from level 1: population is ceiling(roster × initial ratio × (1 + population rate)^(level−1));
   enemy health is ceiling(base health × (1 + health rate)^(level−1)). Spectators/disconnects do not change roster size.

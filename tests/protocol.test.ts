@@ -48,17 +48,23 @@ describe("protocol v1 validation", () => {
     ).toBe(false);
   });
 
-  it("uses 50 default NPC health without changing explicit host health or growth", () => {
+  it("uses five default NPCs per player without changing population or health growth", () => {
+    expect(DEFAULT_GAME_SETTINGS.initialNpcsPerPlayer).toBe(5);
+    expect(DEFAULT_GAME_SETTINGS.npcPopulationGrowthPercent).toBe(20);
     expect(DEFAULT_GAME_SETTINGS.baseNpcHealth).toBe(50);
     expect(calculateLevelDifficulty(DEFAULT_GAME_SETTINGS, 1, 1))
-      .toEqual({ npcCount: 10, npcHealth: 50 });
+      .toEqual({ npcCount: 5, npcHealth: 50 });
     expect(calculateLevelDifficulty(DEFAULT_GAME_SETTINGS, 1, 2))
+      .toEqual({ npcCount: 6, npcHealth: 55 });
+    expect(calculateLevelDifficulty(DEFAULT_GAME_SETTINGS, 2, 1))
+      .toEqual({ npcCount: 10, npcHealth: 50 });
+    expect(calculateLevelDifficulty(DEFAULT_GAME_SETTINGS, 2, 2))
       .toEqual({ npcCount: 12, npcHealth: 55 });
     for (const baseNpcHealth of [1, 75, 100, 100_000]) {
       const settings = { ...DEFAULT_GAME_SETTINGS, baseNpcHealth };
       expect(GameSettingsSchema.parse(settings).baseNpcHealth).toBe(baseNpcHealth);
       expect(calculateLevelDifficulty(settings, 1, 1))
-        .toEqual({ npcCount: 10, npcHealth: baseNpcHealth });
+        .toEqual({ npcCount: 5, npcHealth: baseNpcHealth });
     }
     const { baseNpcHealth: _health, ...missingHealth } = DEFAULT_GAME_SETTINGS;
     expect(GameSettingsSchema.safeParse(missingHealth).success).toBe(false);

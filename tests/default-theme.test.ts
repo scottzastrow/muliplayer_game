@@ -110,23 +110,24 @@ describe("default theme registration", () => {
     try {
       module.initialize();
       counts.push(living().length);
-      expect(living()).toHaveLength(10);
-      expect(living().map(entity => entity.state.health)).toEqual(Array(10).fill(50));
+      expect(living()).toHaveLength(5);
+      expect(living().map(entity => entity.state.health)).toEqual(Array(5).fill(50));
+      expect(defaultThemeDefinition.settingsDefaults.initialNpcsPerPlayer).toBe(5);
       expect(defaultThemeDefinition.settingsDefaults.baseNpcHealth).toBe(50);
       expect(module.snapshot({ accountId: "alice", role: "player" })).toMatchObject({
-        startingNpcCount: 10, livingNpcCount: 10,
+        startingNpcCount: 5, livingNpcCount: 5,
         levelStandings: [{ accountId: "alice", levelPoints: 0, points: 0 }]
       });
       kill();
-      expect(living()).toHaveLength(9);
+      expect(living()).toHaveLength(4);
       module.step(0, ++tick);
-      expect(living()).toHaveLength(9);
+      expect(living()).toHaveLength(4);
       expect(module.state).toMatchObject({ phase: "active", level: 1 });
       while (living().length) kill();
       expect(module.state).toMatchObject({ phase: "intermission", level: 1 });
       expect(module.snapshot({ accountId: "alice", role: "spectator" })).toMatchObject({
-        startingNpcCount: 10, livingNpcCount: 0,
-        levelStandings: [{ accountId: "alice", levelPoints: 1000, points: 1000, kills: 10 }]
+        startingNpcCount: 5, livingNpcCount: 0,
+        levelStandings: [{ accountId: "alice", levelPoints: 500, points: 500, kills: 5 }]
       });
       const clearedAt = tick;
       module.step(0, clearedAt + 149);
@@ -134,11 +135,11 @@ describe("default theme registration", () => {
       expect(module.state).toMatchObject({ phase: "intermission", level: 1 });
       module.step(0, clearedAt + 150);
       expect(module.state).toMatchObject({ phase: "active", level: 2 });
-      expect(living()).toHaveLength(12);
-      expect(living().map(entity => entity.state.health)).toEqual(Array(12).fill(55));
+      expect(living()).toHaveLength(6);
+      expect(living().map(entity => entity.state.health)).toEqual(Array(6).fill(55));
       expect(module.snapshot({ accountId: "alice", role: "player" })).toMatchObject({
-        startingNpcCount: 12, livingNpcCount: 12,
-        levelStandings: [{ accountId: "alice", levelPoints: 0, points: 1000, kills: 10 }]
+        startingNpcCount: 6, livingNpcCount: 6,
+        levelStandings: [{ accountId: "alice", levelPoints: 0, points: 500, kills: 5 }]
       });
       console.log("Default one-player wave trace:", JSON.stringify({
         wave1LivingCounts: counts, intermissionTicks: 150, wave2StartingCount: living().length

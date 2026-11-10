@@ -63,7 +63,7 @@ export type GameSettings = z.infer<typeof GameSettingsSchema>;
 export const DEFAULT_GAME_SETTINGS: GameSettings = Object.freeze({
   maxPlayers: 4,
   maxSpectators: 8,
-  initialNpcsPerPlayer: 10,
+  initialNpcsPerPlayer: 5,
   npcPopulationGrowthPercent: 20,
   baseNpcHealth: 50,
   npcHealthGrowthPercent: 10,

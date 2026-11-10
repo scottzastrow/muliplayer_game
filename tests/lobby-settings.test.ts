@@ -93,12 +93,14 @@ describe("host NPC settings", () => {
       id: "room", creator: "Host", status: "waiting", themeName: "Dots and Squares",
       playerCount: 1, maxPlayers: 4, settingsRevision: 2, canJoin: false, canSpectate: false
     };
+    const savedSettings = { ...DEFAULT_GAME_SETTINGS, initialNpcsPerPlayer: 8,
+      npcMovementSpeed: 90, baseNpcHealth: 100 };
     const fetch = vi.fn(async (url: string, init?: RequestInit) => ({
       ok: true, status: 200,
       json: async () => url === "/api/v1/sessions" && !init?.method
         ? { sessions: [session] }
         : url === "/api/v1/sessions/room"
-          ? { settings: { ...DEFAULT_GAME_SETTINGS, npcMovementSpeed: 90, baseNpcHealth: 100 } }
+          ? { settings: savedSettings }
           : {}
     }));
     vi.stubGlobal("fetch", fetch);
@@ -110,7 +112,9 @@ describe("host NPC settings", () => {
     const elements = () => createdElements[0]!.descendants();
     const createSpeed = elements().find(element => element.name === "setting-npcMovementSpeed")!;
     const createRange = elements().find(element => element.name === "setting-npcDetectionRange")!;
+    const createNpcCount = elements().find(element => element.name === "setting-initialNpcsPerPlayer")!;
     const createTimeout = elements().find(element => element.name === "setting-noKillTimeoutSeconds")!;
+    expect(createNpcCount.value).toBe("5");
     expect(createTimeout.value).toBe("60");
     expect([createTimeout.min, createTimeout.max, createTimeout.step]).toEqual(["0.001", "3600", "any"]);
     createTimeout.value = "45.5";
@@ -137,6 +141,7 @@ describe("host NPC settings", () => {
       ?.textContent).toContain("world units");
     createSpeed.value = "33.75";
     createRange.value = "300";
+    createNpcCount.value = "7";
     const createForm = elements().find(element => element.tagName === "form" &&
       element.children.some(child => child.tagName === "fieldset" &&
         child.children.includes(createSpeed)))!;
@@ -146,7 +151,8 @@ describe("host NPC settings", () => {
     const create = fetch.mock.calls.find(([url, init]) => url === "/api/v1/sessions" &&
       init?.method === "POST")!;
     expect(JSON.parse(String(create[1]!.body)).settings).toMatchObject({
-      npcMovementSpeed: 33.75, npcDetectionRange: 300, baseNpcHealth: 50, noKillTimeoutSeconds: 45.5,
+      initialNpcsPerPlayer: 7, npcMovementSpeed: 33.75, npcDetectionRange: 300,
+      baseNpcHealth: 50, noKillTimeoutSeconds: 45.5,
       mapMode: "simple-generated",
       terrainDensity: { mode: "incremental", startingDensity: 3, increasePerLevel: 0 }
     });
@@ -173,9 +179,11 @@ describe("host NPC settings", () => {
     const editSpeed = controls.querySelector('[name="setting-npcMovementSpeed"]')!;
     const editRange = controls.querySelector('[name="setting-npcDetectionRange"]')!;
     const editHealth = controls.querySelector('[name="setting-baseNpcHealth"]')!;
+    const editNpcCount = controls.querySelector('[name="setting-initialNpcsPerPlayer"]')!;
     expect(editHealth.value).toBe("100");
     expect(editSpeed.value).toBe("90");
     expect(editRange.value).toBe("512");
+    expect(editNpcCount.value).toBe("8");
     editSpeed.value = "0";
     editRange.value = "0";
     editHealth.value = "75";
@@ -186,7 +194,8 @@ describe("host NPC settings", () => {
     const update = fetch.mock.calls.find(([url]) => url === "/api/v1/sessions/room/settings")!;
     expect(JSON.parse(String(update[1]!.body))).toEqual({
       settings: {
-        ...DEFAULT_GAME_SETTINGS, npcMovementSpeed: 0, npcDetectionRange: 0, baseNpcHealth: 75
+        ...DEFAULT_GAME_SETTINGS, initialNpcsPerPlayer: 8,
+        npcMovementSpeed: 0, npcDetectionRange: 0, baseNpcHealth: 75
       }, expectedRevision: 2
     });
     const requestCount = fetch.mock.calls.filter(([url]) =>

@@ -38,7 +38,7 @@ export async function verifyNpcSpawns({
     if (!response.ok) throw new Error('Cannot read local room settings');
     return (await response.json()).settings;
   })()`);
-  assert.equal(settings.initialNpcsPerPlayer, 10);
+  assert.equal(settings.initialNpcsPerPlayer, 5);
   assert.equal(settings.baseNpcHealth, 50);
   assert.equal(settings.npcMovementSpeed, 67.5);
   assert.equal(settings.npcDetectionRange, 512);
@@ -48,14 +48,14 @@ export async function verifyNpcSpawns({
   await delay(200);
   const view = await state(alice);
   const enemies = view.snapshot.entities.filter(entity => entity.state.kind === "npc");
-  assert.equal(enemies.length, 10, "unchanged one-player default NPC count");
+  assert.equal(enemies.length, 5, "one-player default NPC count");
   assert.deepEqual(view.snapshot.map.obstacles, expected.map.obstacles, "unchanged selected terrain");
   assert.ok(enemies.every(entity => entity.state.health === 50), "default NPC health");
   const zones = new Set(enemies.map(entity =>
     `${Math.floor(entity.position.x / 512)},${Math.floor(entity.position.y / 512)}`));
   const quadrants = new Set(enemies.map(entity =>
     `${Math.floor(entity.position.x / 1024)},${Math.floor(entity.position.y / 1024)}`));
-  assert.ok(zones.size >= 8, "enemies start across several arena zones");
+  assert.ok(zones.size >= 4, "enemies start across several arena zones");
   assert.equal(quadrants.size, 4, "enemies start in all four arena quadrants");
   const markers = view.snapshot.radar.markers.filter(marker => marker.category === "enemy");
   assert.deepEqual(markers.map(marker => marker.id), enemies.map(entity => entity.id));
@@ -63,8 +63,8 @@ export async function verifyNpcSpawns({
   const radarX = view.width - 84;
   const dots = view.arcs.filter(arc => arc.r === 3 && arc.color === "#ed6b61" &&
     Math.hypot(arc.x - radarX, arc.y - 84) <= 72);
-  assert.equal(dots.length, 10, "Chrome actually renders all NPC radar dots, including rim markers");
-  assert.ok(view.fillTexts.some(label => label.text === "Enemies remaining: 10"));
+  assert.equal(dots.length, 5, "Chrome actually renders all NPC radar dots, including rim markers");
+  assert.ok(view.fillTexts.some(label => label.text === "Enemies remaining: 5"));
   const screenshot = process.env.BROWSER_TEST_SCREENSHOT;
   if (screenshot) {
     const image = await cdp("Page.captureScreenshot", { format: "png" }, alice.session);

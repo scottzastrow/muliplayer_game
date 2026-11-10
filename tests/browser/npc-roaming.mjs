@@ -164,7 +164,7 @@ export async function verifyNpcRoaming({
       (await (await fetch('/api/v1/sessions/${sessionId}')).json()).settings)()`);
     assert.equal(settings.npcMovementSpeed, 67.5);
     assert.equal(settings.npcDetectionRange, 512);
-    assert.equal(settings.initialNpcsPerPlayer, 10);
+    assert.equal(settings.initialNpcsPerPlayer, 5);
     assert.equal(settings.baseNpcHealth, 50);
     assert.equal(settings.maxLevels, 5);
     if (routeOnly) await evaluate(playerPage, "window.__startNpcFrames()");
@@ -325,7 +325,7 @@ export async function verifyNpcRoaming({
           spawn, initialBand, samples, movedToInterior
         };
       });
-      assert.deepEqual(spawnBands, { outer: 2, middle: 4, interior: 4 },
+      assert.deepEqual(spawnBands, { outer: 1, middle: 2, interior: 2 },
         "the ordinary Fixed wave meets the target spawn-band mix");
       const outerToInteriorIds = tracks.filter(track => track.movedToInterior)
         .map(track => track.id);

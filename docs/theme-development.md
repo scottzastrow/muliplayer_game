@@ -670,9 +670,9 @@ node tests\browser\default-game.mjs --npc-spawns
 ```
 
 This scenario seeds only its own waiting room to 42, leaves all lobby gameplay
-defaults unchanged, and checks 10 NPCs across several zones/all four quadrants,
+defaults unchanged, and checks 5 NPCs across several zones/all four quadrants,
 unchanged selected terrain/health/settings, matching enemy radar positions and
-10 actual Canvas radar dot draws. Repeat once with each source map mode, rebuilding
+5 actual Canvas radar dot draws. Repeat once with each source map mode, rebuilding
 and restarting between modes, then restore Fixed and rebuild. Screenshots and
 automated visible-Chrome assertions are local evidence, not human playtesting or
 capacity measurements. The separate `--arena-obstacles` fixture now uses the same

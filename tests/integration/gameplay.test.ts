@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_GAME_SETTINGS, type GameSettings } from "@multiplayer-game/protocol";
 import { BoundedNavigation, SeededRandom, SessionWorld, type Rect } from "@multiplayer-game/engine";
 import type { ModuleContext, NavigationPathResult, Point2 } from "@multiplayer-game/theme-sdk";
 import {
@@ -10,6 +11,18 @@ import {
 } from "@multiplayer-game/default-theme";
 
 describe("integrated default gameplay", () => {
+  it("starts default waves with five NPCs solo and ten for two players", () => {
+    const solo = simulation("default-solo", [], DEFAULT_GAME_SETTINGS, 1);
+    const multiplayer = simulation("default-multiplayer", [], DEFAULT_GAME_SETTINGS);
+    try {
+      expect(solo.world.entities().filter(entity => entity.state.kind === "npc")).toHaveLength(5);
+      expect(multiplayer.world.entities().filter(entity => entity.state.kind === "npc")).toHaveLength(10);
+    } finally {
+      solo.module.dispose();
+      multiplayer.module.dispose();
+    }
+  });
+
   it("keeps five simultaneous worlds, inputs, scores, death clocks and completion isolated", () => {
     const sessions = Array.from({ length: 5 }, (_, index) =>
       simulation(`room-${index}`, [], index === 2 ? { npcMovementSpeed: 0 } : {})
@@ -189,7 +202,8 @@ describe("integrated default gameplay", () => {
 function simulation(
   id: string,
   obstacles: readonly Rect[] = [],
-  settings: Record<string, number> = {}
+  settings: Partial<GameSettings> = {},
+  rosterSize = 2
 ) {
   const map = generateMap(42).map;
   const world = new SessionWorld<DefaultEntity>(id, map.definition.bounds, [...map.obstacles, ...obstacles]);
@@ -233,12 +247,13 @@ function simulation(
     emit: () => {}, requestCompletion: (request) => requests.push(request),
     metrics: { increment: (name, amount = 1) => metrics.set(name, (metrics.get(name) ?? 0) + amount), gauge: () => {} }
   };
-  const module = defaultModuleFactory.create(context, {
-    initialNpcsPerPlayer: 1, maxLevels: 2, ...settings
-  }, [
+  const roster = [
     { accountId: "alice", username: "Alice", joinedOrder: 0 },
     { accountId: "bob", username: "Bob", joinedOrder: 1 }
-  ], 42);
+  ].slice(0, rosterSize);
+  const module = defaultModuleFactory.create(context, {
+    initialNpcsPerPlayer: 1, maxLevels: 2, ...settings
+  }, roster, 42);
   module.initialize();
   return {
     module, world, navigation, requests, metrics, update,

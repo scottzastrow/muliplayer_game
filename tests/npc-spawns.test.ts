@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_GAME_SETTINGS } from "@multiplayer-game/protocol";
 import { BoundedNavigation, SessionWorld, WorldGeometry, type Rect } from "@multiplayer-game/engine";
 import {
   defaultModuleFactory, generateMap, loadMap, type DefaultEntity
@@ -54,6 +55,17 @@ const quadrant = (point: Point2, bounds: { width: number; height: number }) =>
   `${point.x >= bounds.width / 2 ? 1 : 0},${point.y >= bounds.height / 2 ? 1 : 0}`;
 
 describe("scattered NPC wave placement", () => {
+  it("places the default solo wave of five NPCs across the Fixed arena", () => {
+    const simulation = setup(42, "fixed", DEFAULT_GAME_SETTINGS.initialNpcsPerPlayer);
+    try {
+      const enemies = npcs(simulation);
+      expect(enemies).toHaveLength(5);
+      expect(new Set(enemies.map(entity => zone(entity.position))).size).toBeGreaterThanOrEqual(4);
+      expect(new Set(enemies.map(entity => quadrant(entity.position, simulation.map.definition.bounds)))
+        .size).toBe(4);
+    } finally { simulation.module.dispose(); }
+  });
+
   it("keeps the obstacle browser encounter reproducible without a fixed NPC spawn", () => {
     const simulation = setup(4315, "fixed", 1);
     try {

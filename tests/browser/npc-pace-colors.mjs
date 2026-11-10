@@ -126,7 +126,9 @@ export async function verifyNpcPaceColors({
       (await (await fetch('/api/v1/sessions/${report.sessionId}')).json()).settings)()`);
     assert.equal(report.settings.npcMovementSpeed, 67.5);
     assert.equal(report.settings.npcDetectionRange, 512);
-    assert.equal(report.settings.initialNpcsPerPlayer, 10);
+    assert.equal(report.settings.initialNpcsPerPlayer, 5);
+    assert.equal(initial.snapshot.entities.filter(entity => entity.state.kind === "npc").length, 10,
+      "two-player default match starts with ten NPCs");
     assert.equal(report.settings.noKillTimeoutSeconds, 60);
     const navigation = new BoundedNavigation(new WorldGeometry(
       { width: 2048, height: 2048 }, initial.snapshot.map.obstacles

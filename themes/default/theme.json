@@ -30,7 +30,7 @@
   "settingsDefaults": {
     "maxPlayers": 4,
     "maxSpectators": 8,
-    "initialNpcsPerPlayer": 10,
+    "initialNpcsPerPlayer": 5,
     "npcPopulationGrowthPercent": 20,
     "baseNpcHealth": 50,
     "npcHealthGrowthPercent": 10,

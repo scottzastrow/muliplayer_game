@@ -52,7 +52,7 @@ export async function verifyNpcRanged({
     (await (await fetch('/api/v1/sessions/${sessionId}')).json()).settings)()`);
   assert.equal(settings.npcMovementSpeed, 67.5);
   assert.equal(settings.npcDetectionRange, 512);
-  assert.equal(settings.initialNpcsPerPlayer, 10);
+  assert.equal(settings.initialNpcsPerPlayer, 5);
   assert.equal(settings.baseNpcHealth, 50);
   assert.equal(settings.noKillTimeoutSeconds, 60);
   await clickSessionButton(playerPage, creator, "Start Session");

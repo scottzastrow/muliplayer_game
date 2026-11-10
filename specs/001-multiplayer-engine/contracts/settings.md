@@ -3,13 +3,13 @@
 All numbers must be finite; reject unknown keys, fractions for integer fields, NaN,
 out-of-range values, uninstalled themes, incompatible revisions and edits after start.
 The server is authoritative. Values below are editable POC design defaults except
-explicitly confirmed 10:1, five-second delay and five-session cap.
+explicitly confirmed 5:1, five-second delay and five-session cap.
 
 | Key | Default | Validation / unit |
 | --- | --- | --- |
 | maxPlayers | 4 | Integer 1–32 |
 | maxSpectators | 8 | Integer 0–64 |
-| initialNpcsPerPlayer | 10 | Integer 1–100 |
+| initialNpcsPerPlayer | 5 | Integer 1–100 |
 | npcPopulationGrowthPercent | 20 | Number 0–100 percent per level |
 | baseNpcHealth | 50 | Integer 1–100000 |
 | npcHealthGrowthPercent | 10 | Number 0–100 percent per level |
@@ -21,6 +21,11 @@ explicitly confirmed 10:1, five-second delay and five-session cap.
 | themeRevision | default@1.0.0 | Installed/enabled exact immutable revision |
 | mapMode | Absent = legacy source-selected mode | Optional `fixed` / `simple-generated`; host selection freezes at start |
 | terrainDensity | Explicit Simple Generated: Incremental 3/0 | Optional strict schedule; integers 0-10, described below |
+
+New Dots and Squares settings default to five initial NPCs per player. Existing
+rooms and saved results keep any explicitly saved `initialNpcsPerPlayer` value;
+changing the default does not rewrite stored settings. The creator can continue
+to change the setting before starting a match.
 
 ## Per-level terrain (additive v1)
 
@@ -56,7 +61,8 @@ Reject start/settings whose requested NPCs or health exceed ceilings; show a use
 maximum instead of silently truncating difficulty. On any unexpected runtime ceiling
 breach fail the session explicitly; never falsely declare a level cleared.
 
-One player with the defaults above starts waves 1/2 with exactly 10/12 NPCs.
+One player with the defaults above starts waves 1/2 with exactly 5/6 NPCs; two
+players start with 10/12. Population growth remains 20%.
 Default level-1 NPC health is 50, so two unboosted 25-damage projectile hits
 kill one NPC. The unchanged 10% health growth gives level 2 NPCs 55 health.
 Host health overrides remain authoritative. Existing saved room/result settings

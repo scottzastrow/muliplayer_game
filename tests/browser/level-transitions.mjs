@@ -12,7 +12,7 @@ export async function verifyLevelTransitions({ newWindow, signIn, evaluate, clic
   const defaults = await evaluate(player, `Object.fromEntries(
     [...document.querySelectorAll('[name^="setting-"]')].map(input =>
       [input.name.slice(8), input.value]))`);
-  assert.equal(defaults.initialNpcsPerPlayer, "10");
+  assert.equal(defaults.initialNpcsPerPlayer, "5");
   assert.equal(defaults.npcPopulationGrowthPercent, "20");
   assert.equal(defaults.baseNpcHealth, "50");
   assert.equal(defaults.maxLevels, "5");
@@ -22,7 +22,7 @@ export async function verifyLevelTransitions({ newWindow, signIn, evaluate, clic
       .find(room => room.creator === ${JSON.stringify(username)}).id)()`);
   try {
     await clickSessionButton(player, username, "Start Session");
-    await waitFor(player, "window.__probe.snapshot?.startingNpcCount === 10");
+    await waitFor(player, "window.__probe.snapshot?.startingNpcCount === 5");
     await click(observer, "Refresh sessions");
     await clickSessionButton(observer, username, "Spectate");
     await click(observer, `Follow ${username}`);
@@ -31,8 +31,8 @@ export async function verifyLevelTransitions({ newWindow, signIn, evaluate, clic
       await verifyCompactLayout({ player, observer, cdp, evaluate, waitFor, delay });
     }
     const first = await state(player);
-    assert.equal(first.snapshot.livingNpcCount, 10);
-    assert.equal(first.snapshot.entities.filter(entity => entity.state.kind === "npc").length, 10);
+    assert.equal(first.snapshot.livingNpcCount, 5);
+    assert.equal(first.snapshot.entities.filter(entity => entity.state.kind === "npc").length, 5);
     const hud = page => evaluate(page, `({
       count: document.querySelector('canvas').__draw?.fillTexts
         .find(label => label.text.startsWith('Enemies remaining:'))?.text,
@@ -41,7 +41,7 @@ export async function verifyLevelTransitions({ newWindow, signIn, evaluate, clic
       rows: [...document.querySelector('[aria-label="Running standings"] tbody').rows]
         .map(row => [...row.cells].map(cell => cell.textContent))
     })`);
-    assert.equal((await hud(player)).count, "Enemies remaining: 10");
+    assert.equal((await hud(player)).count, "Enemies remaining: 5");
     await evaluate(player, `window.__waveTrace = [];
       const Native = window.__probe;
       setInterval(() => {
@@ -59,15 +59,15 @@ export async function verifyLevelTransitions({ newWindow, signIn, evaluate, clic
     await cdp("Input.dispatchMouseEvent", {
       type: "mousePressed", button: "left", buttons: 1, clickCount: 1, ...bounds
     }, player.session);
-    await waitFor(player, "window.__probe.snapshot.livingNpcCount === 7", 30000);
+    await waitFor(player, "window.__probe.snapshot.livingNpcCount === 2", 30000);
     for (const page of [player, observer]) {
-      await waitFor(page, "window.__probe.snapshot.livingNpcCount === 7");
+      await waitFor(page, "window.__probe.snapshot.livingNpcCount === 2");
       await evaluate(page, `(() => {
         const input = document.querySelector('[name="radar-enemy"]');
         input.checked = false; input.dispatchEvent(new Event('change'));
       })()`);
       await delay(50);
-      assert.equal((await hud(page)).count, "Enemies remaining: 7");
+      assert.equal((await hud(page)).count, "Enemies remaining: 2");
     }
     await waitFor(player, "window.__probe.snapshot.phase === 'intermission'", 30000);
     await cdp("Input.dispatchMouseEvent", {
@@ -88,9 +88,9 @@ export async function verifyLevelTransitions({ newWindow, signIn, evaluate, clic
       const summary = await hud(page);
       assert.ok(summary.visible);
       assert.ok(summary.summary.includes("Level 1 Complete"));
-      assert.ok(summary.summary.includes("Points earned this level: 1000"));
+      assert.ok(summary.summary.includes("Points earned this level: 500"));
       assert.match(summary.summary, /Level 2 starts in [1-5]\u2026/);
-      assert.deepEqual(summary.rows, [["1", username, "1000", "1000", "10", "0"]]);
+      assert.deepEqual(summary.rows, [["1", username, "500", "500", "5", "0"]]);
       if (process.argv.includes("--compact-match")) {
         await captureCompactIntermission({ page, role: page === player ? "player" : "spectator",
           cdp, evaluate });
@@ -99,26 +99,26 @@ export async function verifyLevelTransitions({ newWindow, signIn, evaluate, clic
     await waitFor(player, "window.__probe.snapshot.level === 2");
     await waitFor(observer, "window.__probe.snapshot.level === 2");
     const second = await state(player);
-    assert.equal(second.snapshot.startingNpcCount, 12);
-    assert.equal(second.snapshot.livingNpcCount, 12);
-    assert.equal(second.snapshot.entities.filter(entity => entity.state.kind === "npc").length, 12);
+    assert.equal(second.snapshot.startingNpcCount, 6);
+    assert.equal(second.snapshot.livingNpcCount, 6);
+    assert.equal(second.snapshot.entities.filter(entity => entity.state.kind === "npc").length, 6);
     assert.equal(second.snapshot.levelStandings[0].levelPoints, 0);
     for (const page of [player, observer]) {
-      assert.equal((await hud(page)).count, "Enemies remaining: 12");
+      assert.equal((await hud(page)).count, "Enemies remaining: 6");
       assert.equal((await hud(page)).visible, false);
     }
     const trace = await evaluate(player, "window.__waveTrace");
     const intermission = trace.filter(row => row.phase === "intermission");
     assert.ok(intermission.length > 50);
-    assert.ok(intermission.every(row => row.level === 1 && row.living === 0 && row.starting === 10));
+    assert.ok(intermission.every(row => row.level === 1 && row.living === 0 && row.starting === 5));
     const next = trace.find(row => row.level === 2);
     assert.ok(next.tick >= intermission[0].deadline);
     assert.ok(trace.filter(row => row.level === 1 && row.phase === "active")
       .every((row, index, rows) => index === 0 || row.living <= rows[index - 1].living));
-    console.log(JSON.stringify({ browser: version.Browser, wave1: 10, wave2: 12,
+    console.log(JSON.stringify({ browser: version.Browser, wave1: 5, wave2: 6,
       wave1ObservedCounts: [...new Set(trace.filter(row => row.level === 1).map(row => row.living))],
       intermissionFirstTick: intermission[0].tick, deadline: intermission[0].deadline,
-      wave2FirstTick: next.tick, pointsEarned: 1000,
+      wave2FirstTick: next.tick, pointsEarned: 500,
       playerAndSpectatorSummary: true, radarFilteredCount: true,
       fixture: "Default settings; one NPC at a time staged in a clear lane; real mouse combat."
     }, null, 2));
