@@ -9,6 +9,77 @@ import {
 import { createSpectatorView } from "../apps/server/src/transport/spectator-view.js";
 
 describe("default player respawn", () => {
+  it.each([undefined, 275])("refills living players once per next-wave boundary with maximum %s", maximum => {
+    const expected = maximum ?? 200;
+    const { module, world } = createSimulation({
+      maxLevels: 3, initialNpcsPerPlayer: 1, npcMovementSpeed: 0, npcDetectionRange: 0,
+      ...(maximum === undefined ? {} : { playerMaxHealth: maximum })
+    });
+    const wound = () => {
+      const player = world.getEntity("player:alice")!;
+      world.addEntity({ ...player, state: { ...player.state, health: 70, points: 400, kills: 4 } });
+    };
+    const clearWave = () => {
+      for (const entity of world.entities()) {
+        if (entity.state.kind === "npc") world.removeEntity(entity.id);
+      }
+    };
+    try {
+      wound();
+      const before = world.getEntity("player:alice")!;
+      for (const [clearTick, startTick] of [[1, 151], [153, 303]] as const) {
+        clearWave();
+        module.step(0, clearTick);
+        module.step(0, startTick - 1);
+        expect(world.getEntity(before.id)!.state.health).toBe(70);
+        module.step(0, startTick);
+        expect(world.getEntity(before.id)).toEqual({
+          ...before, state: { ...before.state, health: expected }
+        });
+        for (const role of ["player", "spectator"] as const) {
+          expect(module.snapshot({ accountId: "alice", role })).toMatchObject({
+            phase: "active", playerMaxHealth: expected,
+            players: [{ health: expected, points: 400, kills: 4, deaths: 0, alive: true }]
+          });
+        }
+        wound();
+        module.step(0, startTick + 1);
+        expect(world.getEntity(before.id)!.state.health).toBe(70);
+      }
+      clearWave();
+      module.step(0, 305);
+      expect(module.state.phase).toBe("complete");
+      expect(world.getEntity(before.id)!.state.health).toBe(70);
+    } finally { module.dispose(); }
+  });
+
+  it.each([undefined, 275])("does not advance an intermission death deadline with maximum %s", maximum => {
+    const { module, world } = createSimulation({
+      maxLevels: 2, initialNpcsPerPlayer: 1, npcMovementSpeed: 0, npcDetectionRange: 0,
+      ...(maximum === undefined ? {} : { playerMaxHealth: maximum })
+    });
+    try {
+      for (const entity of world.entities()) {
+        if (entity.state.kind === "npc") world.removeEntity(entity.id);
+      }
+      module.step(0, 1);
+      defeat(world, 300, 3);
+      module.step(0, 100);
+      module.step(0, 151);
+      expect(world.getEntity("player:alice")).toBeUndefined();
+      expect(module.state).toMatchObject({
+        phase: "active", level: 2,
+        players: [{ health: 0, alive: false, respawnAtTick: 250, points: 300, deaths: 1 }]
+      });
+      module.step(0, 249);
+      expect(world.getEntity("player:alice")).toBeUndefined();
+      module.step(0, 250);
+      expect(world.getEntity("player:alice")!.state).toMatchObject({
+        health: maximum ?? 200, points: 300, kills: 3, deaths: 1
+      });
+    } finally { module.dispose(); }
+  });
+
   it.each([undefined, 37, 100, 150, 275])("uses maximum %s for spawn, HUD snapshots and death respawn", maximum => {
     const expected = maximum ?? 200;
     const { module, world } = createSimulation(maximum === undefined ? {} : { playerMaxHealth: maximum });

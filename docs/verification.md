@@ -1,5 +1,81 @@
 # Local verification
 
+## Living-player wave refill (2026-11-10, T028)
+
+The subsequent-wave `DefaultEntitySimulator.startLevel` now restores present
+living players to its resolved `playerMaxHealth` once. Generated-map placement
+still happens first. No respawn, pickup, public SDK/protocol or pin code changed.
+
+Pre-fix execution of the new boundary cases reproduced **four failures**:
+wounded players remained at 70 HP instead of 200 (omitted setting) or explicit
+275 on both Fixed and Simple Generated. The name-filtered run skipped the
+other 26 cases; those skips are not counted as verification.
+
+```powershell
+npm test -- tests\default-respawn.test.ts tests\terrain-density.test.ts -t 'refills living players'
+npm run build --workspace @multiplayer-game/default-theme
+npm test -- tests\default-respawn.test.ts tests\terrain-density.test.ts tests\default-entities.test.ts tests\default-combat.test.ts tests\default-theme.test.ts tests\wave-countdown.test.ts tests\player-max-health.test.ts tests\default-skin.test.ts
+```
+
+The build passed; the final focused suite passed **8 files / 165 tests**,
+zero failures/skips, in **23.54 seconds** on the local Windows workspace.
+Seed-42 controlled real-module/world checks stage damage and remove NPCs:
+
+- Fixed: health stays 70 through intermission, becomes 200/275 at ticks 151
+  and 303, and stays wounded after new damage on subsequent active ticks.
+  Final completion does not refill. Position, identity, score, kills, deaths
+  and facing remain unchanged; player/spectator snapshots show full health.
+- Simple Generated: density 0-to-3 transition refills 70 to 200/275 at tick 151
+  but not tick 150 or the active tick after new damage. Existing geometry,
+  collision, blocked-shot, navigation and safe-return assertions pass.
+- Dead players: a Fixed intermission death retains its exact tick-250 deadline;
+  the generated transition preserves the other player's tick-301 deadline.
+  Neither revives at the boundary, both stay absent through deadline-minus-one,
+  and both respawn at the configured maximum with score/death state intact.
+- Separate health-pack regressions still pass: three-wave Fixed/generated
+  consumed/retained counts, no duplicate packs, 25-HP capped healing and both
+  roles' arena/radar rendering. Pickup replenishment code is untouched.
+
+At the initial handoff, whitespace checks passed and changes stayed local;
+no full-suite, browser, capacity or deployment execution was claimed.
+
+### Scoped review and Linux release gate
+
+The subsequent owner authorization permits committing only the living-player
+wave-start refill, its tests and these verification notes. Review found no
+blocking defects. Unrelated edits remain unstaged; public packages, the immutable
+consumer pin and its drift assertion are unchanged. Original T042 stays open.
+
+Validated staged tree `04988b18ff06e14bb071349152b88ac862c55cf7` in a disposable
+`node:24-bookworm` Linux x86_64 container, Node **24.22.2**, npm **11.19.1**,
+WSL2 kernel **5.15.167.4-microsoft-standard-WSL2**. A local clone supplied Git
+history; a canonical-LF archive supplied only the staged candidate. Tree equality
+and tracked-file cleanliness were checked before/after execution. No unrelated
+edits, Windows dependencies, local environment or runtime data entered the copy.
+
+```text
+npm ci --no-audit --no-fund
+npm run build
+npm run check
+npm test
+```
+
+Build, workspace/tool checks and the full unfiltered suite passed:
+**56 files / 418 tests**, zero failures or skips, **42.04 seconds**, with
+unchanged workers/timeouts. All five public-theme conformance tests passed,
+including the packed external consumer (**5.473 seconds**). Dependency install
+emitted non-fatal deprecation/install-script-policy warnings. Initial staging
+attempts stopped before validation on CRLF patch context/whitespace; normalizing
+the patch input to LF resolved this without changing source or assertions.
+Raw output is retained as `refill-linux-candidate.log` in the Copilot session
+files.
+
+After committing these notes, rerun the same Linux build/check/unfiltered suite
+on that exact commit, not the dirty checkout. Push without force only after it
+passes and a fresh fetch confirms this is the sole outgoing commit. Report the
+exact-commit result separately rather than amending and invalidating that gate.
+No browser, deployment or capacity result is claimed. No hooks file exists.
+
 ## Health-pickup wave trace (2026-11-10, T027)
 
 The owner authorized automated runtime/Canvas checks instead of an IDE session

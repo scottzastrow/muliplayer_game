@@ -128,7 +128,7 @@ describe("reusable authoritative map transition", () => {
     expect(() => transition.commit(-1, [])).toThrow();
   });
 
-  it("uses new geometry for collision, blocked shots, paths and safe returns without resetting players", () => {
+  it.each([undefined, 275])("uses new geometry and refills living players without resetting death timers (maximum %s)", maximum => {
     const initial = generateDensityMap(42, 1, 0);
     const world = new SessionWorld<DefaultEntity>("density-game", initial.map.definition.bounds);
     const navigation = new BoundedNavigation(world.geometry, { agentRadius: 8 });
@@ -163,7 +163,8 @@ describe("reusable authoritative map transition", () => {
       { accountId: "bob", username: "Bob", joinedOrder: 1 }];
     const module = defaultModuleFactory.create(context, {
       mapMode: "simple-generated", terrainDensity: { mode: "per-level", densities: [0, 3] },
-      maxLevels: 2, initialNpcsPerPlayer: 1, npcMovementSpeed: 0, respawnDelaySeconds: 10
+      maxLevels: 2, initialNpcsPerPlayer: 1, npcMovementSpeed: 0, respawnDelaySeconds: 10,
+      ...(maximum === undefined ? {} : { playerMaxHealth: maximum })
     }, roster, 42);
     try {
       module.initialize();
@@ -177,8 +178,21 @@ describe("reusable authoritative map transition", () => {
       expect(cleared.players[1]).toMatchObject({ alive: false, respawnAtTick: 301, points: 200 });
       module.step(0, 150);
       expect(world.geometry.obstacles).toHaveLength(0);
+      expect(world.getEntity("player:alice")!.state.health).toBe(70);
       module.step(0, 151);
-      expect(world.getEntity("player:alice")!.state).toMatchObject({ health: 70, points: 400, kills: 4 });
+      expect(world.getEntity("player:alice")!.state).toMatchObject({
+        health: maximum ?? 200, points: 400, kills: 4
+      });
+      for (const role of ["player", "spectator"] as const) {
+        expect(module.snapshot({ accountId: "alice", role })).toMatchObject({
+          players: [{ health: maximum ?? 200 }, { health: 0, respawnAtTick: 301 }]
+        });
+      }
+      context.entities.update("player:alice", entity => ({
+        ...entity, state: { ...entity.state, health: 70 }
+      }));
+      module.step(0, 152);
+      expect(world.getEntity("player:alice")!.state.health).toBe(70);
       expect(world.getEntity("player:bob")).toBeUndefined();
       const changed = DefaultViewSchema.parse(module.snapshot({ accountId: "alice", role: "player" }));
       expect(changed.players[1]).toMatchObject({ alive: false, respawnAtTick: 301, points: 200 });
@@ -208,7 +222,7 @@ describe("reusable authoritative map transition", () => {
       expect(world.getEntity("player:bob")).toBeUndefined();
       module.step(0, 301);
       const bob = world.getEntity("player:bob")!;
-      expect(bob.state).toMatchObject({ health: 200, points: 200, deaths: 1 });
+      expect(bob.state).toMatchObject({ health: maximum ?? 200, points: 200, deaths: 1 });
       expect(world.geometry.isCircleWalkable(bob.position, bob.radius + SAFE_SPAWN_MARGIN)).toBe(true);
     } finally {
       module.dispose();

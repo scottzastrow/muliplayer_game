@@ -191,6 +191,14 @@ export class DefaultEntitySimulator {
     if (!map) {
       throw new Error("Default entity simulator has no loaded map.");
     }
+    for (const id of this.#playerIds.values()) {
+      const player = this.context.entities.get(id);
+      if (player?.state.kind === "player" && player.state.health > 0) {
+        this.context.entities.update(id, current => ({
+          ...current, state: { ...current.state, health: this.playerMaxHealth }
+        }));
+      }
+    }
     this.#spawnNpcs(npcCount, npcHealth, level, []);
     this.#spawnPickups(map.definition.spawns.filter(spawn =>
       spawn.kind === "pickup" && spawn.pickupType === "health" &&
