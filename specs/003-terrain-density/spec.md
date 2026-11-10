@@ -261,3 +261,20 @@ Record separate measured Explore/approach speeds, a visibly stopped firing NPC
 without rushing through the player, and actual arena/radar color checks from both
 players and spectator follow views. Leave all changes local/uncommitted and
 original T042 open; no deployment or capacity result is implied.
+
+### Player facing-steered movement follow-up (2026-11-10)
+
+Dots and Squares rotates held player movement input by 30% of the shortest
+signed angle toward current facing, recalculating from input each update rather
+than accumulating rotation. Expose a named theme tuning setting in the range
+0 to 1 with default 0.30. Preserve input magnitude, movement speed, aim-based
+firing, spinning at rest and all NPC behavior. Verify rightward input with upward
+aim travels exactly 27 degrees upward, wraparound takes the shortest turn, held
+input does not drift, firing follows aim and zero-input spinning never translates.
+Keep changes local/uncommitted and original T042 open.
+
+The subsequent scoped commit authorization permits only this steering change,
+its tests and matching documentation to be committed, with a non-force push
+only as the sole outgoing commit on `1513429` after fetching origin. The local
+browser playtest is skipped; the manual steering check will happen on Lightsail.
+Original T042 remains open; no deployment or capacity result is implied.

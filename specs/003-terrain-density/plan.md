@@ -154,3 +154,21 @@ protocol/SDK or immutable pin changes. Verify full-roster fallback/remount,
 real rejoin, separate movement measurements and pixel-level colors in two player
 windows plus both spectator follow views, using ordinary spawns and real keyboard
 travel. Record local evidence without closing T042 or live gates.
+
+### Player facing-steered movement follow-up
+
+Export `PLAYER_FACING_MOVEMENT_BLEND = 0.30` in default-theme tuning (range 0-1).
+Only player movement rotates the stored normalized input through that fraction
+of the shortest signed input-to-facing angle on each step. Preserve magnitude,
+leave stored input/facing untouched, and leave combat and NPC simulation unchanged.
+Cover exact 27-degree steering, signed wraparound, stable repeated steps, partial
+input speed, aim-based firing and stationary spinning. Update the existing held
+controls browser assertion to expect blended travel, not pure downward travel;
+do not claim a browser run without executing it. No public SDK/protocol change,
+commit, deployment or original T042 completion.
+
+The subsequent scoped commit authorization supersedes the no-commit handoff
+for this steering slice only. Preserve unrelated edits and push without force
+only as the sole outgoing commit on `1513429` after fetching origin. Skip the
+local browser playtest and leave the manual steering check pending on Lightsail;
+neither deployment nor original T042 completion is authorized.

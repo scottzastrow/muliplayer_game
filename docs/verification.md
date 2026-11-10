@@ -1,5 +1,25 @@
 # Local verification
 
+## Player facing-steered movement (2026-11-10, T019)
+
+The recorded focused selection passed **8 files / 117 tests** on the local
+Windows workspace; the default-theme build and type-check also passed.
+The exact command and failure/correction history are retained in
+`specs/003-terrain-density/tasks.md` under T019. Review confirms that player
+travel is recomputed from held input using 30% of the shortest signed angle
+toward facing, preserving input magnitude without accumulated rotation.
+Coverage includes exact 27-degree steering, signed wraparound, repeated steps,
+partial-input speed, aim-based firing and stationary spinning, with existing
+NPC/combat/skin/respawn regressions.
+
+**Local browser playtest skipped.** The updated held-controls browser assertion
+has not been exercised for this change. The manual steering check will happen
+on Lightsail; no Lightsail browser, deployment or capacity result is claimed.
+The owner authorizes only the steering change, its tests and matching
+documentation to be committed, preserving unrelated edits, with a non-force
+push only as the sole outgoing commit on `1513429` after fetching origin.
+Original T042 remains open.
+
 ## Release-test blockers for `1d98585` (2026-11-10)
 
 **Full Linux suite passed: 54 files / 334 tests, zero failures or skips,

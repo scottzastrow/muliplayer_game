@@ -17,7 +17,7 @@ describe("integrated default gameplay", () => {
     try {
       const before = sessions.map(({ module }) => module.snapshot({ accountId: "alice", role: "player" }));
       sessions[0]!.module.applyInput("alice", {
-        type: "combat", moveX: 1, moveY: 0, aimX: 0, aimY: 0, fire: false
+        type: "combat", moveX: 1, moveY: 0, aimX: 1000, aimY: 272, fire: false
       });
       sessions[1]!.update("player:alice", (entity) => {
         if (entity.state.kind !== "player") throw new Error("Expected player.");

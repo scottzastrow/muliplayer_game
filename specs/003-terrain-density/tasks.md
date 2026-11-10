@@ -2,6 +2,50 @@
 
 Scoped sequential feature; retains original engine and Theme Credits context.
 
+## Player facing-steered movement follow-up (2026-11-10)
+
+- [x] T019 Add named/documented default-theme facing-movement blend 0.30 (range
+  0-1); recompute shortest-signed-angle steering from held player input each
+  update. Verify exact 27-degree right/up steering, wraparound, no accumulated
+  drift, unchanged speed, aim-based firing and spin-in-place. Preserve NPC
+  behavior, update related controls documentation/fixtures, record actual focused
+  checks, and keep changes local/uncommitted with original T042 open.
+  Authorized independently of live-release/capacity gates; follows T017.
+
+T019 evidence: default-theme build and type-check passed. The focused command
+below passed **8 files / 117 tests** on the local Windows workspace:
+
+```powershell
+npm test -- tests\default-entities.test.ts tests\default-combat.test.ts tests\npc-engagement.test.ts tests\npc-ranged.test.ts tests\default-skin.test.ts tests\integration\gameplay.test.ts tests\default-theme.test.ts tests\default-respawn.test.ts
+```
+
+New simulation assertions measure right/up travel at -27 degrees (screen
+coordinates), reverse-sign and +/-170-degree wraparound, ten stable held-input
+updates and unchanged full/partial-input speed. A simultaneous moving/firing
+case checks projectile velocity toward the unchanged aim target from the moved
+position, not the blended travel heading. Twelve stationary facing updates
+complete a full turn with exactly unchanged position. NPC/combat/skin/respawn
+regressions pass without NPC or firing implementation changes.
+
+Before implementation the new selection had five expected steering failures and
+one passing stationary-spin test. The first post-change run passed 98/99 tests;
+the remaining test looked for projectile:1 although the first shot is numbered
+0. Selecting the actual projectile fixed that assertion; no combat fix was
+needed. Existing diagonal/isolation fixtures now explicitly aim along their
+intended movement so they continue testing normalization/isolation.
+
+`node --check tests\browser\default-game.mjs` and `git diff --check` passed.
+The existing held-controls browser assertion now expects blended travel; no
+local browser playtest was run: it was explicitly skipped, and the manual
+steering check will happen on Lightsail. No deployment or capacity result is
+claimed. No extension hooks file exists.
+
+Scoped commit authorization (2026-11-10) supersedes T019's local/uncommitted
+handoff only: commit steering, its tests and matching documentation, preserving
+unrelated edits. Push without force only if this is the sole outgoing commit
+on top of `1513429` after fetching origin. Original T042, T010 and T013 remain
+open; the pending Lightsail check is not browser verification or deployment.
+
 - [x] T001 Specify schedules, compatibility, coverage and public map transition
   in spec.md, plan.md, contracts/terrain.md and requirements checklist.
 - [x] T002 Add failing schedule/coverage/connectivity/atomic transition tests in

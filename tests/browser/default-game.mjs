@@ -487,7 +487,16 @@ async function verifyHeldControls() {
         const held = await state(page);
         assert.ok(own(held).position.y > own(before).position.y + 20,
           `${mode} keeps moving down while firing after repeats`);
-        assert.ok(Math.abs(own(held).position.x - own(before).position.x) < 0.01);
+        const travelX = own(held).position.x - own(before).position.x;
+        const travelY = own(held).position.y - own(before).position.y;
+        const travelAngle = Math.atan2(travelY, travelX);
+        const facingAngle = Math.atan2(facing.y, facing.x);
+        const towardFacing = Math.atan2(Math.sin(facingAngle - Math.PI / 2),
+          Math.cos(facingAngle - Math.PI / 2));
+        const expectedTravel = Math.PI / 2 + towardFacing * 0.30;
+        assert.ok(Math.abs(Math.atan2(Math.sin(travelAngle - expectedTravel),
+          Math.cos(travelAngle - expectedTravel))) < 0.15,
+          `${mode} downward input bends 30% toward facing rather than accumulating rotation`);
         assert.ok(turn === "mouse"
           ? own(held).facing.x < -0.99 && Math.abs(own(held).facing.y) < 0.15
           : Math.hypot(displayedFacing(held).x - localFacing.x,

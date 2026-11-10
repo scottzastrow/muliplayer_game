@@ -1,6 +1,8 @@
 import { DEFAULT_GAME_SETTINGS } from "@multiplayer-game/protocol";
 
 export const PLAYER_SPEED = 180;
+/** Fraction [0, 1] of the shortest input-to-facing angle: 0 = input, 1 = facing. */
+export const PLAYER_FACING_MOVEMENT_BLEND = 0.30;
 export const PLAYER_HEALTH = 100;
 export const PLAYER_RADIUS = 14;
 export const MAX_PLAYER_HEALTH = 100;

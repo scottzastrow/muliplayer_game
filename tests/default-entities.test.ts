@@ -28,6 +28,8 @@ import {
   NPC_EXPLORE_SPEED_FACTOR,
   NPC_REPATH_INTERVAL_TICKS,
   PLAYER_SPEED,
+  PLAYER_FACING_MOVEMENT_BLEND,
+  PLAYER_SHOT_SPEED,
   type DefaultEntity,
   type DefaultPlayerAction
 } from "@multiplayer-game/default-theme";
@@ -37,6 +39,12 @@ const roster: readonly RosterMember[] = [
 ];
 
 describe("default entity movement and pursuit", () => {
+  it("exports the Dots and Squares facing-movement blend within its documented range", () => {
+    expect(PLAYER_FACING_MOVEMENT_BLEND).toBe(0.30);
+    expect(PLAYER_FACING_MOVEMENT_BLEND).toBeGreaterThanOrEqual(0);
+    expect(PLAYER_FACING_MOVEMENT_BLEND).toBeLessThanOrEqual(1);
+  });
+
   it("allocates distinct reserved-safe authoritative colors across the full frozen roster", () => {
     const s = createSimulation([], { npcMovementSpeed: 0, initialNpcsPerPlayer: 1 });
     s.module.dispose();
@@ -271,8 +279,8 @@ describe("default entity movement and pursuit", () => {
       type: "combat",
       moveX: 1,
       moveY: 1,
-      aimX: 0,
-      aimY: 0,
+      aimX: player.position.x + 100,
+      aimY: player.position.y + 100,
       fire: false
     };
 
@@ -295,6 +303,86 @@ describe("default entity movement and pursuit", () => {
       position: moved.position
     }));
     simulation.module.dispose();
+  });
+
+  it.each([
+    { inputDegrees: 0, facingDegrees: -90, magnitude: 1, expectedDegrees: -27 },
+    { inputDegrees: 0, facingDegrees: 90, magnitude: 0.4, expectedDegrees: 27 },
+    { inputDegrees: 170, facingDegrees: -170, magnitude: 1, expectedDegrees: 176 },
+    { inputDegrees: -170, facingDegrees: 170, magnitude: 1, expectedDegrees: -176 }
+  ])("blends held input $inputDegrees toward facing $facingDegrees without drift or speed changes",
+    ({ inputDegrees, facingDegrees, magnitude, expectedDegrees }) => {
+      const { context, module } = createSimulation([], { npcMovementSpeed: 0 });
+      const radians = (degrees: number) => degrees * Math.PI / 180;
+      const player = context.entities.get("player:player-a")!;
+      const facing = { x: Math.cos(radians(facingDegrees)), y: Math.sin(radians(facingDegrees)) };
+      try {
+        module.applyInput("player-a", {
+          type: "combat",
+          moveX: Math.cos(radians(inputDegrees)) * magnitude,
+          moveY: Math.sin(radians(inputDegrees)) * magnitude,
+          aimX: player.position.x + facing.x * 100,
+          aimY: player.position.y + facing.y * 100,
+          fire: false
+        });
+        for (let tick = 1; tick <= 10; tick++) {
+          const before = context.entities.get(player.id)!;
+          module.step(1 / 30, tick);
+          const after = context.entities.get(player.id)!;
+          const dx = after.position.x - before.position.x;
+          const dy = after.position.y - before.position.y;
+          expect(Math.atan2(dy, dx) * 180 / Math.PI).toBeCloseTo(expectedDegrees, 8);
+          expect(Math.hypot(dx, dy)).toBeCloseTo(PLAYER_SPEED * magnitude / 30, 8);
+          expect(after.state.facing).toEqual(before.state.facing);
+        }
+      } finally { module.dispose(); }
+    }
+  );
+
+  it("steers travel 27 degrees upward while firing at the upward aim, not along travel", () => {
+    const { context, module } = createSimulation([], { npcMovementSpeed: 0 });
+    const player = context.entities.get("player:player-a")!;
+    const aim = { x: player.position.x, y: player.position.y - 100 };
+    try {
+      module.applyInput("player-a", {
+        type: "combat", moveX: 1, moveY: 0, aimX: aim.x, aimY: aim.y, fire: true
+      });
+      module.step(1 / 30, 1);
+      const moved = context.entities.get(player.id)!;
+      expect(moved.state.facing).toEqual({ x: 0, y: -1 });
+      expect(Math.atan2(moved.position.y - player.position.y,
+        moved.position.x - player.position.x) * 180 / Math.PI).toBeCloseTo(-27, 8);
+      const projectile = context.entities.values().find(entity => entity.state.kind === "projectile");
+      if (projectile?.state.kind !== "projectile") throw new TypeError("Expected player projectile.");
+      const aimDistance = Math.hypot(aim.x - moved.position.x, aim.y - moved.position.y);
+      expect(projectile.state.velocity.x).toBeCloseTo(
+        (aim.x - moved.position.x) / aimDistance * PLAYER_SHOT_SPEED, 8);
+      expect(projectile.state.velocity.y).toBeCloseTo(
+        (aim.y - moved.position.y) / aimDistance * PLAYER_SHOT_SPEED, 8);
+      expect(projectile.state.velocity.y).toBeLessThan(0);
+    } finally { module.dispose(); }
+  });
+
+  it("spins through a full turn at rest without translating", () => {
+    const { context, module } = createSimulation([], { npcMovementSpeed: 0 });
+    const player = context.entities.get("player:player-a")!;
+    try {
+      for (let tick = 1; tick <= 12; tick++) {
+        const angle = tick * Math.PI / 6;
+        module.applyInput("player-a", {
+          type: "combat", moveX: 0, moveY: 0,
+          aimX: player.position.x + Math.cos(angle) * 100,
+          aimY: player.position.y + Math.sin(angle) * 100, fire: false
+        });
+        module.step(1 / 30, tick);
+        const current = context.entities.get(player.id)!;
+        expect(current.position).toEqual(player.position);
+        if (current.state.kind !== "player") throw new TypeError("Expected player.");
+        const facing = current.state.facing;
+        expect(facing.x).toBeCloseTo(Math.cos(angle), 8);
+        expect(facing.y).toBeCloseTo(Math.sin(angle), 8);
+      }
+    } finally { module.dispose(); }
   });
 
   it.each([400, 700])(

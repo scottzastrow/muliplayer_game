@@ -27,6 +27,7 @@ import {
   MAX_PICKUPS_PER_SESSION,
   PLAYER_RADIUS,
   PLAYER_SPEED,
+  PLAYER_FACING_MOVEMENT_BLEND,
   MAX_NPC_PATH_REQUESTS_PER_TICK,
   MAX_PENDING_NPC_PATHS,
   MAX_ATTRACTION_QUERY_CELLS,
@@ -329,7 +330,17 @@ export class DefaultEntitySimulator {
       if (!entity || entity.state.kind !== "player" || entity.state.health <= 0) {
         continue;
       }
-      const movement = this.#movementByAccount.get(accountId) ?? EMPTY_MOVEMENT;
+      let movement = this.#movementByAccount.get(accountId) ?? EMPTY_MOVEMENT;
+      const magnitude = Math.hypot(movement.x, movement.y);
+      if (magnitude > 0) {
+        const facing = entity.state.facing;
+        const difference = Math.atan2(
+          movement.x * facing.y - movement.y * facing.x,
+          movement.x * facing.x + movement.y * facing.y
+        );
+        const angle = Math.atan2(movement.y, movement.x) + difference * PLAYER_FACING_MOVEMENT_BLEND;
+        movement = { x: Math.cos(angle) * magnitude, y: Math.sin(angle) * magnitude };
+      }
       const moved = this.context.geometry.moveCircle(
         entity.position,
         { x: movement.x * PLAYER_SPEED * dtSeconds, y: movement.y * PLAYER_SPEED * dtSeconds },
