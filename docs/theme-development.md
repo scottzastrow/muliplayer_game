@@ -329,19 +329,23 @@ Dots and Squares reads `npcMovementSpeed` from the public session settings:
 finite 0-180 world units/second, including fractions, default 67.5. This is a
 playtesting default of 75% of the former 90 units/second. Direct pursuit and
 navigation use the same travel budget (speed multiplied by step seconds);
-32 world units equal one navigation cell. Zero stops travel but preserves contact
-damage. The host exposes "NPC movement speed" on create/edit; values lock on start.
+32 world units equal one navigation cell. Zero stops travel, but NPCs can still
+turn and fire at a clear, uncrowded target. NPC contact never causes damage.
+The host exposes "NPC movement speed" on create/edit; values lock on start.
 The additive v1 schema supplies 67.5 for older rooms/results that omit the field.
 
 `npcDetectionRange` is a separate finite 0-700 world-unit setting, default 512,
 matching the previous fixed attraction distance. The default theme acquires living
 targets only within this radius and still uses bounded spatial queries. Zero disables
-automatic pursuit. The host exposes it on create/edit; values lock on start, and the
+automatic engagement and awareness bias. The host exposes it on create/edit; values lock on start, and the
 additive v1 schema supplies 512 for older rooms/results that omit it.
 
 Explore is the default state of every mobile NPC on every wave. NPCs without an
 engagement slot explore at half their configured speed (33.75 world units/second
-at the default), including inside detection range. On each wave's first
+at the default), including inside engagement range. The earlier 10x playtest
+increase to 337.5 was reverted. Attack approach uses the configured speed
+independently (67.5 units/second by default, twice Explore), not the Explore multiplier.
+On each wave's first
 simulation step every NPC picks a destination and starts moving immediately,
 steering directly toward it (with collision-checked axis fallbacks) until its
 navigation path arrives. Destinations use the session's seeded RNG to sample at
@@ -359,17 +363,75 @@ no clear candidate halve the next destination's target down to one cell. This
 finds closer reachable legs without adding synchronous searches or increasing
 navigation budgets. Arrival and pursuit transitions restore the full map-scaled
 target. Failures report `default.npc_explore.*` metrics.
-Each living player has **two sticky pursuit/contact slots**. Existing in-range
+
+Awareness is wider than engagement: three times `npcDetectionRange` (1536 units
+by default) biases destinations around the nearest living player's action area,
+clamped toward the interior quarter-band. Seeded offsets of 6-25% of the shorter
+map side, region novelty and per-NPC home distance spread destinations rather
+than sending the wave to one point. The same bounded path service validates
+routes; failed searches shorten both the focus leg and sampling radius.
+Outside awareness the map-spanning/inward Explore policy above is unchanged.
+Spawn quotas, player clearance, reachable cells and quadrant distribution are unchanged.
+
+Each living player has **two sticky engagement slots**. Existing in-range
 engagements retain their slots, even if another NPC or player becomes closer.
 Unassigned NPC/player pairs are admitted by distance (stable ID tie-breaks), with
 at most one target per NPC and two attackers independently per player. Death,
 removal or loss of detection range frees a slot for the next eligible NPC on the
-next simulation step. Denied NPCs keep exploring and cannot damage that player,
-even on contact. Losing a target discards pursuit waypoints and resumes
+next simulation step. Denied NPCs keep exploring and never fire. Losing a target discards pursuit waypoints and resumes
 exploration on the same step. Pending stale
 results are drained but never followed. Detection range 0 allows exploration but
 never acquires a player, including at the exact same position. Speed 0 remains
-stationary in either mode and preserves in-range contact damage.
+stationary in either mode.
+
+Slot holders stop advancing with a clear shot within 384 units, turn independently
+of movement at up to 3 pi radians/second, and fire when aligned within 0.1 radians.
+They retreat inside 96 units or when another NPC crowds within 32 units, keeping
+their facing toward the player even while backing away. Blocked shots trigger
+bounded navigation around terrain; valid routes are retained until exhausted or
+stalled rather than repeatedly restarting at their first waypoint.
+The front marker is a 6-unit square attached to the rotating 16-unit square body.
+Every enemy body, attached facing square and radar marker uses the same reserved
+color, `#ed6b61`. The shared 32-player palette excludes the red hue sector
+(player hues are 40-320 degrees) and orders hues widely apart for early roster
+slots. Authoritative colors belong to frozen roster slots and survive death,
+respawn, disconnect and rejoin. The skin uses one resolved account-to-color map
+for bodies, facing dots, radar markers and the radar anchor, for either role.
+Older snapshots with missing, unsupported, duplicate or reserved player colors
+receive distinct unused palette entries in account-ID order; frozen-roster
+fallback allocation is identical on reorder and remount/rejoin. No generic
+shared player-color fallback can consume the enemy color.
+
+NPC projectiles are matching 6-unit squares, travel at 300 units/second, deal 10
+damage, and fire at most once per 30 ticks (one second). They expire after 60 ticks,
+hit living players only, and use the shared 1000-projectile ceiling. Swept,
+substepped collision uses a conservative circumscribed circle for NPC squares;
+thin walls block both shot eligibility and projectiles in flight. Player weapons
+and confirmed-kill scoring/reset behavior are unchanged. Legacy contact capability
+exports remain source-compatible but are never executed. Optional NPC facing/target/
+fire-readiness and projectile `ownerNpcId` fields are additive default-theme v4
+snapshot data; the skin tolerates older snapshots without them.
+
+`node tests\browser\default-game.mjs --npc-ranged` runs the focused ordinary-spawn
+solo Fixed scenario using a disposable local database and visible Chrome.
+It retains gameplay defaults, records actual viewport/DPR, 30 seconds of idle
+positions, first encounter against the 60-second timeout, one-second travel,
+engagement counts, screenshots of turning/firing and an SVG track map. A final
+keyboard-only approach attempts physical contact without staging entities.
+Its report explicitly marks contact untested if that approach cannot reach an NPC.
+Set the existing `BROWSER_TEST_ORIGIN`, `BROWSER_DEBUG_URL`,
+`BROWSER_TEST_DATABASE_PATH` and `BROWSER_TEST_ARTIFACT_DIR` variables for that
+disposable process only; no persistent system variables are required.
+
+`node tests\browser\default-game.mjs --npc-pace-colors` runs a fresh two-player
+Fixed match plus a spectator following each player. Both players travel to a
+shared area through real keyboard input and ordinary navigation. It separately
+measures one-second Explore/approach travel, captures visible standoff firing,
+checks the per-player two-attacker cap and color stability on rejoin, and samples
+actual Canvas pixels for both player colors and the reserved enemy body/front/
+radar color in all four views. It uses the same disposable-loopback environment
+variables and artifact directory as the solo ranged check, without entity staging
+or gameplay-default overrides.
 
 Distant radar markers are clamped to the radar rim, so their angular changes can
 look small, and the normal follow-camera hides offscreen NPC bodies. The skin

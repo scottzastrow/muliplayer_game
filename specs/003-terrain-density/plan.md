@@ -118,3 +118,39 @@ toward arena center and bias later samples inward; reduced-distance retries
 retain their prior random-angle ordering so enclosed-area fallback remains
 available. Do not change navigation budgets, pursuit behavior or speed zero.
 Cover band allocation/redistribution and an ordinary 30-second browser trace.
+
+### Full NPC ranged playtest follow-up
+
+T016 changes only default-theme simulation/presentation and focused evidence.
+Set Explore factor from 0.5 to 5; keep swept engine movement, path budgets and
+safe band/quadrant spawn selection. Use awareness at 3x the existing engagement
+setting, seeded action-area candidates with interior preference and shorter
+reachable retries. Retain the sticky two-slot allocator. NPC state adds optional
+facing, targetId and readyToFire; combat consumes authoritative readiness, enforces
+cooldown/cap, and shares square-clearance shot checks with the AI.
+NPC shots use additive ownerNpcId and projectile.npc, hit players (not NPCs),
+and reuse existing swept projectile movement, damage/respawn/finalization.
+The skin rotates the NPC body/attached marker separately from travel and draws
+same-sized square bullets. Keep legacy contact exports for source compatibility,
+but remove their execution. Default schema v4 additions are optional for old
+snapshots; shared protocol/SDK contracts and immutable consumer pin do not change.
+Record baseline/new clear-route measurements, deterministic authority regressions
+and actual local browser screenshots/traces separately; do not close T042.
+
+### NPC pace and reserved-color correction
+
+T017 supersedes the T016 Explore multiplier with 0.5, restoring measured 33.75
+units/second at default settings. Approach retains its independent configured
+67.5-unit/second budget (twice Explore); verify actual clear-route travel and
+stopping at the existing 384-unit shot boundary instead of increasing approach
+speed or weakening the 96-unit separation/cover rules.
+
+Share enemy color and the 32-entry non-red player palette between authoritative
+entity creation and the skin. Space early roster colors across the hue range.
+Resolve legacy missing/invalid/duplicate/reserved colors deterministically by
+account ID using unused palette entries, then reuse the same map for every player
+arena/radar surface. Respawn/rejoin keeps authoritative stored colors. No shared
+protocol/SDK or immutable pin changes. Verify full-roster fallback/remount,
+real rejoin, separate movement measurements and pixel-level colors in two player
+windows plus both spectator follow views, using ordinary spawns and real keyboard
+travel. Record local evidence without closing T042 or live gates.

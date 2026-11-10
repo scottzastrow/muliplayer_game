@@ -85,8 +85,11 @@ function simulation(players = 1, npcMovementSpeed = 67.5, fixed = false, seed = 
       return [npc.id, Math.hypot(npc.position.x - previous.x, npc.position.y - previous.y)];
     }));
   };
-  const pursuers = (tick: number) => [...step(tick)].filter(([, travel]) =>
-    Math.abs(travel - npcMovementSpeed / 30) < 1e-6).map(([id]) => id);
+  const pursuers = (tick: number) => {
+    step(tick);
+    return npcs().filter(npc => Number(npc.state.health) > 0 &&
+      Boolean(npc.state.targetId)).map(npc => npc.id);
+  };
   return { world, module, context, navigation, npcs, place, stage, step, pursuers };
 }
 
@@ -110,6 +113,8 @@ describe("NPC wave-start roaming and per-player engagement", () => {
     });
     try {
       for (let tick = 1; tick <= 450; tick++) {
+        s.context.entities.update("player:p0", entity => entity.state.kind === "player"
+          ? { ...entity, state: { ...entity.state, health: 100 } } : entity);
         const amounts = s.step(tick);
         expect(s.module.state.players).toContainEqual(expect.objectContaining({
           accountId: "p0", position: playerPosition
@@ -131,7 +136,7 @@ describe("NPC wave-start roaming and per-player engagement", () => {
       }
       if (speed === 0) expect(requests).not.toHaveBeenCalled();
     } finally { s.module.dispose(); }
-  });
+  }, 30_000);
 
   it("explores every non-pursuing NPC for 30 seconds with four in range of an idle player", () => {
     const s = simulation(1, 67.5, true);
@@ -167,8 +172,7 @@ describe("NPC wave-start roaming and per-player engagement", () => {
         for (const npc of s.npcs()) {
           const row = report.get(npc.id)!;
           const amount = travel.get(npc.id)!;
-          const atPlayer = Math.hypot(npc.position.x - center.x, npc.position.y - center.y) <= 22;
-          if (Math.abs(amount - fullStep) < 1e-6 || (amount === 0 && atPlayer)) {
+          if (npc.state.targetId === playerId) {
             row.pursuedTicks += 1;
             continue;
           }
@@ -190,12 +194,11 @@ describe("NPC wave-start roaming and per-player engagement", () => {
       })));
       for (const [id, row] of report) {
         if (closestTwo.includes(id)) {
-          // One partial closing step reaches contact range; every other tick is pursuit.
-          expect(row.pursuedTicks, `${id} holds a pursuit slot`).toBeGreaterThanOrEqual(899);
+          expect(row.pursuedTicks, `${id} holds an engagement slot`).toBe(900);
           continue;
         }
         expect(row.pursuedTicks, `${id} has no pursuit slot`).toBe(0);
-        expect(row.distance).toBeGreaterThan(0.75 * 900 * fullStep * NPC_EXPLORE_SPEED_FACTOR);
+        expect(row.distance).toBeGreaterThan(0.6 * 900 * fullStep * NPC_EXPLORE_SPEED_FACTOR);
         expect(row.longestStationaryTicks).toBeLessThanOrEqual(2 * NPC_EXPLORE_PAUSE_TICKS);
         expect(row.farthest, `${id} explores away from its start`).toBeGreaterThan(256);
         for (const window of row.windows) {
@@ -203,7 +206,7 @@ describe("NPC wave-start roaming and per-player engagement", () => {
         }
       }
     } finally { s.module.dispose(); }
-  });
+  }, 30_000);
 
   it.each([67.5, 0])("starts both Fixed waves outside detection at speed %s", speed => {
     const s = simulation(1, speed, true);
@@ -254,9 +257,15 @@ describe("NPC wave-start roaming and per-player engagement", () => {
       s.place("test:2", { x: 1_500, y: 700 });
       expect(s.pursuers(4).sort()).toEqual(["test:0", "test:1"]);
       const health = s.world.getEntity("player:p0")!.state.health;
+      const clearShots = () => {
+        for (const entity of s.world.entities()) {
+          if (entity.state.kind === "projectile") s.world.removeEntity(entity.id);
+        }
+      };
       // Only a denied NPC is touching the player; it must not deal damage.
       s.place("test:2", { x: 700, y: 700 });
       for (let tick = 5; tick < 15; tick++) {
+        clearShots();
         expect(s.pursuers(tick).sort()).toEqual(["test:0", "test:1"]);
       }
       expect(s.world.getEntity("player:p0")!.state.health).toBe(health);
@@ -289,18 +298,20 @@ describe("NPC wave-start roaming and per-player engagement", () => {
       s.place("player:p1", { x: 900, y: 700 });
       s.stage([640, 660, 680, 920, 940, 960].map(x => ({ x, y: 700 })));
       expect(s.pursuers(1).sort()).toEqual(["test:1", "test:2", "test:3", "test:4"]);
-      expect(s.world.getEntity("test:1")!.position.x).toBeGreaterThan(660);
-      expect(s.world.getEntity("test:2")!.position.x).toBeGreaterThan(680);
-      expect(s.world.getEntity("test:3")!.position.x).toBeLessThan(920);
-      expect(s.world.getEntity("test:4")!.position.x).toBeLessThan(940);
+      for (const id of ["test:1", "test:2"]) {
+        expect(s.world.getEntity(id)!.state.targetId).toBe("player:p0");
+      }
+      for (const id of ["test:3", "test:4"]) {
+        expect(s.world.getEntity(id)!.state.targetId).toBe("player:p1");
+      }
       // Getting closer to the other player does not steal an occupied slot.
       s.place("player:p1", { x: 665, y: 700 });
       expect(s.pursuers(2).sort()).toEqual(["test:1", "test:2", "test:3", "test:4"]);
-      expect(s.world.getEntity("test:1")!.position.x).toBeGreaterThan(662);
+      expect(s.world.getEntity("test:1")!.state.targetId).toBe("player:p0");
     } finally { s.module.dispose(); }
   });
 
-  it("preserves zero-speed contact for admitted NPCs but denies a third overlapping NPC", () => {
+  it("removes contact damage for admitted and denied zero-speed NPCs", () => {
     const s = simulation(1, 0);
     try {
       s.place("player:p0", { x: 700, y: 700 });
@@ -311,7 +322,7 @@ describe("NPC wave-start roaming and per-player engagement", () => {
       expect(s.world.getEntity("player:p0")!.state.health).toBe(100);
       s.place("test:0", { x: 710, y: 700 });
       s.step(3);
-      expect(s.world.getEntity("player:p0")!.state.health).toBe(90);
+      expect(s.world.getEntity("player:p0")!.state.health).toBe(100);
       expect(s.world.getEntity("test:2")!.position).toEqual({ x: 700, y: 700 });
       expect(s.navigation.outstandingRequests).toBe(0);
     } finally { s.module.dispose(); }

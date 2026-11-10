@@ -168,6 +168,66 @@ adjustment limits inward preference to full-range goals and preserves the prior
 random stream when it is inactive; the separate focused reruns above passed.
 The interim failures are not counted as passing.
 
+## Full NPC ranged playtest follow-up (2026-11-10)
+
+- [x] T016 Implement the authorized full NPC playtest behavior against `4c8cac4`:
+  measure clear-route Explore travel before/after at the requested 10x, add wider
+  interior/action awareness and closer sticky two-slot engagement, remove contact
+  damage, implement stop/track/cooldown ranged attacks, retreat and terrain
+  repositioning, independent facing with attached front square and matching
+  wall-blocked square projectiles. Verify safe spawns/speed zero, deterministic
+  regressions and a fresh ordinary default solo Fixed browser match, record each
+  requested behavior's verified/failed/untested status separately by evidence
+  type, and keep changes local with original T042 open. Follows T015; this
+  authorization supersedes the earlier ranged-combat deferral, not the live gates.
+
+T016 evidence: `docs/verification.md` records 14 files / 150 passing tests,
+workspace check and the final fresh ordinary solo Fixed seed-42 visible Chrome
+run (571 snapshots, ticks 2-1142). Clear-route Explore measured 33.75 before /
+337.5 after over one second; browser ticks 2-32 independently measured 337.5.
+The wave retains 2/4/4 spawn bands, visible interior Explore on tick 70, first
+engagement at 0.8 seconds versus the unchanged 60-second timeout, at most two
+active engagements, an NPC rotating in place then firing visibly, and ordinary
+keyboard contact at 16.121 units with health 70 unchanged. Simulation separately
+verifies cooldown, collision/thin walls, retreat, blocked-shot repositioning,
+speed zero, denied exploration and multiplayer caps. Actual screenshots/traces
+and the track map persist in `var\npc-ranged-final-evidence\`. Intermediate
+failures and corrections are recorded; no deployment/capacity claim is made.
+Original T042, T010 and T013 remain open; changes stay local and uncommitted.
+
+- [x] T017 Correct the uncommitted T016 playtest: restore and remeasure default
+  Explore at 33.75 units/second; measure readable approach separately and preserve
+  speed zero, broad interior routes, distributed spawns, two sticky attackers,
+  standoff/turn/cooldown/cover behavior and zero contact damage. Enforce one shared
+  enemy body/front/radar color and distinct stable enemy-excluding player colors
+  across all 32 slots, fallback and rejoin. Preserve rotating squares/projectiles.
+  Run focused checks and a real two-player/spectator browser match with separate
+  movement and arena/radar color evidence. Follows T016; leave changes local,
+  uncommitted and original T042 open.
+
+T017 evidence: `docs/verification.md` records 15 focused files / 173 passing
+tests, workspace check and the final two-player plus spectator Chrome match.
+Separate one-second browser measurements are 33.7500000000001 Explore and
+67.49999908819296 approach. A visible NPC stops and fires at 214.401 units
+(combined radii 22); the trace retains its stationary position for 8.267
+simulation seconds and records shots every 30 ticks. Gold/green players and the
+reserved `#ed6b61` NPC body/front/radar color pass actual pixel checks in both
+player views and both spectator follow views; real rejoin preserves colors.
+Tests cover all 32 authoritative/fallback slots, remount and respawn colors,
+speed zero, routes/spawns, caps, cover and no contact damage. Exact conditions,
+intermediate failures and final artifacts in
+`var\npc-pace-colors-final-evidence-6\` are recorded separately from simulation.
+Original T042, T010 and T013 remain open; no commit, push or deployment.
+
+Local commit review (2026-11-10): the owner authorizes committing only the
+verified NPC combat/pace/colors changes, related tests/docs and saved spectator
+evidence. Review of the saved two follow screenshots/report confirms that the
+selected player supplies the centered avatar and radar anchor, with only two
+player bodies/markers and no additional spectator entity. Runtime rebuild,
+workspace check, browser-script syntax and 17 focused files / 184 tests passed.
+This supersedes only T016/T017's uncommitted handoff; preserve unrelated edits.
+Original T042, T010 and T013 stay open; no push or deployment is authorized.
+
 ## Evidence
 
 Checklist: 16 checked, 0 unchecked (PASS). The prerequisite helper resolved this

@@ -14,6 +14,7 @@ describe("default player respawn", () => {
     try {
       const npcCount = () => world.entities().filter(entity => entity.state.kind === "npc").length;
       const initialNpcs = npcCount();
+      const color = world.getEntity("player:alice")!.state.color;
       defeat(world, 500, 5);
       module.step(0, 10);
       module.setPlayerPresence?.("alice", "disconnected");
@@ -28,14 +29,14 @@ describe("default player respawn", () => {
       expect(world.getEntity("player:alice")).toBeUndefined();
       module.step(0, 160);
       expect(world.entities().filter(entity => entity.state.kind === "player")).toHaveLength(1);
-      expect(world.getEntity("player:alice")?.state).toMatchObject({ points: 500, kills: 5, deaths: 1 });
+      expect(world.getEntity("player:alice")?.state).toMatchObject({ points: 500, kills: 5, deaths: 1, color });
       expect(npcCount()).toBe(initialNpcs);
       module.setPlayerPresence?.("alice", "disconnected");
       module.step(0, 200);
       expect(world.getEntity("player:alice")).toBeUndefined();
       module.setPlayerPresence?.("alice", "connected");
       expect(world.entities().filter(entity => entity.state.kind === "player")).toHaveLength(1);
-      expect(world.getEntity("player:alice")?.state).toMatchObject({ points: 500, deaths: 1 });
+      expect(world.getEntity("player:alice")?.state).toMatchObject({ points: 500, deaths: 1, color });
     } finally { module.dispose(); }
   });
 
@@ -193,7 +194,7 @@ describe("default player respawn", () => {
     simulation.module.dispose();
   });
 
-  it("allows contact damage immediately on return, without a respawn immunity flag", () => {
+  it("removes contact damage but allows ranged hits immediately on return, without immunity", () => {
     const { module, world } = createSimulation();
     defeat(world);
     module.step(0, 1);
@@ -208,6 +209,14 @@ describe("default player respawn", () => {
       }
     });
     module.step(0, 152);
+    expect(world.getEntity("player:alice")?.state).toMatchObject({ health: 100, deaths: 1 });
+    world.addEntity({
+      id: "npc-shot", typeId: "projectile.npc", radius: 6 / Math.SQRT2,
+      position: player.position,
+      state: { kind: "projectile", ownerAccountId: "", ownerNpcId: "npc:contact",
+        damage: 10, velocity: { x: 300, y: 0 }, expiresAtTick: 180 }
+    });
+    module.step(0, 153);
     expect(world.getEntity("player:alice")?.state).toMatchObject({ health: 90, deaths: 1 });
     module.dispose();
   });

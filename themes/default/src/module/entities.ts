@@ -14,6 +14,12 @@ import {
   NPC_ATTRACTION_RADIUS,
   NPC_CONTACT_COOLDOWN_TICKS,
   NPC_CONTACT_DAMAGE,
+  NPC_AWARENESS_RANGE_FACTOR,
+  NPC_SHOT_RANGE,
+  NPC_KEEP_DISTANCE,
+  NPC_TURN_RADIANS_PER_SECOND,
+  NPC_FIRE_COOLDOWN_TICKS,
+  NPC_SHOT_DAMAGE,
   MAX_NPC_ATTACKERS_PER_PLAYER,
   NPC_REPATH_INTERVAL_TICKS,
   NPC_SPEED,
@@ -40,6 +46,8 @@ import type {
 } from "./types.js";
 import type { LoadedMap } from "./maps.js";
 import { selectNpcSpawns } from "./npc-spawns.js";
+import { hasNpcShot } from "./npc-shot.js";
+import { PLAYER_COLORS } from "../colors.js";
 
 export interface DefaultContactAttackCapability extends Record<string, JsonValue> {
   readonly typeId: "default.contact-attack";
@@ -47,6 +55,7 @@ export interface DefaultContactAttackCapability extends Record<string, JsonValue
   readonly cooldownTicks: number;
 }
 
+/** @deprecated Retained for old consumers; the simulator never applies contact damage. */
 export const defaultContactAttackCapability: DefaultContactAttackCapability =
   Object.freeze({
     typeId: "default.contact-attack",
@@ -81,15 +90,11 @@ function newNavigation(home: Point2): NpcNavigationState {
 }
 
 const EMPTY_MOVEMENT = Object.freeze({ x: 0, y: 0 });
-const PLAYER_COLORS = Object.freeze(Array.from({ length: 32 }, (_, index) =>
-  `hsl(${Math.round((25 + (index * 360) / 32) % 360)} 78% 58%)`
-));
 const DEFAULT_FACING: DefaultFacing = Object.freeze({ x: 1, y: 0 });
 
 export class DefaultEntitySimulator {
   readonly #movementByAccount = new Map<string, Point2>();
   readonly #npcNavigation = new Map<string, NpcNavigationState>();
-  readonly #lastContactAttackTick = new Map<string, number>();
   readonly #playerIds = new Map<string, string>();
   readonly #pickupIds = new Set<string>();
   #map: LoadedMap | undefined;
@@ -226,8 +231,6 @@ export class DefaultEntitySimulator {
 
   resetPlayerInput(accountId: string): void {
     this.#movementByAccount.set(accountId, EMPTY_MOVEMENT);
-    const playerId = this.#playerIds.get(accountId);
-    if (playerId) this.#lastContactAttackTick.delete(playerId);
   }
 
   step(dtSeconds: number, tick: number): void {
@@ -261,7 +264,6 @@ export class DefaultEntitySimulator {
     this.#playerIds.clear();
     this.#npcNavigation.clear();
     this.#pickupIds.clear();
-    this.#lastContactAttackTick.clear();
     this.#map = undefined;
     this.#roster = [];
     this.#disposed = true;
@@ -302,7 +304,13 @@ export class DefaultEntitySimulator {
       const state: DefaultNpcState = {
         kind: "npc",
         health: npcHealth,
-        attackCapability: defaultContactAttackCapability
+        attackCapability: {
+          typeId: "default.ranged-attack", damage: NPC_SHOT_DAMAGE,
+          cooldownTicks: NPC_FIRE_COOLDOWN_TICKS
+        },
+        facing: DEFAULT_FACING,
+        targetId: "",
+        readyToFire: false
       };
       this.context.entities.add({
         id,
@@ -360,11 +368,17 @@ export class DefaultEntitySimulator {
         navigation.exploreDistanceScale = 1;
         navigation.nextPathPoint = 0;
         navigation.lastRequestTick = -Infinity;
+        navigation.progressTick = tick;
         if (target) navigation.targetId = target.id;
         else delete navigation.targetId;
       }
       if (this.#pollPath(navigation, tick)) pendingPaths -= 1;
       if (!target || target.state.kind !== "player") {
+        if (targetChanged || npc.state.readyToFire) {
+          this.context.entities.update(npc.id, current => current.state.kind === "npc"
+            ? { ...current, state: { ...current.state, targetId: "", readyToFire: false } }
+            : current);
+        }
         if (this.#explore(npc, navigation, dtSeconds, tick, pathRequests, pendingPaths)) {
           pathRequests += 1;
           pendingPaths += 1;
@@ -372,22 +386,60 @@ export class DefaultEntitySimulator {
         continue;
       }
 
-      let destination = target.position;
+      const facing = turnFacing(
+        npc.state.kind === "npc" ? npc.state.facing ?? DEFAULT_FACING : DEFAULT_FACING,
+        npc.position, target.position, dtSeconds
+      );
+      const range = distance(npc.position, target.position);
+      const clearShot = range <= NPC_SHOT_RANGE &&
+        hasNpcShot(this.context, npc.position, target.position);
+      const crowdedBy = this.context.entities.queryRadius(
+        npc.position, npc.radius + 24, MAX_ATTRACTION_QUERY_CELLS
+      ).find(other => other.id !== npc.id && other.state.kind === "npc" &&
+        other.state.health > 0 &&
+        distance(other.position, npc.position) < npc.radius + other.radius + 16 &&
+        hasNpcShot(this.context, npc.position, other.position));
+      const retreat = (range < NPC_KEEP_DISTANCE && clearShot) || crowdedBy !== undefined;
+      const wantedFacing = normalizedFacing({
+        x: target.position.x - npc.position.x, y: target.position.y - npc.position.y
+      });
+      this.context.entities.update(npc.id, current => current.state.kind === "npc"
+        ? { ...current, state: { ...current.state, facing, targetId: target.id,
+          readyToFire: clearShot && !retreat && wantedFacing !== undefined &&
+            facing.x * wantedFacing.x + facing.y * wantedFacing.y >= Math.cos(0.1) } }
+        : current);
+      if (clearShot && !retreat) continue;
+
+      const awayFrom = crowdedBy?.position ?? target.position;
+      const escape = distance(npc.position, awayFrom) > 1e-6
+        ? normalizedDelta(awayFrom, npc.position, NPC_KEEP_DISTANCE)
+        : crowdedBy
+          ? { x: compareIds(npc.id, crowdedBy.id) < 0 ? -NPC_KEEP_DISTANCE : NPC_KEEP_DISTANCE, y: 0 }
+          : { x: -facing.x * NPC_KEEP_DISTANCE, y: -facing.y * NPC_KEEP_DISTANCE };
+      let destination = retreat ? {
+        x: npc.position.x + escape.x, y: npc.position.y + escape.y
+      } : target.position;
       const currentPath = navigation.path;
-      const pathPoint = currentPath?.[navigation.nextPathPoint];
+      const pathPoint = retreat ? undefined : currentPath?.[navigation.nextPathPoint];
       if (pathPoint) {
         destination = pathPoint;
         if (distance(npc.position, pathPoint) <= this.npcMovementSpeed * dtSeconds) {
           navigation.nextPathPoint += 1;
-          destination = currentPath[navigation.nextPathPoint] ?? target.position;
+          destination = currentPath?.[navigation.nextPathPoint] ?? target.position;
         }
+      }
+      if (currentPath && navigation.nextPathPoint >= currentPath.length) {
+        delete navigation.path;
+      }
+      if (tick - navigation.progressTick > NPC_EXPLORE_STUCK_TICKS) {
+        delete navigation.path;
       }
 
       const delta = normalizedDelta(npc.position, destination, this.npcMovementSpeed * dtSeconds);
       const desired = { x: npc.position.x + delta.x, y: npc.position.y + delta.y };
       const blocked = !isWalkable(this.context, desired, npc.radius);
       if (
-        blocked &&
+        this.npcMovementSpeed > 0 && !retreat && !navigation.path && (blocked || !clearShot) &&
         !navigation.requestId &&
         pathRequests < MAX_NPC_PATH_REQUESTS_PER_TICK &&
         pendingPaths < MAX_PENDING_NPC_PATHS &&
@@ -403,13 +455,10 @@ export class DefaultEntitySimulator {
         }
       }
 
-      const moved = this.context.geometry.moveCircle(
-        npc.position,
-        delta,
-        npc.radius
-      );
+      const moved = this.#steer(npc.position, destination,
+        this.npcMovementSpeed * dtSeconds, npc.radius);
+      if (distance(npc.position, moved) > 1e-3) navigation.progressTick = tick;
       this.context.entities.update(npc.id, (current) => ({ ...current, position: moved }));
-      this.#applyContactAttack(npc.id, target.id, tick);
     }
   }
 
@@ -522,7 +571,12 @@ export class DefaultEntitySimulator {
       if (progressed) navigation.bestGoalDistance = remaining;
     }
     if (position !== npc.position) {
-      this.context.entities.update(npc.id, current => ({ ...current, position }));
+      const facing = turnFacing(
+        npc.state.kind === "npc" ? npc.state.facing ?? DEFAULT_FACING : DEFAULT_FACING,
+        npc.position, goal, dtSeconds
+      );
+      this.context.entities.update(npc.id, current => current.state.kind === "npc"
+        ? { ...current, position, state: { ...current.state, facing } } : current);
     }
     if (progressed) navigation.progressTick = tick;
 
@@ -586,6 +640,11 @@ export class DefaultEntitySimulator {
     const shorterSide = Math.min(bounds.width, bounds.height);
     const target = shorterSide * NPC_EXPLORE_MAP_DISTANCE_FACTOR *
       navigation.exploreDistanceScale;
+    const action = [...this.#playerIds.values()].map(id => this.context.entities.get(id))
+      .filter((entity): entity is DefaultEntity => this.npcDetectionRange > 0 &&
+        entity?.state.kind === "player" && entity.state.health > 0 &&
+        distance(entity.position, npc.position) <= this.npcDetectionRange * NPC_AWARENESS_RANGE_FACTOR)
+      .sort((a, b) => distance(a.position, npc.position) - distance(b.position, npc.position))[0];
     const currentEdgeDistance = Math.min(
       npc.position.x,
       npc.position.y,
@@ -604,16 +663,27 @@ export class DefaultEntitySimulator {
     let bestAway = -Infinity;
     for (let attempt = 0; attempt < MAX_NPC_EXPLORE_CANDIDATES; attempt += 1) {
       const randomAngle = this.context.random.next();
-      const angle = seekInterior
+      const angle = action ? randomAngle * Math.PI * 2 : seekInterior
         ? attempt === 0 ? centerBearing : centerBearing + (randomAngle - 0.5) * Math.PI
         : randomAngle * Math.PI * 2;
-      const reach = target * (0.9 + this.context.random.next() * 0.2);
-      const column = clamp(Math.floor((npc.position.x + Math.cos(angle) * reach) / MAP_CELL_SIZE),
+      const reach = action ? shorterSide * (0.06 + this.context.random.next() * 0.19) *
+        navigation.exploreDistanceScale
+        : target * (0.9 + this.context.random.next() * 0.2);
+      const focus = action ? {
+        x: clamp(action.position.x, shorterSide * 0.25, bounds.width - shorterSide * 0.25),
+        y: clamp(action.position.y, shorterSide * 0.25, bounds.height - shorterSide * 0.25)
+      } : npc.position;
+      const center = action ? {
+        x: npc.position.x + (focus.x - npc.position.x) * navigation.exploreDistanceScale,
+        y: npc.position.y + (focus.y - npc.position.y) * navigation.exploreDistanceScale
+      } : focus;
+      const column = clamp(Math.floor((center.x + Math.cos(angle) * reach) / MAP_CELL_SIZE),
         0, columns - 1);
-      const row = clamp(Math.floor((npc.position.y + Math.sin(angle) * reach) / MAP_CELL_SIZE),
+      const row = clamp(Math.floor((center.y + Math.sin(angle) * reach) / MAP_CELL_SIZE),
         0, rows - 1);
       const candidate = { x: (column + 0.5) * MAP_CELL_SIZE, y: (row + 0.5) * MAP_CELL_SIZE };
-      if (distance(npc.position, candidate) < target * 0.75 ||
+      if (distance(npc.position, candidate) <
+        (action ? Math.min(MAP_CELL_SIZE * 2, target * 0.75) : target * 0.75) ||
         !isWalkable(this.context, candidate, npc.radius)) continue;
       const candidateEdgeDistance = Math.min(
         candidate.x,
@@ -621,7 +691,7 @@ export class DefaultEntitySimulator {
         bounds.width - candidate.x,
         bounds.height - candidate.y
       );
-      const inward = seekInterior
+      const inward = action ? candidateEdgeDistance >= shorterSide * 0.25 ? 2 : 1 : seekInterior
         ? candidateEdgeDistance >= shorterSide * 0.25
           ? attempt === 0 ? 3 : 2
           : candidateEdgeDistance > currentEdgeDistance ? 1 : 0
@@ -681,37 +751,6 @@ export class DefaultEntitySimulator {
       }
     }
     return true;
-  }
-
-  #applyContactAttack(npcId: string, playerId: string, tick: number): void {
-    const npc = this.context.entities.get(npcId);
-    const player = this.context.entities.get(playerId);
-    if (
-      !npc ||
-      npc.state.kind !== "npc" ||
-      npc.state.attackCapability.typeId !== "default.contact-attack" ||
-      !player ||
-      player.state.kind !== "player" ||
-      player.state.health <= 0 ||
-      distance(npc.position, player.position) > npc.radius + player.radius
-    ) {
-      return;
-    }
-    const previousTick = this.#lastContactAttackTick.get(playerId) ?? -Infinity;
-    if (tick - previousTick < npc.state.attackCapability.cooldownTicks) {
-      return;
-    }
-    this.#lastContactAttackTick.set(playerId, tick);
-    const damage = npc.state.attackCapability.damage;
-    this.context.entities.update(playerId, (current) => {
-      if (current.state.kind !== "player") {
-        return current;
-      }
-      return {
-        ...current,
-        state: { ...current.state, health: Math.max(0, current.state.health - damage) }
-      };
-    });
   }
 
   #pendingPathCount(): number {
@@ -784,6 +823,16 @@ function normalizedDelta(from: Point2, to: Point2, distanceToMove: number): Poin
 
 function distance(from: Point2, to: Point2): number {
   return Math.hypot(to.x - from.x, to.y - from.y);
+}
+
+function turnFacing(facing: DefaultFacing, from: Point2, to: Point2, dt: number): DefaultFacing {
+  if (distance(from, to) === 0) return facing;
+  const angle = Math.atan2(facing.y, facing.x);
+  const wanted = Math.atan2(to.y - from.y, to.x - from.x);
+  const difference = Math.atan2(Math.sin(wanted - angle), Math.cos(wanted - angle));
+  const next = angle + clamp(difference,
+    -NPC_TURN_RADIANS_PER_SECOND * dt, NPC_TURN_RADIANS_PER_SECOND * dt);
+  return { x: Math.cos(next), y: Math.sin(next) };
 }
 
 function normalizedFacing(vector: Point2): DefaultFacing | undefined {

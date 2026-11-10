@@ -220,3 +220,44 @@ track map; report how many spawned in the interior, how many outer-band NPCs
 entered the interior, and the travel and pause bounds of visible non-pursuing
 NPCs. A local seeded browser result does not imply results for other seeds or
 the deployed release.
+
+### Full NPC ranged playtest follow-up (2026-11-10)
+
+The owner authorizes ranged combat now, superseding the earlier deferral. Use
+`4c8cac4` as baseline and retain local changes for review, without push/deployment.
+Explore must target 10x its baseline actual speed, measured over one clear-route
+second before/after, preserving wall collision and explicit speed zero.
+Wider awareness biases varied reachable Explore goals toward interior action;
+closer engagement retains two sticky slots per player and denied NPCs explore.
+Remove all NPC contact damage. Slot holders stop for clear in-range shots, track
+with facing independent of travel, retreat when crowded, and reposition around
+blocked shots. Every NPC has an attached front square, and shoots equal-sized
+squares along its facing on cooldown; walls block shots.
+
+Verify the combined behavior in a fresh default solo Fixed browser match at a
+normal viewport with ordinary spawns. Record visible interior roaming, actual
+speed, stationary turning/firing, first encounter versus the existing 60-second
+no-kill timeout, no contact damage and at most two active attackers. Separate
+browser observations from simulations and report each behavior as verified,
+failed or untested. Keep original T042 and live-release gates open.
+
+### NPC pace and reserved-color correction (2026-11-10)
+
+This correction supersedes only T016's requested 10x Explore pace: restore the
+default clear-route Explore speed to **33.75 world units/second** and measure it
+again. Measure attack approach independently and keep it readable into weapon
+range. Preserve explicit speed zero, broad interior routes, distributed spawns,
+two sticky attackers per player, stopping outside overlap, turning/firing on
+cooldown, cover repositioning and zero contact damage.
+
+Every enemy body, attached facing square and radar marker MUST share one reserved
+enemy color. Every player MUST have a distinct stable color throughout the full
+supported 32-player roster, including fallback allocation and rejoin; player
+allocation MUST exclude the enemy color. Preserve rotating square NPC bodies and
+square NPC projectiles.
+
+Run focused tests and a real local two-player browser match with a spectator.
+Record separate measured Explore/approach speeds, a visibly stopped firing NPC
+without rushing through the player, and actual arena/radar color checks from both
+players and spectator follow views. Leave all changes local/uncommitted and
+original T042 open; no deployment or capacity result is implied.

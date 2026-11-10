@@ -8,6 +8,8 @@ import {
 import {
   DefaultViewSchema, interpolateEntities, worldToScreen, type DefaultView
 } from "./view.js";
+import { NPC_FRONT_SIZE } from "../module/tuning.js";
+import { NPC_COLOR, PLAYER_COLORS, resolvePlayerColors } from "../colors.js";
 
 const metadata: SkinFactoryMetadata = Object.freeze({
   id: "default",
@@ -23,7 +25,6 @@ const TERRAIN_TILE_SIZE = 32;
 const TERRAIN_TILE_COLORS = Object.freeze(["#2b3d51", "#2d4155"]);
 const TERRAIN_SEAM_COLOR = "#3b5168";
 const TERRAIN_PATTERN_COLOR = "#344a60";
-const NPC_COLOR = "#ed6b61";
 const RADAR_MARGIN = 12;
 const RADAR_Y = 84;
 const RADAR_RADIUS = 72;
@@ -126,6 +127,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     const keys = new Set<string>();
     let previous: DefaultView | undefined;
     let current: DefaultView | undefined;
+    let playerColors: ReadonlyMap<string, string> = new Map();
     let receivedAt = 0;
     let interval = SNAPSHOT_INTERVAL_MS;
     let width = 1;
@@ -293,6 +295,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
         if (current && parsed.data.tick <= current.tick) return;
         previous = current;
         current = parsed.data;
+        playerColors = resolvePlayerColors(current.players);
         if (!autoFocused && current.viewerRole === "player") {
           autoFocused = true;
           // Focus the arena once on entry/rejoin unless the user already focused another control.
@@ -376,13 +379,20 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
           if (screen.x + radius < 0 || screen.y + radius < 0 ||
               screen.x - radius > width || screen.y - radius > height) continue;
           if (entity.state.kind === "npc") {
+            const facing = entity.state.facing ?? { x: 1, y: 0 };
+            context.save();
+            context.translate(screen.x, screen.y);
+            context.rotate(Math.atan2(facing.y, facing.x));
             context.fillStyle = NPC_COLOR;
-            context.fillRect(screen.x - radius, screen.y - radius, radius * 2, radius * 2);
+            context.fillRect(-radius, -radius, radius * 2, radius * 2);
+            context.fillRect(radius, -NPC_FRONT_SIZE / 2, NPC_FRONT_SIZE, NPC_FRONT_SIZE);
+            context.restore();
           } else if (entity.state.kind === "player") {
             const accountId = entity.state.accountId;
             const playerState = current.players.find((item) => item.accountId === accountId);
-            context.fillStyle = playerState?.color ?? entity.state.color ??
-              (accountId === player.accountId ? "#58d6ff" : "#f7db76");
+            const color = playerColors.get(accountId);
+            if (!color) throw new Error("Player entity is missing its roster color.");
+            context.fillStyle = color;
             context.beginPath();
             context.arc(screen.x, screen.y, radius, 0, Math.PI * 2);
             context.fill();
@@ -400,6 +410,10 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
             context.fill();
           } else if (entity.state.kind === "pickup") {
             drawPickup(context, screen, radius, entity.state.pickupType);
+          } else if (entity.state.ownerNpcId !== undefined) {
+            context.fillStyle = "#ffb5ad";
+            context.fillRect(screen.x - NPC_FRONT_SIZE / 2, screen.y - NPC_FRONT_SIZE / 2,
+              NPC_FRONT_SIZE, NPC_FRONT_SIZE);
           } else {
             context.fillStyle = "#ffffff";
             context.beginPath();
@@ -420,13 +434,13 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
             center: camera,
             ...(radarFacing ? { facing: radarFacing } : {}),
             markerColors: {
-              player: "#f7db76", enemy: NPC_COLOR, pickup: "#ffa64d", terrain: "#344a60"
+              player: PLAYER_COLORS[0]!, enemy: NPC_COLOR, pickup: "#ffa64d", terrain: "#344a60"
             },
             markerColorOverrides: Object.fromEntries(current.players.map(item =>
-              [`player:${item.accountId}`, item.color ?? "#f7db76"])),
+              [`player:${item.accountId}`, playerColors.get(item.accountId)!])),
             markerShapes: { pickup: "diamond", terrain: "footprint" },
             enabledCategories: [...enabledCategories],
-            anchorColor: player.color ?? "#58d6ff"
+            anchorColor: playerColors.get(player.accountId)!
           });
           context.fillStyle = "#f4f1e8";
           context.font = "12px sans-serif";

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { DefaultEntitySimulator } from "../themes/default/src/module/entities.js";
+import { NPC_COLOR, PLAYER_COLORS } from "../themes/default/src/colors.js";
 import type { LoadedMap } from "../themes/default/src/module/maps.js";
 import type { GameSettings } from "@multiplayer-game/protocol";
 import {
@@ -36,6 +37,26 @@ const roster: readonly RosterMember[] = [
 ];
 
 describe("default entity movement and pursuit", () => {
+  it("allocates distinct reserved-safe authoritative colors across the full frozen roster", () => {
+    const s = createSimulation([], { npcMovementSpeed: 0, initialNpcsPerPlayer: 1 });
+    s.module.dispose();
+    const simulator = new DefaultEntitySimulator(s.context, 0, 0, 42);
+    const members = Array.from({ length: 32 }, (_, index) => ({
+      accountId: `p${index}`, username: `Player${index}`, joinedOrder: index
+    }));
+    try {
+      simulator.initialize(generateMap(42, "fixed").map, members, 1);
+      const colors = members.map(member =>
+        s.context.entities.get(`player:${member.accountId}`)!.state.color);
+      expect(colors).toEqual(PLAYER_COLORS);
+      expect(new Set(colors).size).toBe(32);
+      expect(colors).not.toContain(NPC_COLOR);
+      simulator.startLevel(2, 1, 50);
+      expect(members.map(member =>
+        s.context.entities.get(`player:${member.accountId}`)!.state.color)).toEqual(colors);
+    } finally { simulator.dispose(); }
+  });
+
   it("routes an ordinarily spawned edge NPC into Fixed interior regions within 30 seconds", () => {
     const simulation = createSimulation([], { npcDetectionRange: 0 }, 42);
     const bounds = { width: 2_048, height: 2_048 };
@@ -301,7 +322,7 @@ describe("default entity movement and pursuit", () => {
         expect(wandering).not.toEqual({ x: 700, y: 700 });
 
         simulation.context.entities.update(player.id, entity => ({
-          ...entity, position: { x: wandering.x + npcDetectionRange, y: wandering.y }
+          ...entity, position: { x: wandering.x + npcDetectionRange - 1, y: wandering.y }
         }));
         simulation.module.step(1 / 30, 121);
 
@@ -452,15 +473,15 @@ describe("default entity movement and pursuit", () => {
       expect(simulation.navigation.outstandingRequests).toBe(1);
       simulation.navigation.processTick();
 
-      // Entry: the completed explore path is drained and direct pursuit wins.
+      // Entry: the completed explore path is drained; a clear shot stops pursuit.
       place(id, { x: 720, y: 700 });
       place("player:player-a", { x: 620, y: 700 });
       simulation.module.step(1 / 30, 2);
-      expect(position()).toEqual({ x: 717.75, y: 700 });
+      expect(position()).toEqual({ x: 720, y: 700 });
 
       // Pursuit blocked by the wall submits a pursuit path request.
       place(id, { x: 727, y: 700 });
-      place("player:player-a", { x: 820, y: 700 });
+      place("player:player-a", { x: 840, y: 700 });
       simulation.module.step(1 / 30, 3);
       expect(simulation.navigation.outstandingRequests).toBe(1);
 
@@ -473,11 +494,11 @@ describe("default entity movement and pursuit", () => {
       expect(resumedTravel).toBeGreaterThan(0);
       expect(resumedTravel).toBeLessThanOrEqual(exploreStep + 1e-8);
 
-      // Re-entry: the stale pursuit path is not followed; pursuit is direct at full speed.
+      // Re-entry: the stale pursuit path is not followed; stop for the clear shot.
       place("player:player-a", { x: resumed.x - 100, y: resumed.y });
       simulation.navigation.processTick();
       simulation.module.step(1 / 30, 5);
-      expect(position().x).toBeCloseTo(resumed.x - 2.25, 6);
+      expect(position().x).toBeCloseTo(resumed.x, 6);
       expect(position().y).toBeCloseTo(resumed.y, 6);
 
       place("player:player-a", { x: 1_900, y: 1_900 });
@@ -586,14 +607,16 @@ describe("default entity movement and pursuit", () => {
   });
 
   it.each([0, 33.75, 67.5, 90, 180])("travels at %s units/second during direct pursuit", npcMovementSpeed => {
-    const simulation = createSimulation([], { npcMovementSpeed });
+    const simulation = createSimulation([], {
+      npcMovementSpeed, npcDetectionRange: 700, initialNpcsPerPlayer: 1
+    });
     const npcId = "npc:npc-northwest";
     try {
       simulation.context.entities.update(npcId, entity => ({
         ...entity, position: { x: 700, y: 700 }
       }));
       simulation.context.entities.update("player:player-a", entity => ({
-        ...entity, position: { x: 1_100, y: 700 }
+        ...entity, position: { x: 1_400, y: 700 }
       }));
       for (let tick = 1; tick <= 30; tick += 1) simulation.module.step(1 / 30, tick);
       expect(simulation.context.entities.get(npcId)!.position.x - 700)
@@ -602,7 +625,7 @@ describe("default entity movement and pursuit", () => {
     } finally { simulation.module.dispose(); }
   });
 
-  it("keeps zero-speed NPCs stationary without disabling contact damage", () => {
+  it("keeps zero-speed NPCs stationary and removes contact damage", () => {
     const simulation = createSimulation([], { npcMovementSpeed: 0 });
     try {
       const npcId = "npc:npc-northwest";
@@ -614,7 +637,7 @@ describe("default entity movement and pursuit", () => {
       }));
       simulation.module.step(1 / 30, 1);
       expect(simulation.context.entities.get(npcId)!.position).toEqual({ x: 700, y: 700 });
-      expect(simulation.context.entities.get("player:player-a")!.state).toMatchObject({ health: 90 });
+      expect(simulation.context.entities.get("player:player-a")!.state).toMatchObject({ health: 100 });
       expect(simulation.navigation.requestsSubmitted).toBe(0);
     } finally { simulation.module.dispose(); }
   });
@@ -643,6 +666,8 @@ describe("default entity movement and pursuit", () => {
 
     let travelled = 0;
     for (let tick = requestTick + 1; tick <= Math.ceil(600 / npcMovementSpeed * 30); tick += 1) {
+      simulation.context.entities.update(playerId, entity => entity.state.kind === "player"
+        ? { ...entity, state: { ...entity.state, health: 100 } } : entity);
       simulation.navigation.processTick();
       const previous = simulation.context.entities.get(npcId)!.position;
       simulation.module.step(1 / 30, tick);
@@ -652,19 +677,19 @@ describe("default entity movement and pursuit", () => {
       expect(simulation.context.geometry.isWalkable(position.x, position.y, 8)).toBe(true);
       travelled += distance;
       if (tick === requestTick + 30) expect(travelled).toBeCloseTo(npcMovementSpeed, 6);
-      if (position.x > wall.x + wall.width && Math.abs(position.y - 1_000) > wall.height / 2) {
+      if (simulation.context.entities.get(npcId)!.state.readyToFire) {
         break;
       }
     }
 
     const position = simulation.context.entities.get(npcId)!.position;
-    expect(position.x).toBeGreaterThan(wall.x + wall.width);
+    expect(simulation.context.entities.get(npcId)!.state.readyToFire).toBe(true);
     expect(Math.abs(position.y - 1_000)).toBeGreaterThan(wall.height / 2);
     expect(simulation.navigation.stats.nodesProcessed).toBeLessThanOrEqual(2_048);
     simulation.module.dispose();
   });
 
-  it("caps per-tick path submissions and keeps contact attacks capability-scoped", () => {
+  it("caps per-tick path submissions and never executes legacy contact capabilities", () => {
     const wall: Rect = { x: 1_000, y: 700, width: 32, height: 700 };
     const simulation = createSimulation([wall]);
     const playerId = "player:player-a";
@@ -707,17 +732,17 @@ describe("default entity movement and pursuit", () => {
     simulation.module.step(1 / 30, 2);
     expect(simulation.context.entities.get(playerId)?.state).toMatchObject({
       kind: "player",
-      health: 90
+      health: 100
     });
     simulation.module.step(0, 20);
     expect(simulation.context.entities.get(playerId)?.state).toMatchObject({
       kind: "player",
-      health: 90
+      health: 100
     });
     simulation.module.step(0, 2 + NPC_CONTACT_COOLDOWN_TICKS);
     expect(simulation.context.entities.get(playerId)?.state).toMatchObject({
       kind: "player",
-      health: 80
+      health: 100
     });
     simulation.module.dispose();
   });

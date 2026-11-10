@@ -1,5 +1,192 @@
 # Local verification
 
+## NPC pace and reserved-color correction (2026-11-10, T017)
+
+**Current local result; supersedes T016's 10x Explore pace and two-tone NPC
+front.** Explore is restored to factor 0.5. Approach intentionally retains the
+independent configured-speed budget: at defaults it is twice Explore, not the
+earlier 10x roaming pace. No commit, push, deployment or capacity run; original
+T042 and deployed-release gates remain open.
+
+| Requirement | Result and executed evidence |
+| --- | --- |
+| Default Explore 33.75 | Clear-route simulation: 33.75 units over 30 updates / one second. Final browser: 33.7500000000001 units, npc:level-1-0011, ticks 2-32. |
+| Separate readable approach | Clear-route simulation: 67.5 units over 30 updates. Final browser: 67.49999908819296 units, npc:npc-northwest, ticks 18-48; target held and not ready to fire throughout. Movement is measured from positions, not inferred from settings. |
+| Stop outside player overlap, turn and fire | Simulation approaches from 500 units, stops at 383 units and fires three times without passing the player. Browser npc:level-1-0008 remains at `(400,624)` through ticks 2-250 (8.267 simulation seconds), changes facing from -0.628 to -2.797 radians and fires at ticks 6/36/66/96/126/156/186/216/246. |
+| Visible standoff | Actual screenshot/Canvas observation at ticks 108-112 shows that NPC stationary, facing the player and firing a square shot, at 214.401 units versus combined overlap radii of 22. Its minimum player separation across the recorded trace is 136.015 units; it never rushes through the player. |
+| Enemy color | Body, attached facing square and all 20 radar markers use `#ed6b61` in both player windows and both spectator follow views. Actual sampled body/front/radar pixels are all `(237,107,97,255)`. |
+| Distinct stable player colors | Gold `#e7b040` and green `#40e7a7` appear on both arena bodies and both radar markers in all four views; actual pixels match `(231,176,64,255)` and `(64,231,167,255)`. Bob's real reload/rejoin retains both original colors. |
+| Full supported roster and fallback | Tests verify authoritative allocation and wave retention for all 32 players; 32 distinct non-red palette entries; missing/reserved/duplicate/mixed legacy fallbacks; deterministic reorder/remount allocation; both roles render all 32 fallback colors consistently in arena and radar. Respawn/disconnect/rejoin tests retain stored color. |
+| Existing behavior | Focused regressions preserve zero-speed travel, broad map-scaled/interior routes and retry budgets, Fixed/generated clearance, distributed spawn bands, two sticky attackers independently per player, stationary turning/cooldown, crowd retreat, cover repositioning and zero contact damage. The browser has at most two targets per player and ordinary 4 outer / 8 middle / 8 interior spawns. |
+| Shapes | Rotating square NPC bodies, same-color attached square fronts and matching-size square NPC projectiles remain; screenshots and both-role skin tests verify them. |
+
+### Final browser conditions
+
+Visible Chrome **157.0.8103.40** on Windows, two actual player windows and one
+spectator window, Fixed seed 42, session
+`369b5db8-bb85-4711-a678-5e8496ee7d6b`. Requested normal windows 1440x900;
+world canvas 1428x748.4 CSS pixels, DPR 2.5. The spectator follows Alice, then
+Bob, through the real roster UI. Color captures are at ticks 62/74/86/102.
+Both players are visible together, with actual enemy bodies/fronts and all
+enemy radar dots in each view. Screenshots were also reviewed.
+
+Commit review rechecked the saved `report.json`, `spectator-follow-a.png` and
+`spectator-follow-b.png`: at ticks 86/102 the selected gold/green player is
+centered at `(714,374.20001220703125)` on the arena and `(1344,84)` on radar.
+Each view contains the same two player bodies and two player radar markers;
+the spectator adds neither an avatar nor a radar marker. The selected player's
+marker is the radar anchor, not an additional spectator. This is review of
+saved local browser evidence, not a new browser run.
+
+The disposable server runs on loopback port 8094 and Vite on 5174, with the
+existing Chrome CDP endpoint on 9223. It loads ignored local `.env` using the
+normal startup loader and process-local test/database/origin overrides. It does
+not modify the existing development server, production settings or persistent
+Windows environment. Readiness/client responses were checked.
+
+Gameplay defaults are read back unchanged: 10 NPCs per player (20 total), 50 HP,
+speed setting 67.5, detection 512, respawn 5 seconds, no-kill timeout 60 seconds,
+five levels. No entity staging, health override or damage immunity. Real keyboard
+input moves both players into a shared viewing area, then moves Alice farther
+away to exercise approach independently. The final trace contains 125 snapshots,
+ticks 2-250: 8.267 simulation seconds over 11.4804 wall-clock seconds.
+
+Local artifacts persist in `var\npc-pace-colors-final-evidence-6\`:
+`report.json`, `trace.json`, `player-b-trace.json`, `player-a.png`, `player-b.png`,
+`spectator-follow-a.png`, `spectator-follow-b.png` and
+`npc-stopped-firing-outside-overlap.png`. These are automated actual-browser
+observations, not human playtesting or deployed/capacity evidence. Contact damage,
+speed zero, exact cover interception and full-roster fallback are simulation/
+rendering-test checks, not claimed as browser contact or 32-player playtests.
+
+### Checks and intermediate corrections
+
+Final focused run: **15 files / 173 passing tests**, with bounded concurrency;
+`npm run check`, browser-script syntax and `git diff --check` also pass.
+
+```powershell
+npm test -- --maxWorkers=2 tests\default-colors.test.ts tests\npc-ranged.test.ts tests\default-skin.test.ts tests\default-entities.test.ts tests\default-respawn.test.ts tests\npc-spawns.test.ts tests\npc-engagement.test.ts tests\radar.test.ts tests\default-combat.test.ts tests\integration\gameplay.test.ts tests\generated-map-integration.test.ts tests\integration\generated-map-runtime.test.ts tests\terrain-density.test.ts tests\wave-countdown.test.ts tests\default-theme.test.ts
+npm run check
+node tests\browser\default-game.mjs --npc-pace-colors
+```
+
+The new tests first reproduced 337.5 instead of 33.75 and the incorrectly
+light-colored facing square. The first implementation build caught an exact-
+optional-property type mismatch. Restoring the slower pace exposed stale
+accelerated-roaming assertions and a floating-point exact detection-edge fixture;
+the latter now places the player one unit inside range. Color filter fixtures
+now use the shared palette rather than arbitrary unsupported colors.
+
+An initial browser pass measured both speeds but used two adjacent yellow hues;
+palette ordering now spaces early slots widely (gold/green in the final match).
+An oversubscribed concurrent browser/test attempt timed out two tests and a
+keyboard rendezvous; the focused suite passes with two workers. Long browser
+routes also exposed waypoint re-planning/corner tolerance in the keyboard helper.
+The helper now retains routes, uses tighter axis tolerance and short ordinary
+routes to put both players on screen. Another attempt watched only Alice's
+offscreen attacker; it now observes either actual player view. One short match
+had no full one-second moving approach, so a real keyboard retreat explicitly
+exercises it; no synthetic speed result or staged NPC was substituted. A reload
+race was corrected before the final successful run, and unavailable post-reload
+diagnostic traces are reported without masking the original failure.
+Failed attempts are not counted as passes. No implementation hooks file exists.
+
+Local commit review (2026-11-10): rebuilt the runtime workspaces and reran the
+15-file selection above plus `tests\spectator-view.test.ts` and
+`tests\integration\spectators.test.ts`: **17 files / 184 tests passed**.
+`npm run check` and syntax checks for the three NPC browser harness scripts
+passed. The owner now authorizes a local NPC-only commit, superseding the earlier
+uncommitted handoff for T016/T017; unrelated edits and original T042 remain open.
+No push, deployment or new browser/capacity run was performed.
+
+## Full NPC ranged playtest (2026-11-10, T016)
+
+**Historical T016 evidence; T017 above supersedes its Explore pace and NPC front
+color. Local only, baseline `4c8cac4`.** Existing worktree edits were preserved.
+No commit, push, deployment, server-setting change or capacity claim. Original
+T042 and the separate deployed-release roaming gates remain open.
+
+### Requested behavior status
+
+| Behavior | Status | Executed evidence |
+| --- | --- | --- |
+| 10x Explore speed | Verified | Same clear-route simulator measured 33.74999999999997 units before and 337.5000000000006 after, over 30 updates / one second. Actual browser snapshots independently measured 337.50000000000017 units between ticks 2 and 32. |
+| Wall collision and speed zero | Verified (simulation) | Accelerated movement cannot cross a one-unit wall; existing real Fixed/generated geometry routes pass. Speed zero disables travel/path requests but permits stationary tracking and ranged fire. |
+| Wider awareness and varied interior/action goals | Verified | Simulation checks six outside-engagement NPCs get distributed interior goals near action. Browser shows a non-engaging interior body at `(956.532,592)` on tick 70 and 3151 interior Explore entity-samples. |
+| Safe distributed ordinary spawns | Verified | Spawn clearance/reachability/quota regressions pass; the ordinary browser wave retains 2 outer / 4 middle / 4 interior NPCs, with no staged entities. |
+| Two engagement slots; denied NPCs still explore | Verified | Sticky assignment, removal/death/range replacement, independent multiplayer caps and four-in-range denied movement pass simulation. Browser maximum is two active target holders across 571 snapshots. |
+| No NPC contact damage | Verified | Simulation checks both admitted/denied NPCs, zero/mobile speed and exact overlap. Real keyboard approach reached an ordinary NPC at 16.121 units (<22 combined radii); health stayed 70 from tick 1130 to 1134. |
+| Stop, independently turn/track, fire on cooldown | Verified | Simulation checks stopping/rotation, aim alignment, one-second cooldown and moving targets. Browser npc:level-1-0007 stays at `(1270.481,1296)`, turns on tick 522 and fires visibly on tick 532. |
+| Retreat and blocked-shot repositioning | Verified (simulation) | Player/NPC crowding and exact overlap separate safely. Real Fixed/generated routes find clear shots; a close player behind a wall does not cause retreat/re-approach oscillation. |
+| Attached front square and matching projectiles | Verified | Skin assertions and actual Canvas/screenshot output show rotating bodies with attached 6-unit markers and 6-unit square projectiles following authoritative facing. |
+| Walls block shots; bounded projectile work | Verified (simulation) | Thin walls prevent firing and intercept in-flight NPC shots. NPC bullets hit players, not NPCs, never award player kills, and obey the shared 1000-projectile ceiling. Post-respawn projectile damage remains immediate, without immunity. |
+| Encounter before existing 60-second timeout | Verified | First browser engagement at tick 24 / 0.8 seconds; first visible projectile at tick 184 / 6.133 seconds. No timer/default settings were changed. |
+| Deployed-release behavior / capacity | Untested | No live deployment or capacity run is authorized; local browser evidence does not resolve those gates. |
+
+### Actual browser conditions and artifacts
+
+Visible Chrome **157.0.8103.40**, Windows, fresh default solo **Fixed, seed 42**,
+session `c1879974-025a-4212-8c1b-cfc1f1bfabb6`. Only map mode/seed were selected;
+ordinary spawns, 10 NPCs, 50 HP, speed setting 67.5, engagement 512, respawn 5
+seconds, maxLevels 5 and no-kill timeout 60 seconds were read back unchanged.
+Requested normal window 1440x900; actual outer 1440x879, content 1428x785,
+world canvas 1428x748.4 CSS pixels, DPR 2.5. No device viewport emulation.
+The first 30.314 wall-clock seconds were idle, followed by ordinary keyboard
+navigation to a slot-holding NPC for contact. Recorded ticks 2-1142 cover **38
+simulation seconds** in 571 snapshots; these are not claimed as 38 wall seconds.
+The idle player died/respawned normally; final life had two deaths, 70 health,
+zero kills and phase active. No health override or entity staging was used.
+
+Screenshots, raw snapshots, measured results and the ordinary track map persist
+locally under `var\npc-ranged-final-evidence\`:
+
+- `visible-interior-explore.png`, `ordinary-track-map.svg`
+- `npc-rotating-in-place.png`, `same-npc-firing-after-turn.png`
+- `npc-firing-square-projectile.png`, `ordinary-keyboard-contact-no-damage.png`
+- `report.json`, `trace.json`
+
+These are automated visible-browser observations and reviewed screenshots, not
+human playtesting or evidence for other seeds/viewports/deployed revisions.
+Terrain interception/cooldown precision, multiplayer allocation, exact overlap
+and speed-zero claims above come from simulation, not this solo browser run.
+
+### Simulation/check execution and corrections
+
+Final focused run: **14 files / 150 passing tests**, followed by successful
+`npm run check`. Browser scripts pass `node --check`; `git diff --check` passes.
+
+```powershell
+npm test -- tests\npc-ranged.test.ts tests\default-entities.test.ts tests\npc-engagement.test.ts tests\default-skin.test.ts tests\default-combat.test.ts tests\npc-spawns.test.ts tests\default-respawn.test.ts tests\wave-countdown.test.ts tests\integration\gameplay.test.ts tests\default-theme.test.ts tests\terrain-density.test.ts tests\generated-map-integration.test.ts tests\integration\generated-map-runtime.test.ts tests\integration\session-lifecycle.test.ts
+npm run check
+node tests\browser\default-game.mjs --npc-ranged
+```
+
+The intentional pre-change speed test failed at 33.75 instead of 337.5.
+Intermediate runs caught stale contact/full-pursuit assertions, a path type
+narrowing error, an accidentally nested new test, and five-second runner limits
+for 15/30-second simulated traces; these were corrected without global timeout
+changes. New ranged routing initially restarted valid paths every 15 ticks,
+making slower NPCs backtrack; it now retains valid routes. Extending verification
+to both actual map modes exposed retreat/re-approach oscillation when a player
+was within 96 units but behind terrain; proximity retreat now requires clear
+separation from walls. Both real-map route tests and a dedicated close-wall
+regression pass. Old whole-NPC-state equality is now a health/no-shot assertion,
+since a stationary NPC must still turn independently.
+
+An intermediate browser acceptance failed because its same-NPC firing check had
+been nested inside the first-turn loop; a separate keyboard approach chased a
+faster denied explorer and did not reach contact. The harness now checks later
+frames and approaches an ordinary slot holder. The final successful fresh match
+above verifies both; failed attempts are not counted as passes.
+
+No movement cap limits the requested normal-tick target: Explore uses factor
+5 instead of 0.5. Engine `WorldGeometry.moveCircle` sweeps both axes; the existing
+four-waypoint per-update Explore bound does not constrain 11.25 units/update at
+the default speed on a clear route. Collision, corners, endpoint pauses and
+terrain/path retries can reduce average roaming progress; 337.5 is the measured
+clear-route rate, not a promise of net displacement through walls.
+No `.specify\extensions.yml` exists, so no implementation hooks are registered.
+
 ## Map-spanning Explore legs (2026-11-09, T014)
 
 Local-only change: target half the map's shorter side instead of 192-512 units,

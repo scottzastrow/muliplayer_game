@@ -12,8 +12,9 @@ const entity = z.object({
       kind: z.literal("player"), accountId: z.string(), deaths: counter,
       color: z.string().min(1).optional(), facing: point.optional()
     }),
-    z.object({ kind: z.literal("npc"), health: z.number().finite().nonnegative() }),
-    z.object({ kind: z.literal("projectile") }),
+    z.object({ kind: z.literal("npc"), health: z.number().finite().nonnegative(),
+      facing: point.optional() }),
+    z.object({ kind: z.literal("projectile"), ownerNpcId: z.string().optional() }),
     z.object({ kind: z.literal("pickup"), pickupType: z.enum(["health", "rapid-fire", "spread"]) })
   ])
 });

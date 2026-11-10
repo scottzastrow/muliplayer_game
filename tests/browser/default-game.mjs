@@ -156,7 +156,13 @@ const probe = `(() => {
       this.canvas.__draw.fillStyles.push(this.fillStyle);
     }
     if (this.fillStyle === '#ed6b61') {
-      this.canvas.__draw?.squares.push({ x, y, w, h, color: this.fillStyle });
+      const m = this.getTransform();
+      const centerX = (m.a*(x+w/2)+m.c*(y+h/2)+m.e)/devicePixelRatio;
+      const centerY = (m.b*(x+w/2)+m.d*(y+h/2)+m.f)/devicePixelRatio;
+      this.canvas.__draw?.squares.push({
+        x:centerX-w/2, y:centerY-h/2, centerX, centerY,
+        angle:Math.atan2(m.b,m.a), w, h, color:this.fillStyle
+      });
     }
     if (this.fillStyle === '#2b3d51' || this.fillStyle === '#2d4155') {
       this.canvas.__draw?.terrain.push({ x, y, w, h, color: this.fillStyle });
@@ -704,7 +710,29 @@ async function fireWhileAiming(page, targetForView, duration, npcTrace) {
 }
 
 try {
-  if (process.argv.includes("--npc-roaming") || process.argv.includes("--npc-explore-routes")) {
+  if (process.argv.includes("--npc-pace-colors")) {
+    const alice = await newWindow();
+    const bob = await newWindow();
+    const observer = await newWindow();
+    const suffix = Date.now().toString(36);
+    const creator = `PaceA_${suffix}`;
+    const bobName = `PaceB_${suffix}`;
+    const password = randomUUID();
+    await signIn(alice, creator, password);
+    await signIn(bob, bobName, password);
+    await signIn(observer, `PaceWatch_${suffix}`, password);
+    const { verifyNpcPaceColors } = await import("./npc-pace-colors.mjs");
+    await verifyNpcPaceColors({ alice, bob, observer, creator, bobName,
+      cdp, evaluate, waitFor, click, clickSessionButton, state, own, delay,
+      browser: version.Browser, origin });
+  } else if (process.argv.includes("--npc-ranged")) {
+    const playerPage = await newWindow();
+    const creator = `Ranged_${Date.now().toString(36)}`;
+    await signIn(playerPage, creator, randomUUID());
+    const { verifyNpcRanged } = await import("./npc-ranged.mjs");
+    await verifyNpcRanged({ playerPage, creator, cdp, evaluate, waitFor, click,
+      clickSessionButton, state, delay, browser: version.Browser, origin });
+  } else if (process.argv.includes("--npc-roaming") || process.argv.includes("--npc-explore-routes")) {
     const playerPage = await newWindow();
     const creator = `Roam_${Date.now().toString(36)}`;
     await signIn(playerPage, creator, randomUUID());

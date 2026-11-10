@@ -4,6 +4,7 @@ import type { SkinHost } from "@multiplayer-game/theme-sdk";
 import {
   DefaultViewSchema, interpolateEntities, worldToScreen, type DefaultView
 } from "../themes/default/src/skin/view.js";
+import { NPC_COLOR, PLAYER_COLORS } from "../themes/default/src/colors.js";
 
 function view(x: number, deaths = 0): DefaultView {
   return DefaultViewSchema.parse({
@@ -13,10 +14,10 @@ function view(x: number, deaths = 0): DefaultView {
       { id: "npc-1", category: "enemy", position: { x: x + 100, y: 100 } }
     ] },
     players: [{ accountId: "alice", position: { x, y: 100 }, points: 200, health: 90,
-      alive: true, deaths, color: "hsl(25 78% 58%)", facing: { x: 0, y: -1 } }],
+      alive: true, deaths, color: PLAYER_COLORS[0]!, facing: { x: 0, y: -1 } }],
     entities: [{ id: "player:alice", radius: 14, position: { x, y: 100 },
       state: { kind: "player", accountId: "alice", deaths,
-        color: "hsl(25 78% 58%)", facing: { x: 0, y: -1 } } }]
+        color: PLAYER_COLORS[0]!, facing: { x: 0, y: -1 } } }]
   });
 }
 
@@ -35,6 +36,7 @@ class HudElement extends EventTarget {
   readonly drawnArcs: { x: number; y: number; radius: number }[] = [];
   readonly children: HudElement[] = [];
   readonly drawnColors: string[] = [];
+  readonly drawnRotations: number[] = [];
   readonly drawnRects: { x: number; y: number; width: number; height: number; color: string }[] = [];
   name = "";
   type = "";
@@ -60,6 +62,8 @@ class HudElement extends EventTarget {
       arc: (x: number, y: number, radius: number) => this.drawnArcs.push({ x, y, radius }),
       fill: () => this.drawnColors.push(color), strokeRect() {},
       save() {}, restore() {}, clip() {}, stroke() {}, moveTo() {}, lineTo() {},
+      translate() {},
+      rotate: (angle: number) => this.drawnRotations.push(angle),
       fillText: (text: string, x: number, y: number) => {
         this.drawnText.push(text);
         this.drawnLabels.push({ text, x, y });
@@ -74,6 +78,113 @@ class HudElement extends EventTarget {
 
 describe("Dots and Squares presentation", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it.each(["player", "spectator"] as const)(
+    "renders 32 distinct fallback colors consistently in arena and radar after rejoin (%s)", role => {
+      vi.stubGlobal("document", Object.assign(new EventTarget(), {
+        createTextNode: (text: string) => Object.assign(new HudElement(), { textContent: text }),
+        createElement: () => new HudElement()
+      }));
+      vi.stubGlobal("window", new EventTarget());
+      const base = view(100);
+      const players = Array.from({ length: 32 }, (_, index) => {
+        const { color: _color, ...player } = base.players[0]!;
+        return { ...player, accountId: index === 0 ? "alice" : `p${index}`,
+          position: { x: 100 + (index % 8) * 24, y: 100 + Math.floor(index / 8) * 24 } };
+      });
+      const snapshot: DefaultView = {
+        ...base, viewerRole: role, players,
+        ...(role === "spectator" ? { spectatorView: {
+          targetAccountId: "alice", cameraAnchor: { x: 100, y: 100 },
+          hud: { points: 200, health: 90 }, death: { alive: true, remainingSeconds: 0 }
+        } } : {}),
+        entities: players.map(player => ({
+          id: `player:${player.accountId}`, radius: 14, position: player.position,
+          state: { kind: "player", accountId: player.accountId, deaths: 0 }
+        })),
+        radar: { categories: ["player"], markers: players.slice(1).map(player => ({
+          id: `player:${player.accountId}`, category: "player", position: player.position
+        })) }
+      };
+      const render = (value: DefaultView) => {
+        const host: SkinHost = {
+          slots: new Map(["world", "hud", "controls"].map(name => [name, document.createElement("div")])),
+          selectedTarget: { accountId: "alice", username: "Alice" },
+          cameraAnchor: undefined, setCameraAnchor(anchor) { this.cameraAnchor = anchor; },
+          dispatchInput: vi.fn(), navigate: () => {}
+        };
+        const skin = defaultSkinFactory.mount(host, {
+          image: async () => { throw new Error("No images used."); },
+          audio: async () => { throw new Error("No audio used."); }
+        });
+        try {
+          skin.handleViewport(800, 600, 1);
+          skin.handleSnapshot(value);
+          skin.render(0, value);
+          const canvas = (host.slots.get("world") as unknown as HudElement).children[0]!;
+          for (const color of PLAYER_COLORS) {
+            // Body and facing dot in the arena, plus own/fellow-player radar marker.
+            expect(canvas.drawnColors.filter(item => item === color).length).toBeGreaterThanOrEqual(3);
+          }
+          expect(canvas.drawnColors).not.toContain(NPC_COLOR);
+          return canvas.drawnColors;
+        } finally { skin.dispose(); }
+      };
+      expect(render(structuredClone(snapshot))).toEqual(render(snapshot));
+    }
+  );
+
+  it.each(["player", "spectator"] as const)(
+    "uses the reserved enemy color on rotating bodies, facing squares and radar for %s", role => {
+    vi.stubGlobal("document", Object.assign(new EventTarget(), {
+      createTextNode: (text: string) => Object.assign(new HudElement(), { textContent: text }),
+      createElement: () => new HudElement()
+    }));
+    vi.stubGlobal("window", new EventTarget());
+    const host: SkinHost = {
+      slots: new Map(["world", "hud", "controls"].map(name => [name, document.createElement("div")])),
+      selectedTarget: { accountId: "alice", username: "Alice" },
+      cameraAnchor: undefined, setCameraAnchor(anchor) { this.cameraAnchor = anchor; },
+      dispatchInput: vi.fn(), navigate: () => {}
+    };
+    const skin = defaultSkinFactory.mount(host, {
+      image: async () => { throw new Error("No images used."); },
+      audio: async () => { throw new Error("No audio used."); }
+    });
+    const snapshot = { ...view(100), viewerRole: role,
+      ...(role === "spectator" ? { spectatorView: {
+        targetAccountId: "alice", cameraAnchor: { x: 100, y: 100 },
+        hud: { points: 200, health: 90 }, death: { alive: true, remainingSeconds: 0 }
+      } } : {}), entities: [
+      ...view(100).entities,
+      { id: "npc", radius: 8, position: { x: 200, y: 100 },
+        state: { kind: "npc", health: 50, facing: { x: 0, y: 1 } } },
+      { id: "shot", radius: 6 / Math.SQRT2, position: { x: 200, y: 150 },
+        state: { kind: "projectile", ownerNpcId: "npc" } }
+    ] };
+    try {
+      skin.handleViewport(800, 600, 1);
+      skin.handleSnapshot(snapshot);
+      skin.render(0, snapshot);
+      const canvas = (host.slots.get("world") as unknown as HudElement).children[0]!;
+      expect(canvas.drawnRotations).toContain(Math.PI / 2);
+      expect(canvas.drawnRects).toContainEqual({
+        x: -8, y: -8, width: 16, height: 16, color: "#ed6b61"
+      });
+      expect(canvas.drawnRects).toContainEqual({
+        x: 8, y: -3, width: 6, height: 6, color: "#ed6b61"
+      });
+      expect(canvas.drawnColors).toContain("#ed6b61");
+      expect(canvas.drawnRects).toContainEqual({
+        x: 497, y: 347, width: 6, height: 6, color: "#ffb5ad"
+      });
+      const turned = { ...snapshot, tick: 4, entities: snapshot.entities.map(entity =>
+        entity.id === "npc" ? { ...entity, state: { ...entity.state, facing: { x: 1, y: 0 } } } : entity) };
+      skin.handleSnapshot(turned);
+      skin.render(100, turned);
+      expect(canvas.drawnRotations.at(-1)).toBe(0);
+    } finally { skin.dispose(); }
+  });
 
   it.each(["player", "spectator"] as const)("shows compact stats, arena wave counts and intermission standings for %s", role => {
     const elements: HudElement[] = [];
@@ -534,7 +645,7 @@ describe("Dots and Squares presentation", () => {
       hud: { points: 200, health: 90 }, death: { alive: true, remainingSeconds: 0 }
     };
     snapshot.players.push({
-      ...snapshot.players[0]!, accountId: "bob", color: "#00ff00", position: { x: 200, y: 100 }
+      ...snapshot.players[0]!, accountId: "bob", color: PLAYER_COLORS[1]!, position: { x: 200, y: 100 }
     });
     snapshot.radar = { categories: ["player", "enemy", "pickup", "terrain"], markers: [
       { id: "player:bob", category: "player", position: { x: 200, y: 100 } },
@@ -546,7 +657,7 @@ describe("Dots and Squares presentation", () => {
     const original = structuredClone(snapshot);
     const drawing = elements[3]!;
     const inputs = elements.filter(element => element.type === "checkbox");
-    const colors = ["#00ff00", "#ed6b61", "#ffa64d", "#344a60"];
+    const colors = [PLAYER_COLORS[1]!, "#ed6b61", "#ffa64d", "#344a60"];
     expect(inputs.map(input => input.name)).toEqual([
       "radar-player", "radar-enemy", "radar-pickup", "radar-terrain"
     ]);

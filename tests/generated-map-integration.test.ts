@@ -101,7 +101,8 @@ describe("generated Dots and Squares map integration", () => {
         type: "combat", moveX: 0, moveY: 0, aimX: target.x, aimY: target.y, fire: true
       });
       for (let tick = 16; tick <= 30; tick += 1) module.step(1 / 30, tick);
-      expect(world.getEntity(npc.id)?.state).toEqual(npc.state);
+      expect(world.getEntity(npc.id)?.state.health).toBe(npc.state.health);
+      expect(world.getEntity(npc.id)?.state.readyToFire).toBe(false);
       expect(world.entities().filter(entity => entity.state.kind === "projectile")).toHaveLength(0);
 
       world.removeEntity(npc.id);
@@ -122,19 +123,19 @@ describe("generated Dots and Squares map integration", () => {
         world.addEntity({ ...world.getEntity("player:alice")!, position: start });
         world.addEntity({ ...pursuer, position: target });
         const previousRequests = nextId;
-        let crossed = false;
+        let clearShot = false;
         for (let tick = 1; tick <= 240; tick += 1) {
           pursuing.step(1 / 30, tick);
           navigation.processTick();
           const current = world.getEntity(pursuer.id)!;
           expect(world.geometry.isCircleWalkable(current.position, current.radius)).toBe(true);
-          if (current.position.x < obstacle.x - current.radius) {
-            crossed = true;
+          if (current.state.readyToFire) {
+            clearShot = true;
             break;
           }
         }
         expect(nextId).toBeGreaterThan(previousRequests);
-        expect(crossed).toBe(true);
+        expect(clearShot).toBe(true);
       } finally {
         pursuing.dispose();
       }

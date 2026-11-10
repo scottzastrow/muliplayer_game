@@ -8,8 +8,11 @@ import {
   PLAYER_SHOT_SPEED,
   PROJECTILE_LIFETIME_TICKS,
   PROJECTILE_RADIUS,
-  SPREAD_ANGLE_RADIANS
+  SPREAD_ANGLE_RADIANS,
+  NPC_FIRE_COOLDOWN_TICKS, NPC_SHOT_DAMAGE, NPC_SHOT_SPEED, NPC_FRONT_SIZE,
+  NPC_SHOT_RANGE, NPC_KEEP_DISTANCE, MAX_NPC_ATTACKERS_PER_PLAYER
 } from "./tuning.js";
+import { hasNpcShot, NPC_PROJECTILE_RADIUS } from "./npc-shot.js";
 import { DefaultPickupSimulator } from "./pickups.js";
 import type {
   DefaultEntity,
@@ -24,6 +27,7 @@ const MAX_PROJECTILE_STEP_DISTANCE = PROJECTILE_RADIUS;
 
 export class DefaultCombatSimulator {
   readonly #lastShotTick = new Map<string, number>();
+  readonly #lastNpcShotTick = new Map<string, number>();
   readonly #fireInputs = new Map<string, Readonly<{ aim: Point2; fire: boolean }>>();
   readonly #pickups: DefaultPickupSimulator;
   #nextProjectileId = 0;
@@ -43,6 +47,7 @@ export class DefaultCombatSimulator {
     }
     this.#pickups.expireEffects(tick);
     this.#fire(tick);
+    this.#fireNpcs(tick);
     this.#moveProjectiles(tick);
     this.#pickups.claimAvailable(tick);
   }
@@ -68,6 +73,7 @@ export class DefaultCombatSimulator {
       }
     }
     this.#lastShotTick.clear();
+    this.#lastNpcShotTick.clear();
     this.#fireInputs.clear();
     this.#disposed = true;
   }
@@ -161,6 +167,48 @@ export class DefaultCombatSimulator {
     });
   }
 
+  #fireNpcs(tick: number): void {
+    for (const id of this.#lastNpcShotTick.keys()) {
+      if (this.context.entities.get(id)?.state.kind !== "npc") this.#lastNpcShotTick.delete(id);
+    }
+    const attackers = new Map<string, number>();
+    for (const npc of this.context.entities.values()) {
+      if (npc.state.kind !== "npc" || npc.state.health <= 0 ||
+        !npc.state.targetId || !npc.state.readyToFire || !npc.state.facing) continue;
+      const target = this.context.entities.get(npc.state.targetId);
+      if (target?.state.kind !== "player" || target.state.health <= 0) continue;
+      const count = attackers.get(target.id) ?? 0;
+      if (count >= MAX_NPC_ATTACKERS_PER_PLAYER) continue;
+      attackers.set(target.id, count + 1);
+      const range = distance(npc.position, target.position);
+      if (range < NPC_KEEP_DISTANCE || range > NPC_SHOT_RANGE ||
+        !hasNpcShot(this.context, npc.position, target.position)) continue;
+      const previousTick = this.#lastNpcShotTick.get(npc.id) ?? -Infinity;
+      if (tick - previousTick < NPC_FIRE_COOLDOWN_TICKS) continue;
+      if (this.#projectileCount() >= MAX_PROJECTILES_PER_SESSION) {
+        this.context.metrics.increment("default.projectile.rejected_cap");
+        continue;
+      }
+      const direction = npc.state.facing;
+      const muzzle = {
+        x: npc.position.x + direction.x * (npc.radius + NPC_FRONT_SIZE / 2),
+        y: npc.position.y + direction.y * (npc.radius + NPC_FRONT_SIZE / 2)
+      };
+      if (!hasNpcShot(this.context, npc.position, muzzle)) continue;
+      this.#lastNpcShotTick.set(npc.id, tick);
+      this.context.entities.add({
+        id: `projectile:${this.#nextProjectileId++}`, typeId: "projectile.npc",
+        position: muzzle, radius: NPC_PROJECTILE_RADIUS,
+        state: {
+          kind: "projectile", ownerAccountId: "", ownerNpcId: npc.id,
+          damage: NPC_SHOT_DAMAGE,
+          velocity: { x: direction.x * NPC_SHOT_SPEED, y: direction.y * NPC_SHOT_SPEED },
+          expiresAtTick: tick + PROJECTILE_LIFETIME_TICKS
+        }
+      });
+    }
+  }
+
   #moveProjectiles(tick: number): void {
     const projectiles = this.context.entities.values().filter(
       (entity): entity is DefaultEntity & { state: DefaultProjectileState } =>
@@ -192,19 +240,28 @@ export class DefaultCombatSimulator {
           break;
         }
 
-        const nearbyNpcs = this.context.entities
+        const nearbyTargets = this.context.entities
           .queryRadius(
             desired,
             Math.hypot(desired.x - previous.x, desired.y - previous.y) + 32,
             MAX_PROJECTILE_QUERY_CELLS
           )
           .filter(
-            (entity): entity is DefaultEntity & { state: DefaultNpcState } =>
-              entity.state.kind === "npc"
+            (entity): entity is DefaultEntity & { state: DefaultNpcState | DefaultPlayerState } =>
+              projectile.state.ownerNpcId !== undefined
+                ? entity.state.kind === "player" && entity.state.health > 0
+                : entity.state.kind === "npc" && entity.state.health > 0
           );
-        const hit = nearestSegmentHit(previous, desired, nearbyNpcs);
+        const hit = nearestSegmentHit(previous, desired, nearbyTargets, projectile.radius);
         if (hit) {
-          this.#applyHit(projectile, hit);
+          if (hit.state.kind === "player") {
+            this.context.entities.update(hit.id, current => current.state.kind === "player"
+              ? { ...current, state: { ...current.state,
+                health: Math.max(0, current.state.health - projectile.state.damage) } }
+              : current);
+          } else {
+            this.#applyHit(projectile, { ...hit, state: hit.state });
+          }
           this.context.entities.remove(projectile.id);
           removed = true;
           break;
@@ -288,9 +345,10 @@ export class DefaultCombatSimulator {
 function nearestSegmentHit(
   start: Point2,
   end: Point2,
-  npcs: readonly (DefaultEntity & { state: DefaultNpcState })[]
-): (DefaultEntity & { state: DefaultNpcState }) | undefined {
-  let nearest: (DefaultEntity & { state: DefaultNpcState }) | undefined;
+  npcs: readonly (DefaultEntity & { state: DefaultNpcState | DefaultPlayerState })[],
+  projectileRadius: number
+): (DefaultEntity & { state: DefaultNpcState | DefaultPlayerState }) | undefined {
+  let nearest: (DefaultEntity & { state: DefaultNpcState | DefaultPlayerState }) | undefined;
   let nearestT = Infinity;
   for (const npc of npcs) {
     const t = segmentProjection(start, end, npc.position);
@@ -298,7 +356,7 @@ function nearestSegmentHit(
       x: start.x + (end.x - start.x) * t,
       y: start.y + (end.y - start.y) * t
     };
-    if (distance(closest, npc.position) <= npc.radius + PROJECTILE_RADIUS && t < nearestT) {
+    if (distance(closest, npc.position) <= npc.radius + projectileRadius && t < nearestT) {
       nearest = npc;
       nearestT = t;
     }

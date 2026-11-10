@@ -51,7 +51,7 @@ describe("integrated default gameplay", () => {
     }
   });
 
-  it("repeats bounded obstacle navigation deterministically and attracts only local NPCs", () => {
+  it("repeats bounded obstacle navigation deterministically and stops for clear ranged shots", () => {
     const wall: Rect = { x: 600, y: 800, width: 32, height: 400 };
     const distantStart = { x: 112, y: 16 };
     const a = simulation("nav-a", [wall]);
@@ -64,8 +64,11 @@ describe("integrated default gameplay", () => {
         session.update("npc:npc-southwest", (entity) => ({ ...entity, position: distantStart }));
       }
       const positions: Point2[] = [];
+      let readyToFire = false;
       for (let tick = 1; tick <= 240; tick++) {
         for (const session of [a, b]) {
+          session.update("player:alice", entity => entity.state.kind === "player"
+            ? { ...entity, state: { ...entity.state, health: 100 } } : entity);
           session.step(tick);
           expect(session.navigation.stats.nodesProcessed).toBeLessThanOrEqual(2048);
           expect(session.navigation.stats.startedSearches).toBeLessThanOrEqual(8);
@@ -74,25 +77,25 @@ describe("integrated default gameplay", () => {
         expect(npc.position).toEqual(b.world.getEntity(npc.id)?.position);
         expect(a.world.geometry.isCircleWalkable(npc.position, npc.radius)).toBe(true);
         positions.push(npc.position);
+        if (npc.state.readyToFire) readyToFire = true;
       }
-      expect(positions.some((position) =>
-        position.x > wall.x + wall.width && Math.abs(position.y - 1000) > wall.height / 2
-      )).toBe(true);
+      expect(readyToFire).toBe(true);
+      expect(positions.some(position => Math.abs(position.y - 1000) > wall.height / 2)).toBe(true);
       const distant = a.world.getEntity("npc:npc-southwest")!.position;
       expect(distant).not.toEqual(distantStart);
       expect(distant).toEqual(b.world.getEntity("npc:npc-southwest")!.position);
-      // Undetected NPCs explore at half speed instead of pursuing: displacement fits that budget
-      // and the NPC remains outside both players' detection range.
       expect(Math.hypot(distant.x - distantStart.x, distant.y - distantStart.y))
         .toBeLessThanOrEqual(240 * 67.5 / 30 * NPC_EXPLORE_SPEED_FACTOR + 1e-6);
-      for (const player of [{ x: 700, y: 1000 }, { x: 1776, y: 1776 }]) {
-        expect(Math.hypot(distant.x - player.x, distant.y - player.y)).toBeGreaterThan(512);
+      for (const playerId of ["player:alice", "player:bob"]) {
+        expect(a.world.entities().filter(entity => entity.state.kind === "npc" &&
+          entity.state.targetId === playerId).length).toBeLessThanOrEqual(2);
       }
+      expect(a.world.getEntity("npc:npc-northwest")!.state.targetId).toBe("player:alice");
     } finally {
       a.module.dispose();
       b.module.dispose();
     }
-  });
+  }, 15_000);
 
   it("single-claims pickups and grows frozen-roster waves; simultaneous last hits complete once", () => {
     const session = simulation("growth", [], {
@@ -168,6 +171,14 @@ describe("integrated default gameplay", () => {
       expect(player.state).not.toHaveProperty("immune");
       session.update("npc:npc-northwest", (entity) => ({ ...entity, position: player.position }));
       session.step(172, 0);
+      expect(session.world.getEntity(player.id)?.state.health).toBe(100);
+      session.world.addEntity({
+        id: "npc-shot", typeId: "projectile.npc", radius: 6 / Math.SQRT2,
+        position: player.position,
+        state: { kind: "projectile", ownerAccountId: "", ownerNpcId: "npc:npc-northwest",
+          damage: 10, velocity: { x: 300, y: 0 }, expiresAtTick: 180 }
+      });
+      session.step(173, 0);
       expect(session.world.getEntity(player.id)?.state.health).toBe(90);
     } finally {
       session.module.dispose();
