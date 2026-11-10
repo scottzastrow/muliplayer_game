@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -18,6 +18,7 @@ const expectedMigrations = [
 "006-fixture-theme.sql",
 "007-account-control-mode.sql",
 "008-match-completion-reason.sql",
+"009-first-person-controls.sql",
 ];
 
 let temporaryDirectory: string | undefined;
@@ -30,6 +31,29 @@ afterEach(() => {
 });
 
 describe("SQLite migrations and restart reconciliation", () => {
+  it("preserves existing control choices when adding First-Person", () => {
+    const database = openDatabase(":memory:");
+    try {
+      for (const name of expectedMigrations.slice(0, -1)) {
+        database.exec(readFileSync(join(DEFAULT_MIGRATIONS_DIRECTORY, name), "utf8"));
+      }
+      const modes = ["keyboard-only", "keyboard-mouse", null];
+      const insert = database.prepare(
+        `INSERT INTO accounts
+         (id, username, normalized_username, password_hash, password_salt, role, created_at, control_mode)
+         VALUES (?, ?, ?, 'test-hash', 'test-salt', 'player', 'now', ?)`
+      );
+      modes.forEach((mode, index) => insert.run(`p${index}`, `user${index}`, `user${index}`, mode));
+      database.exec(readFileSync(join(DEFAULT_MIGRATIONS_DIRECTORY, expectedMigrations.at(-1)!), "utf8"));
+      expect(database.prepare("SELECT control_mode FROM accounts ORDER BY id").all())
+        .toEqual(modes.map(control_mode => ({ control_mode })));
+      expect(() => database.prepare("UPDATE accounts SET control_mode = 'first-person'").run())
+        .not.toThrow();
+      expect(() => database.prepare("UPDATE accounts SET control_mode = 'gamepad'").run()).toThrow();
+      expect(database.pragma("foreign_key_check")).toEqual([]);
+    } finally { database.close(); }
+  });
+
   it("enables WAL/foreign keys and applies migrations once", () => {
     temporaryDirectory = mkdtempSync(join(tmpdir(), "multiplayer-game-db-"));
     const database = openDatabase(join(temporaryDirectory, "test.sqlite"));

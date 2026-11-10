@@ -3,6 +3,7 @@ import { z } from "zod";
 export const DefaultCombatActionSchema = z
   .object({
     type: z.literal("combat"),
+    controlMode: z.enum(["keyboard-only", "keyboard-mouse", "first-person"]).optional(),
     moveX: z.number().finite().min(-1).max(1),
     moveY: z.number().finite().min(-1).max(1),
     aimX: z.number().finite(),

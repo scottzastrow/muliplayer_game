@@ -318,7 +318,7 @@ describe("default entity movement and pursuit", () => {
       const facing = { x: Math.cos(radians(facingDegrees)), y: Math.sin(radians(facingDegrees)) };
       try {
         module.applyInput("player-a", {
-          type: "combat",
+          type: "combat", controlMode: "first-person",
           moveX: Math.cos(radians(inputDegrees)) * magnitude,
           moveY: Math.sin(radians(inputDegrees)) * magnitude,
           aimX: player.position.x + facing.x * 100,
@@ -345,7 +345,8 @@ describe("default entity movement and pursuit", () => {
     const aim = { x: player.position.x, y: player.position.y - 100 };
     try {
       module.applyInput("player-a", {
-        type: "combat", moveX: 1, moveY: 0, aimX: aim.x, aimY: aim.y, fire: true
+        type: "combat", controlMode: "first-person",
+        moveX: 1, moveY: 0, aimX: aim.x, aimY: aim.y, fire: true
       });
       module.step(1 / 30, 1);
       const moved = context.entities.get(player.id)!;
@@ -363,6 +364,31 @@ describe("default entity movement and pursuit", () => {
     } finally { module.dispose(); }
   });
 
+  it.each(["keyboard-only", "keyboard-mouse", undefined] as const)(
+    "keeps held movement unsteered in %s mode", (controlMode) => {
+      const { context, module } = createSimulation([], { npcMovementSpeed: 0 });
+      const player = context.entities.get("player:player-a")!;
+      try {
+        module.applyInput("player-a", {
+          type: "combat", controlMode: "first-person", moveX: 0.4, moveY: 0,
+          aimX: player.position.x, aimY: player.position.y - 100, fire: false
+        });
+        module.applyInput("player-a", {
+          type: "combat", controlMode, moveX: 0.4, moveY: 0,
+          aimX: player.position.x, aimY: player.position.y - 100, fire: false
+        });
+        for (let tick = 1; tick <= 10; tick++) {
+          const before = context.entities.get(player.id)!;
+          module.step(1 / 30, tick);
+          const after = context.entities.get(player.id)!;
+          expect(after.position.x - before.position.x).toBeCloseTo(PLAYER_SPEED * 0.4 / 30, 8);
+          expect(after.position.y).toBe(before.position.y);
+          expect(after.state.facing).toEqual({ x: 0, y: -1 });
+        }
+      } finally { module.dispose(); }
+    }
+  );
+
   it("spins through a full turn at rest without translating", () => {
     const { context, module } = createSimulation([], { npcMovementSpeed: 0 });
     const player = context.entities.get("player:player-a")!;
@@ -370,7 +396,7 @@ describe("default entity movement and pursuit", () => {
       for (let tick = 1; tick <= 12; tick++) {
         const angle = tick * Math.PI / 6;
         module.applyInput("player-a", {
-          type: "combat", moveX: 0, moveY: 0,
+          type: "combat", controlMode: "first-person", moveX: 0, moveY: 0,
           aimX: player.position.x + Math.cos(angle) * 100,
           aimY: player.position.y + Math.sin(angle) * 100, fire: false
         });

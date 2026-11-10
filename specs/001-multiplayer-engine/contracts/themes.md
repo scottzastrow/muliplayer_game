@@ -135,6 +135,11 @@ The host sets `controls.dataset.controlMode` to the authenticated account prefer
 Keyboard Only maps WASD to screen-direction movement and facing, left/right arrows
 to turning in place, and Space to firing. Keyboard + Mouse maps all arrows to
 screen-direction movement and facing, mouse movement to aim and left click to firing.
+First-Person uses Keyboard Only bindings and is the only mode that rotates held
+movement 30% of the shortest signed angle toward facing each authoritative update.
+The skin includes `controlMode` (`keyboard-only`, `keyboard-mouse`, `first-person`)
+in its default-theme combat intent; missing mode preserves unsteered legacy input.
+Existing account preferences and nullable legacy choices survive migration.
 Movement is normalized diagonally. A newly pressed movement key sets facing once;
 holding it, including browser key auto-repeat, maintains movement without overriding
 subsequent mouse aim or keyboard rotation. Turning and firing do not change the held

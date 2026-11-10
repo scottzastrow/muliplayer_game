@@ -45,9 +45,11 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     if (!world || !hud || !controls) throw new Error("The default skin requires world, hud and controls slots.");
     const canvas = document.createElement("canvas");
     canvas.tabIndex = 0;
-    const controlMode = controls.dataset.controlMode === "keyboard-only"
-      ? "keyboard-only" : "keyboard-mouse";
-    canvas.setAttribute("aria-label", controlMode === "keyboard-only"
+    const selectedMode = controls.dataset.controlMode;
+    const controlMode = selectedMode === "keyboard-only" || selectedMode === "first-person"
+      ? selectedMode : "keyboard-mouse";
+    const keyboardControls = controlMode !== "keyboard-mouse";
+    canvas.setAttribute("aria-label", keyboardControls
       ? "Dots and Squares game. WASD to move and face, left and right arrows to turn, Space to fire."
       : "Dots and Squares game. Arrow keys to move and face, mouse to aim, left click to fire.");
     canvas.style.display = "block";
@@ -94,9 +96,12 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     optionsTitle.textContent = "Controls & radar";
     options.append(optionsTitle);
     const help = document.createElement("p");
-    help.textContent = controlMode === "keyboard-only"
+    help.textContent = keyboardControls
       ? "The game is focused when the match opens; click it to refocus. WASD: move and face. Left/Right arrows: turn in place. Space: fire."
       : "The game is focused when the match opens; click it to refocus. Arrow keys: move and face. Mouse: aim. Left click: fire.";
+    if (controlMode === "first-person") {
+      help.textContent += " First-Person: held movement steers 30% toward facing.";
+    }
     options.append(help);
     controls.append(options);
     world.append(canvas, life, terrainCoverage);
@@ -250,10 +255,10 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     }
 
     function movement(): { x: number; y: number } {
-      const x = controlMode === "keyboard-only"
+      const x = keyboardControls
         ? Number(keys.has("KeyD")) - Number(keys.has("KeyA"))
         : Number(keys.has("ArrowRight")) - Number(keys.has("ArrowLeft"));
-      const y = controlMode === "keyboard-only"
+      const y = keyboardControls
         ? Number(keys.has("KeyS")) - Number(keys.has("KeyW"))
         : Number(keys.has("ArrowDown")) - Number(keys.has("ArrowUp"));
       const magnitude = Math.hypot(x, y);
@@ -261,7 +266,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     }
 
     function isMovementKey(code: string): boolean {
-      return (controlMode === "keyboard-only"
+      return (keyboardControls
         ? ["KeyW", "KeyA", "KeyS", "KeyD"]
         : ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]).includes(code);
     }
@@ -276,7 +281,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     }
 
     function isControlKey(code: string): boolean {
-      return controlMode === "keyboard-only"
+      return keyboardControls
         ? ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowLeft", "ArrowRight", "Space"].includes(code)
         : ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(code);
     }
@@ -355,7 +360,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
           item.state.kind === "player" && item.state.accountId === player.accountId);
         const observed = current.viewerRole === "spectator" ? current.spectatorView : undefined;
         const camera = observed?.cameraAnchor ?? avatar?.position ?? player.position;
-        const turnDirection = controlMode === "keyboard-only"
+        const turnDirection = keyboardControls
           ? Number(keys.has("ArrowRight")) - Number(keys.has("ArrowLeft"))
           : 0;
         if (focused && turnDirection !== 0 && current.phase === "active" &&
@@ -487,9 +492,10 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
           sending = true;
           host.dispatchInput({
             type: "combat",
+            controlMode,
             moveX: direction.x, moveY: direction.y,
             aimX: aim.x, aimY: aim.y,
-            fire: controlMode === "keyboard-only" ? keys.has("Space") : fire
+            fire: keyboardControls ? keys.has("Space") : fire
           });
         }
 

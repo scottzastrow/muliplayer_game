@@ -1,5 +1,40 @@
 # Local verification
 
+## First-Person-only steering (2026-11-10, T020)
+
+The original pull was unconditional. The owner confirmed a separate First-Person
+setting using Keyboard Only bindings, not a rename of either existing mode.
+Signup, saved lobby preferences and the default skin now support `first-person`.
+The migration preserves `keyboard-only`, `keyboard-mouse` and NULL choices.
+The default-theme combat intent carries the selected mode; only First-Person
+activates the 0.30 shortest-angle blend. Missing mode preserves unsteered legacy
+input, and switching/resetting input clears the prior steering flag.
+
+Default-theme build and server/client/default-theme type-checks passed.
+The final focused run passed **12 files / 155 tests**, zero failures, in
+**33.50 seconds**:
+
+```powershell
+npm test -- tests\default-entities.test.ts tests\movement-collision.test.ts tests\default-combat.test.ts tests\default-respawn.test.ts tests\default-skin.test.ts tests\database.test.ts tests\integration\accounts-lobby.test.ts tests\integration\realtime.test.ts tests\npc-engagement.test.ts tests\npc-ranged.test.ts tests\integration\gameplay.test.ts tests\default-theme.test.ts
+```
+
+Assertions cover First-Person's exact -27-degree right/up movement, both signed
+wraparound directions, magnitude/speed, ten stable held steps, firing along aim,
+and stationary spinning. Existing and missing modes stay exactly unsteered even
+after a First-Person input. All three modes retain 60-step respawn world/snapshot
+agreement and walkability. Skin tests verify bindings and selected-mode dispatch;
+API/migration tests verify saved choices, legacy preservation and invalid-mode
+rejection. The heartbeat repair passes ordinary and 300 ms event-loop-delay cases.
+
+Before implementation the new mode was rejected by the old action schema.
+The first broad run passed 118 tests with one failure from the migration fixture's
+two-character username; using a valid username corrected that fixture.
+`node --check tests\browser\default-game.mjs` and `git diff --check` passed.
+The browser fixture now expects steering only for First-Person and exposes three
+choices, but no browser run is claimed. Original T042 remains open; no Lightsail,
+deployment or capacity result is implied. Unrelated edits remain outside the
+authorized commits; the heartbeat repair is committed separately.
+
 ## Player facing-steered movement (2026-11-10, T019)
 
 The recorded focused selection passed **8 files / 117 tests** on the local

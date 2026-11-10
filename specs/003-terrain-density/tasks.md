@@ -2,6 +2,27 @@
 
 Scoped sequential feature; retains original engine and Theme Credits context.
 
+## First-Person steering scoping (2026-11-10)
+
+- [x] T020 Add the owner-confirmed separate First-Person setting with Keyboard
+  Only bindings. Persist it without rewriting existing choices; dispatch the mode
+  in default-theme combat intent and apply the 30% pull only to First-Person.
+  Keep both prior modes and legacy mode-less inputs unsteered. Verify steering,
+  collision, controls, persistence and heartbeat; commit First-Person and the
+  existing heartbeat fixture repair separately, preserving unrelated edits,
+  and push without force. Original T042 stays open.
+
+T020 evidence: default-theme build and server/client/default-theme type-checks
+passed. The final focused selection passed **12 files / 155 tests** in 33.50
+seconds, including exact 27-degree steering, signed wraparound, stable held input,
+unsteered existing/legacy modes after switching, aim-based firing, stationary
+spinning, all three modes' respawn/collision/snapshot agreement, mode dispatch,
+account persistence, migration preservation and both heartbeat cases.
+The initial migration fixture used an invalid two-character username; correcting
+the fixture to a valid username resolved its failure without changing production.
+Browser syntax and whitespace checks passed; no browser, Lightsail, deployment
+or capacity execution is claimed. No extension hooks file exists.
+
 ## Player facing-steered movement follow-up (2026-11-10)
 
 - [x] T019 Add named/documented default-theme facing-movement blend 0.30 (range

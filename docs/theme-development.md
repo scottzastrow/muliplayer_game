@@ -55,13 +55,18 @@ A fresh movement-key press sets facing to the current screen-direction movement
 vector. Holding the key, including browser auto-repeat, maintains movement without
 reasserting facing. In Keyboard + Mouse mode, hold Down Arrow, move the pointer
 left and click to keep the downward input while aiming/firing left. In Keyboard
-Only mode, hold S, rotate with Left/Right Arrow and press Space: the held input
-remains down while facing/firing follows the rotation.
+Only mode, hold S, rotate with Left/Right Arrow and press Space: movement remains
+down while facing/firing follows the rotation. First-Person is a separate saved
+control choice using the same Keyboard Only bindings, with facing-steered movement.
+Keyboard Only and Keyboard + Mouse do not apply steering.
 
 Dots and Squares exports the theme tuning setting `PLAYER_FACING_MOVEMENT_BLEND`
 from `themes/default/src/module/tuning.ts`, set to `0.30`. Its range is 0 to 1:
 0 follows movement input exactly; 1 follows facing whenever movement is held.
-Each authoritative update starts from the normalized held input and rotates it
+Only First-Person applies this blend. Its combat intent includes
+`controlMode: "first-person"`; `keyboard-only`, `keyboard-mouse` and legacy
+actions without a mode follow the input exactly. Each authoritative update starts
+from the normalized held input and rotates it
 by that fraction of the shortest signed angle toward current facing, preserving
 input magnitude and speed. Rightward input with upward facing therefore travels
 27 degrees upward from right. Rotation never accumulates into the stored input;
@@ -71,7 +76,7 @@ NPC movement is unchanged. This is a theme source setting, not a host lobby opti
 With the existing disposable local server/client and Chrome debugging setup,
 set `BROWSER_TEST_ORIGIN` and `BROWSER_DEBUG_URL` to those loopback endpoints and run
 `node tests\browser\default-game.mjs --held-controls`. This focused scenario creates
-two disposable accounts and sequential one-player rooms, disables NPC pursuit,
+three disposable accounts and sequential one-player rooms, disables NPC pursuit,
 checks real repeated keyboard events, movement/facing and authoritative projectile
 directions, and leaves each room in cleanup. It does not change map mode or require
 database seed edits. Exact facing stability is also covered in

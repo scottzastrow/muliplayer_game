@@ -416,9 +416,9 @@ async function aim(page, horizontal, vertical) {
 }
 async function verifyHeldControls() {
   const results = [];
-  for (const mode of ["keyboard-mouse", "keyboard-only"]) {
+  for (const mode of ["keyboard-mouse", "keyboard-only", "first-person"]) {
     const page = await newWindow();
-    const username = `Held_${mode === "keyboard-only" ? "K" : "M"}_${Date.now().toString(36)}`;
+    const username = `Held_${mode === "keyboard-mouse" ? "M" : "K"}_${Date.now().toString(36)}`;
     await signIn(page, username, randomUUID(), mode);
     await evaluate(page, `document.querySelector('[name=setting-initialNpcsPerPlayer]').value = '1';
         document.querySelector('[name=setting-baseNpcHealth]').value = '100000';
@@ -438,11 +438,11 @@ async function verifyHeldControls() {
         document.querySelector('canvas').addEventListener('keydown', event => {
           if (event.repeat) window.__heldRepeats++;
         })`);
-      const down = mode === "keyboard-only" ? "KeyS" : "ArrowDown";
+      const down = mode !== "keyboard-mouse" ? "KeyS" : "ArrowDown";
       const key = (code, type = "keyDown", autoRepeat = false) => cdp("Input.dispatchKeyEvent", {
         type, code, key: ({ KeyS: "s", Space: " " })[code] ?? code, autoRepeat
       }, page.session);
-      for (const turn of mode === "keyboard-only" ? ["ArrowLeft", "ArrowRight"] : ["mouse"]) {
+      for (const turn of mode !== "keyboard-mouse" ? ["ArrowLeft", "ArrowRight"] : ["mouse"]) {
         await key(down);
         await waitFor(page, `window.__probe.snapshot.players.find(p =>
           p.accountId === window.__probe.snapshot.viewerAccountId).facing.y > 0.99`);
@@ -476,7 +476,7 @@ async function verifyHeldControls() {
           return { x: r.left + r.width / 2 - 300, y: r.top + r.height / 2 };
         })()`);
         await evaluate(page, "window.__probe.actions = []; window.__heldShots = []");
-        if (mode === "keyboard-only") await key("Space");
+        if (mode !== "keyboard-mouse") await key("Space");
         else await cdp("Input.dispatchMouseEvent", {
           type: "mousePressed", button: "left", buttons: 1, clickCount: 1, ...bounds
         }, page.session);
@@ -493,10 +493,10 @@ async function verifyHeldControls() {
         const facingAngle = Math.atan2(facing.y, facing.x);
         const towardFacing = Math.atan2(Math.sin(facingAngle - Math.PI / 2),
           Math.cos(facingAngle - Math.PI / 2));
-        const expectedTravel = Math.PI / 2 + towardFacing * 0.30;
+        const expectedTravel = Math.PI / 2 + towardFacing * (mode === "first-person" ? 0.30 : 0);
         assert.ok(Math.abs(Math.atan2(Math.sin(travelAngle - expectedTravel),
           Math.cos(travelAngle - expectedTravel))) < 0.15,
-          `${mode} downward input bends 30% toward facing rather than accumulating rotation`);
+          `${mode} applies steering only in First-Person without accumulating rotation`);
         assert.ok(turn === "mouse"
           ? own(held).facing.x < -0.99 && Math.abs(own(held).facing.y) < 0.15
           : Math.hypot(displayedFacing(held).x - localFacing.x,
@@ -529,7 +529,7 @@ async function verifyHeldControls() {
               inputs: firing.map(input => input.payload.action)
             })}`);
         }
-        if (mode === "keyboard-only") await key("Space", "keyUp");
+        if (mode !== "keyboard-mouse") await key("Space", "keyUp");
         else await cdp("Input.dispatchMouseEvent", {
           type: "mouseReleased", button: "left", buttons: 0, clickCount: 1, ...bounds
         }, page.session);
@@ -552,7 +552,7 @@ async function verifyHeldControls() {
           firingInputs: firing.length, projectiles: shots.length
         });
       }
-      assert.equal(await evaluate(page, "window.__heldRepeats"), mode === "keyboard-only" ? 8 : 4);
+      assert.equal(await evaluate(page, "window.__heldRepeats"), mode !== "keyboard-mouse" ? 8 : 4);
     } finally {
       const leave = await evaluate(page, `(async () => {
         return (await fetch('/api/v1/sessions/${sessionId}/leave', {
@@ -817,7 +817,7 @@ try {
   await click(observer, "Sign in");
   await waitFor(observer, "document.querySelector('.auth-form h2')?.textContent === 'Choose your controls'");
   assert.equal(await evaluate(observer,
-    "document.querySelectorAll('input[name=controlMode]').length"), 2);
+    "document.querySelectorAll('input[name=controlMode]').length"), 3);
   assert.equal(await evaluate(observer,
     "document.querySelector('input[name=controlMode]:checked')"), null);
   await evaluate(observer, `document.querySelector('[name=controlMode][value=keyboard-only]').checked = true;

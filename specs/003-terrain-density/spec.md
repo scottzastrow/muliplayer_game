@@ -1,5 +1,17 @@
 # Feature Specification: Per-Level Terrain Density
 
+## First-Person steering scoping (2026-11-10)
+
+The owner authorizes a separate saved First-Person control setting, reusing
+Keyboard Only bindings (WASD movement, arrow-key turning, Space to fire).
+Only First-Person applies the existing 30% shortest-angle steering pull;
+Keyboard Only, Keyboard + Mouse and legacy mode-less inputs remain unsteered.
+Preserve speed, input magnitude, firing, spin-in-place and NPC behavior.
+Run focused steering/collision checks; commit this slice and the existing
+heartbeat test repair separately, preserving unrelated edits, then push without
+force. This supersedes prior commit/push restrictions only for these slices.
+Original T042 remains open; no browser, deployment or capacity result is implied.
+
 **Feature Branch**: `001-multiplayer-engine` (same checkout)
 **Created**: 2026-11-08
 **Status**: Specified; scoped implementation authorized

@@ -494,9 +494,29 @@ describe("accounts and lobby integration", () => {
     expect(invalid.statusCode).toBe(400);
   });
 
+  it("persists First-Person at signup, login and lobby preference changes", async () => {
+    const account = await register("FirstPerson", "first-person");
+    expect(account.controlMode).toBe("first-person");
+    const signedIn = await login("FirstPerson", "correct horse battery staple 123");
+    expect(signedIn.json().account.controlMode).toBe("first-person");
+    const cookie = cookieFrom(signedIn);
+    for (const controlMode of ["keyboard-only", "keyboard-mouse", "first-person"]) {
+      const saved = await app.inject({
+        method: "PATCH", url: "/api/v1/me/control-mode",
+        headers: { ...BASE_HEADERS, cookie }, payload: { controlMode }
+      });
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json().account.controlMode).toBe(controlMode);
+      const me = await app.inject({ url: "/api/v1/me", headers: { cookie } });
+      expect(me.json().account.controlMode).toBe(controlMode);
+    }
+    const signedInAgain = await login("FirstPerson", "correct horse battery staple 123");
+    expect(signedInAgain.json().account.controlMode).toBe("first-person");
+  });
+
   async function register(
     username: string,
-    controlMode: "keyboard-only" | "keyboard-mouse" = "keyboard-mouse"
+    controlMode: "keyboard-only" | "keyboard-mouse" | "first-person" = "keyboard-mouse"
   ): Promise<Record<string, unknown>> {
     const response = await app.inject({
       method: "POST",

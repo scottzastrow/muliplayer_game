@@ -95,6 +95,7 @@ const DEFAULT_FACING: DefaultFacing = Object.freeze({ x: 1, y: 0 });
 
 export class DefaultEntitySimulator {
   readonly #movementByAccount = new Map<string, Point2>();
+  readonly #firstPersonAccounts = new Set<string>();
   readonly #npcNavigation = new Map<string, NpcNavigationState>();
   readonly #playerIds = new Map<string, string>();
   readonly #pickupIds = new Set<string>();
@@ -214,6 +215,8 @@ export class DefaultEntitySimulator {
     }
     if (action.type === "combat") {
       this.#movementByAccount.set(accountId, normalizeMovement(action.moveX, action.moveY));
+      if (action.controlMode === "first-person") this.#firstPersonAccounts.add(accountId);
+      else this.#firstPersonAccounts.delete(accountId);
       const id = this.#playerIds.get(accountId);
       const player = id ? this.context.entities.get(id) : undefined;
       if (id && player?.state.kind === "player") {
@@ -232,6 +235,7 @@ export class DefaultEntitySimulator {
 
   resetPlayerInput(accountId: string): void {
     this.#movementByAccount.set(accountId, EMPTY_MOVEMENT);
+    this.#firstPersonAccounts.delete(accountId);
   }
 
   step(dtSeconds: number, tick: number): void {
@@ -262,6 +266,7 @@ export class DefaultEntitySimulator {
       this.context.entities.remove(id);
     }
     this.#movementByAccount.clear();
+    this.#firstPersonAccounts.clear();
     this.#playerIds.clear();
     this.#npcNavigation.clear();
     this.#pickupIds.clear();
@@ -332,7 +337,7 @@ export class DefaultEntitySimulator {
       }
       let movement = this.#movementByAccount.get(accountId) ?? EMPTY_MOVEMENT;
       const magnitude = Math.hypot(movement.x, movement.y);
-      if (magnitude > 0) {
+      if (magnitude > 0 && this.#firstPersonAccounts.has(accountId)) {
         const facing = entity.state.facing;
         const difference = Math.atan2(
           movement.x * facing.y - movement.y * facing.x,

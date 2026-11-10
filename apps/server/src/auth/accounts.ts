@@ -6,7 +6,7 @@ import { HttpError } from "../errors.js";
 
 const SCRYPT_OPTIONS = Object.freeze({ N: 16_384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
 const HASH_BYTES = 64;
-export type ControlMode = "keyboard-only" | "keyboard-mouse";
+export type ControlMode = "keyboard-only" | "keyboard-mouse" | "first-person";
 
 export interface AccountWithControlMode extends PublicAccount {
   readonly controlMode: ControlMode | null;
@@ -110,7 +110,7 @@ export function validatePassword(input: unknown): string {
 }
 
 export function validateControlMode(input: unknown): ControlMode {
-  if (input !== "keyboard-only" && input !== "keyboard-mouse") {
+  if (input !== "keyboard-only" && input !== "keyboard-mouse" && input !== "first-person") {
     throw new HttpError(400, "BAD_REQUEST", "Choose a supported control mode.");
   }
   return input;

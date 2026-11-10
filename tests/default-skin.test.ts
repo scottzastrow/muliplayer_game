@@ -341,7 +341,8 @@ describe("Dots and Squares presentation", () => {
 
   it.each([
     { mode: "keyboard-mouse", right: "ArrowRight", up: "ArrowUp" },
-    { mode: "keyboard-only", right: "KeyD", up: "KeyW" }
+    { mode: "keyboard-only", right: "KeyD", up: "KeyW" },
+    { mode: "first-person", right: "KeyD", up: "KeyW" }
   ] as const)("moves and faces in screen directions in $mode mode", ({ mode, right, up }) => {
     class TestKeyboardEvent extends Event {
       constructor(type: string, readonly code: string, readonly repeat = false) { super(type); }
@@ -381,7 +382,7 @@ describe("Dots and Squares presentation", () => {
       canvas.drawnArcs.length = 0;
       skin.render(time += 40, snapshot);
       return dispatchInput.mock.lastCall![0] as {
-        moveX: number; moveY: number; aimX: number; aimY: number; fire: boolean;
+        controlMode: string; moveX: number; moveY: number; aimX: number; aimY: number; fire: boolean;
       };
     };
     const key = (type: string, code: string, repeat = false) =>
@@ -408,6 +409,7 @@ describe("Dots and Squares presentation", () => {
       const moved = render();
       expect(moved.moveX).toBeCloseTo(1);
       expect(moved.moveY).toBeCloseTo(0);
+      expect(moved.controlMode).toBe(mode);
       expectAim(moved, 1, 0);
       skin.handleSnapshot({ ...snapshot, tick: 3 });
       expectAim(render(), 1, 0);
@@ -426,7 +428,7 @@ describe("Dots and Squares presentation", () => {
       expectAim(stopped, 1, 0);
       skin.handleSnapshot({ ...snapshot, tick: 4 });
       expectAim(render(), 1, 0);
-      if (mode === "keyboard-only") key("keydown", "Space");
+      if (mode !== "keyboard-mouse") key("keydown", "Space");
       else {
         canvas.dispatchEvent(new TestPointerEvent("pointermove", 300, 300));
         expectAim(render(), 1, 0);
@@ -465,9 +467,9 @@ describe("Dots and Squares presentation", () => {
         key("keyup", "ArrowLeft");
       }
 
-      const down = mode === "keyboard-only" ? "KeyS" : "ArrowDown";
+      const down = mode !== "keyboard-mouse" ? "KeyS" : "ArrowDown";
       let snapshotTick = 4;
-      for (const turn of mode === "keyboard-only" ? ["ArrowLeft", "ArrowRight"] : ["mouse"]) {
+      for (const turn of mode !== "keyboard-mouse" ? ["ArrowLeft", "ArrowRight"] : ["mouse"]) {
         key("keydown", down);
         const movingDown = render();
         expect(movingDown).toMatchObject({ moveX: 0, moveY: 1, fire: false });
@@ -485,7 +487,7 @@ describe("Dots and Squares presentation", () => {
         const x = Math.cos(angle);
         const y = Math.sin(angle);
         expectAim(render(), x, y);
-        if (mode === "keyboard-only") key("keydown", "Space");
+        if (mode !== "keyboard-mouse") key("keydown", "Space");
         else canvas.dispatchEvent(new TestPointerEvent("pointerdown", 200, 300));
         for (let frame = 0; frame < 6; frame++) {
           // Duplicate keydowns must not reassert facing, even without a repeat flag.
@@ -493,9 +495,10 @@ describe("Dots and Squares presentation", () => {
           skin.handleSnapshot({ ...snapshot, tick: ++snapshotTick });
           const held = render();
           expect(held).toMatchObject({ moveX: 0, moveY: 1, fire: true });
+          expect(held.controlMode).toBe(mode);
           expectAim(held, x, y);
         }
-        if (mode === "keyboard-only") key("keyup", "Space");
+        if (mode !== "keyboard-mouse") key("keyup", "Space");
         else window.dispatchEvent(new Event("pointerup"));
         key("keyup", down);
         const released = render();

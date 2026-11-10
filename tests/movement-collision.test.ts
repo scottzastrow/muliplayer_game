@@ -130,7 +130,8 @@ describe("default simulator movement near the map obstacle", () => {
     }
   });
 
-  it("respawns at a position the player record and world agree on, then moves from it", () => {
+  it.each(["first-person", "keyboard-only", "keyboard-mouse"] as const)(
+    "respawns with matching player/world positions, then moves in %s mode", (controlMode) => {
     // Respawn cell grid: inset 2, 60 columns; cell 28*60+26 is centred at (912, 976).
     const spawnCell = 28 * 60 + 26;
     const { module, world } = createSimulation({ random: (spawnCell + 0.5) / 3_600 });
@@ -153,7 +154,9 @@ describe("default simulator movement near the map obstacle", () => {
       expect(world.getEntity("player:alice")!.position).toEqual(spawned.position);
 
       let previous = spawned.position;
-      module.applyInput("alice", { type: "combat", moveX: 1, moveY: 0.25, aimX: 0, aimY: 0, fire: false });
+      module.applyInput("alice", {
+        type: "combat", controlMode, moveX: 1, moveY: 0.25, aimX: 0, aimY: 0, fire: false
+      });
       const aimed = world.getEntity("player:alice")!;
       if (aimed.state.kind !== "player") throw new Error("Expected player after aiming.");
       const movement = normalizeMovement(1, 0.25);
@@ -163,7 +166,8 @@ describe("default simulator movement near the map obstacle", () => {
         movement.x * facing.x + movement.y * facing.y
       );
       // Held input is steered afresh toward the facing set by aim, not accumulated.
-      const travelAngle = Math.atan2(movement.y, movement.x) + shortestTurn * PLAYER_FACING_MOVEMENT_BLEND;
+      const travelAngle = Math.atan2(movement.y, movement.x) +
+        shortestTurn * (controlMode === "first-person" ? PLAYER_FACING_MOVEMENT_BLEND : 0);
       const magnitude = Math.hypot(movement.x, movement.y);
       const delta = {
         x: Math.cos(travelAngle) * magnitude * PLAYER_SPEED * TICK_SECONDS,

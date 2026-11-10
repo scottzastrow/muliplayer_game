@@ -12,7 +12,7 @@ HTTPS; local HTTP development is the only Secure-cookie exception.
 | POST /auth/login | username, password | 200 account and Set-Cookie | Public, throttled |
 | POST /auth/logout | Empty | 204 and cleared cookie | Logged in |
 | GET /me | None | Account id/display name/role | Logged in |
-| PATCH /me/control-mode | controlMode (`keyboard-only` or `keyboard-mouse`) | Updated public account preference | Logged in |
+| PATCH /me/control-mode | controlMode (`keyboard-only`, `keyboard-mouse` or `first-person`) | Updated public account preference | Logged in |
 | GET /sessions | None | Active session summaries | Logged in |
 | POST /sessions | settings, optional requestId | 201 session; creator joins as player | Logged in |
 | PATCH /sessions/:id/settings | Full validated settings, expectedRevision | Updated waiting session | Creator |

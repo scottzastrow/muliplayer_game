@@ -1,5 +1,17 @@
 # Implementation Plan: Per-Level Terrain Density
 
+## First-Person steering scoping (2026-11-10)
+
+Add `first-person` to the existing account preference/API/UI, preserving prior
+choices and NULL through an additive SQLite migration. Reuse keyboard bindings
+in the default skin and include its mode in the theme-owned combat intent.
+The simulator tracks that intent per player and applies the existing blend only
+to First-Person, clearing the flag with input resets/disposal. Missing mode is
+unsteered for legacy clients. No shared protocol/SDK contracts change.
+Verify all three control modes, respawn collision/snapshot agreement, persistence
+and heartbeat behavior. Commit/push only this scoped slice and the heartbeat
+test fix, in separate commits; preserve unrelated work and keep T042 open.
+
 **Branch**: `001-multiplayer-engine` | **Date**: 2026-11-08
 **Spec**: [spec.md](spec.md)
 
