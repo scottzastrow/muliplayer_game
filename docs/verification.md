@@ -1,5 +1,111 @@
 # Local verification
 
+## Public SDK movement controller (2026-11-10, T026)
+
+Added public `MovementController` / `MovementControllerOptions` with validated
+finite inclusive 0-1 `facingMovementBlend`, default **0** for other consumers.
+The owner confirmed this reusable SDK surface rather than a theme-only option.
+Dots and Squares passes its unchanged **0.40** tuning constant through the new
+API, keeping the existing explicit-mode/legacy-input gate. Normalization,
+bindings, facing updates, firing, collision and NPC policy were not changed.
+The helper only computes a fresh magnitude-preserving shortest-angle travel
+vector from current held movement and facing.
+
+Executed in the existing local Windows/npm workspace:
+
+```powershell
+npm test -- tests\movement-controller.test.ts
+npm run build --workspace @multiplayer-game/theme-sdk
+npm run build --workspace @multiplayer-game/default-theme
+npm run check --workspace @multiplayer-game/client
+npm test -- tests\movement-controller.test.ts tests\default-entities.test.ts tests\default-skin.test.ts tests\default-combat.test.ts tests\movement-collision.test.ts tests\default-respawn.test.ts tests\default-theme.test.ts tests\npc-engagement.test.ts tests\npc-ranged.test.ts tests\integration\gameplay.test.ts
+npm test -- tests\contract\themes.test.ts
+git diff --check
+```
+
+The initial test-first API run failed all 18 cases on the missing controller.
+After implementation/rebuild, the focused selection passed **10 files / 175
+tests** in **34.36 seconds**, with no skips. SDK/default-theme builds and client
+type-check passed. API cases cover default zero steering, endpoints 0 and 1,
+0.40 producing -36 degrees at partial magnitude 0.4, repeated no-drift calls,
+signed wraparound, stationary input, zero facing, configuration snapshotting,
+nonfinite vectors and invalid options (out-of-range, NaN, infinities, null and
+string). Existing simulation cases measure +/-36-degree travel and unchanged
+full/partial speed in Keyboard Only, Keyboard + Mouse and First-Person.
+Mocked DOM keyboard/pointer events feed actual authoritative movement; tests
+retain bindings, aim-based projectile velocity, stationary rotation, legacy
+mode-less input, collision/respawn and NPC behavior.
+
+Before the pin update, focused public conformance passed four cases and failed
+the unchanged immutable drift assertion against the old revision
+`4d87681f34e830d8f7e5e081d1f4a3c8799c316a`. The external fixture imports the
+typed API and checks runtime angle, magnitude and default-zero behavior.
+
+The scoped SDK/Dots and Squares source commit is
+`21fcc78a381fff952aa8fb80345b01f8ac871c40`. A disposable Linux x86_64
+`node:24-bookworm` container cloned that exact commit from a read-only source
+mount; only the consumer lock revision was changed in the disposable copy to
+that commit. Runtime: Node **24.22.2**, npm **11.19.1**. An initial container
+invocation stopped before testing because the Windows shell stripped nested
+Python quoting; the corrected invocation completed successfully.
+
+```sh
+npm ci --no-audit --no-fund
+npm run build
+npm test
+```
+
+The build passed and the unfiltered suite passed **56 files / 409 tests** in
+**40.34 seconds**. The unchanged immutable drift assertion passed, including
+`tests/contract/themes.test.ts` building, packing and loading the isolated
+external consumer from public SDK exports. No gate was skipped or weakened.
+Whitespace checks and the focused Windows movement selection also passed.
+No actual browser, capacity test or deployment was performed. Both scoped
+commits remain local; unrelated edits and original T042/live-release gates
+remain intact.
+
+## 40% facing-to-movement blend (2026-11-10, T025)
+
+Changed only Dots and Squares' existing `PLAYER_FACING_MOVEMENT_BLEND` from
+0.30 to **0.40**, superseding the earlier 27-degree results below. No engine,
+protocol, SDK, NPC or firing implementation changed. Controls help, the current
+theme contract and held-controls browser expectation now match 40%.
+
+The existing local Windows/npm workspace executed:
+
+```powershell
+npm run build --workspace @multiplayer-game/default-theme
+npm run check --workspace @multiplayer-game/client
+npm test -- tests\default-entities.test.ts tests\default-skin.test.ts tests\default-combat.test.ts tests\movement-collision.test.ts tests\default-respawn.test.ts tests\default-theme.test.ts tests\npc-engagement.test.ts tests\npc-ranged.test.ts tests\integration\gameplay.test.ts
+node --check tests\browser\default-game.mjs
+git diff --check
+```
+
+Build, type-check, syntax and whitespace checks passed. The focused suite passed
+**9 files / 157 tests** in **34.68 seconds**, with no skips.
+
+| Mode | Rightward input / upward facing | Skin-to-simulator input |
+| --- | --- | --- |
+| Keyboard Only | Exact -36-degree travel | D held, Left Arrow turns |
+| Keyboard + Mouse | Exact -36-degree travel | Right Arrow held, pointer moves upward |
+| First-Person | Exact -36-degree travel | D held, Left Arrow turns |
+
+Angles are measured from actual displacement to eight decimal places, not
+derived only from the setting. The skin check uses dispatched keyboard/pointer
+events with mocked DOM/Canvas, not a real browser. All modes preserve 180-unit/s
+full input and proportional partial speed, ten stable held-input steps, shortest
+signed wraparound (+/-178 degrees), aim-target projectile velocity rather than
+travel direction, and zero translation during stationary turning. Legacy
+mode-less input remains unsteered; collision, respawn and NPC regressions pass.
+
+Before changing the setting, the new simulation expectations failed 16 selected
+cases against 0.30, receiving +/-27 instead of +/-36 and +/-176 instead of
++/-178 degrees. That initial name filter did not select the skin cases; the
+final focused run includes all skin cases. No failed run is counted as passing.
+No actual browser, capacity or deployment result is claimed. No extension
+hooks file exists. Both scoped commits remain local without push; pre-existing
+edits and original T042/live-release gates are preserved.
+
 ## 200-HP default and blue health radar markers (2026-11-10, T024)
 
 The existing `playerMaxHealth` schema fallback, settings default and theme
