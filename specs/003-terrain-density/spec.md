@@ -1,5 +1,19 @@
 # Feature Specification: Per-Level Terrain Density
 
+## All-mode directional pull follow-up (2026-11-10)
+
+The owner now requires the existing 30% shortest-angle pull in all three Dots
+and Squares modes, superseding the First-Person-only scope below. Keyboard +
+Mouse aim pulls travel toward facing while a movement key is held. Preserve
+each mode's bindings, movement speed, firing direction and turning in place
+without movement input. Verify the exact 27-degree bend for a 90-degree turn
+in every mode, including mouse-event aim. Retain mode-less legacy behavior.
+Report results before pushing; no deployment or original T042 completion.
+
+The subsequent scoped review authorization permits committing only all-mode
+steering, its tests and related notes, preserving unrelated edits. Fetch origin
+and push without force only as the sole outgoing commit on `0d22fbf`.
+
 ## First-Person steering scoping (2026-11-10)
 
 The owner authorizes a separate saved First-Person control setting, reusing

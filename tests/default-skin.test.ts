@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { defaultSkinFactory, generateMap } from "@multiplayer-game/default-theme";
+import {
+  DefaultEntitySimulator, defaultSkinFactory, generateMap, PLAYER_SPEED, type DefaultEntity
+} from "@multiplayer-game/default-theme";
+import { SessionWorld } from "@multiplayer-game/engine";
 import type { SkinHost } from "@multiplayer-game/theme-sdk";
+import { DefaultCombatActionSchema } from "../themes/default/src/module/actions.js";
 import {
   DefaultViewSchema, interpolateEntities, worldToScreen, type DefaultView
 } from "../themes/default/src/skin/view.js";
@@ -378,12 +382,10 @@ describe("Dots and Squares presentation", () => {
       kind: "player", accountId: "alice", deaths: 0, facing: { x: -1, y: 0 }
     };
     let time = 0;
-    const render = () => {
+    const render = (elapsed = 40) => {
       canvas.drawnArcs.length = 0;
-      skin.render(time += 40, snapshot);
-      return dispatchInput.mock.lastCall![0] as {
-        controlMode: string; moveX: number; moveY: number; aimX: number; aimY: number; fire: boolean;
-      };
+      skin.render(time += elapsed, snapshot);
+      return DefaultCombatActionSchema.parse(dispatchInput.mock.lastCall![0]);
     };
     const key = (type: string, code: string, repeat = false) =>
       canvas.dispatchEvent(new TestKeyboardEvent(type, code, repeat));
@@ -508,6 +510,68 @@ describe("Dots and Squares presentation", () => {
         expectAim(render(), 0, 1);
         key("keyup", down);
       }
+
+      const map = generateMap(42, "fixed").map;
+      const world = new SessionWorld<DefaultEntity>("skin-steering", map.definition.bounds, map.obstacles);
+      const simulator = new DefaultEntitySimulator({
+        clock: { nowMs: () => 0 },
+        random: { next: () => 0.5 },
+        entities: {
+          get: id => world.getEntity(id),
+          add: entity => world.addEntity(entity),
+          update: (id, update) => {
+            const entity = world.getEntity(id);
+            if (!entity) throw new Error(`Missing entity ${id}.`);
+            world.addEntity(update(entity));
+          },
+          remove: id => world.removeEntity(id),
+          values: () => world.entities(),
+          queryRadius: (center, radius, maxCells) => world.queryEntities(center, radius, maxCells)
+        },
+        geometry: {
+          isWalkable: (x, y, radius = 0) => world.geometry.isCircleWalkable({ x, y }, radius),
+          intersectsObstacle: (x, y, radius) => world.geometry.intersectsObstacle({ x, y }, radius),
+          moveCircle: (position, delta, radius) => world.geometry.moveCircle(position, delta, radius)
+        },
+        navigation: { requestPath: () => undefined, getPath: () => undefined },
+        emit: () => {},
+        requestCompletion: () => {},
+        metrics: { increment: () => {}, gauge: () => {} }
+      }, 0);
+      try {
+        simulator.initialize(map, [{ accountId: "alice", username: "Alice", joinedOrder: 0 }], 1);
+        const player = world.getEntity("player:alice")!;
+        world.addEntity({ ...player, position: { x: 500, y: 100 } });
+        key("keydown", right);
+        expectAim(render(), 1, 0);
+        if (mode === "keyboard-mouse") {
+          canvas.dispatchEvent(new TestPointerEvent("pointermove", 400, 200));
+        } else {
+          key("keydown", "ArrowLeft");
+          for (let frame = 0; frame < 5; frame++) render(100);
+          key("keyup", "ArrowLeft");
+        }
+        const aimed = render();
+        expect(aimed).toMatchObject({ moveX: 1, moveY: 0, controlMode: mode });
+        expectAim(aimed, 0, -1);
+        simulator.applyInput("alice", aimed);
+        const before = world.getEntity(player.id)!.position;
+        simulator.step(1 / 30, 1);
+        const after = world.getEntity(player.id)!.position;
+        expect(Math.atan2(after.y - before.y, after.x - before.x) * 180 / Math.PI)
+          .toBeCloseTo(-27, 8);
+        expect(Math.hypot(after.x - before.x, after.y - before.y)).toBeCloseTo(PLAYER_SPEED / 30, 8);
+        key("keyup", right);
+        if (mode === "keyboard-mouse") {
+          canvas.dispatchEvent(new TestPointerEvent("pointermove", 500, 300));
+        } else key("keydown", "ArrowRight");
+        const turningAtRest = render(100);
+        expect(turningAtRest).toMatchObject({ moveX: 0, moveY: 0 });
+        expect(turningAtRest.aimX).toBeGreaterThan(aimed.aimX);
+        simulator.applyInput("alice", turningAtRest);
+        simulator.step(1 / 30, 2);
+        expect(world.getEntity(player.id)!.position).toEqual(after);
+      } finally { simulator.dispose(); }
     } finally {
       skin.dispose();
     }

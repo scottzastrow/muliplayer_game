@@ -2,6 +2,33 @@
 
 Scoped sequential feature; retains original engine and Theme Credits context.
 
+## All-mode directional pull follow-up (2026-11-10)
+
+- [x] T021 Extend the existing 30% shortest-angle pull to Keyboard Only and
+  Keyboard + Mouse as well as First-Person. Keep bindings, speed, aim-based
+  firing and spin-in-place unchanged; retain legacy mode-less compatibility.
+  Verify exact 27-degree travel for a 90-degree turn in every mode, including
+  pointer-event aim through the skin into the authoritative simulator. Update
+  related documentation/browser expectations and report results before pushing.
+  Follows T020; preserve unrelated edits and leave original T042 open.
+
+T021 evidence: default-theme build and default-theme/client type-checks passed.
+The focused gameplay selection passed **9 files / 141 tests** in 33.60 seconds.
+Each mode measures exactly -27-degree travel from rightward input/upward facing;
+skin keyboard/pointer events also feed the authoritative simulator to verify
+the bend, unchanged speed and stationary turning. Parameterized regressions
+cover wraparound, stable held input, partial speed, aim-based firing, full
+stationary rotation and all-mode respawn collision/snapshot agreement.
+Browser syntax and whitespace checks passed. `docs/verification.md` records
+commands, expected baseline failures and the corrected zero-NPC test fixture.
+No real browser, Lightsail, deployment or capacity run is claimed. No extension
+hooks file exists; the initial implementation remained local without commit/push.
+Scoped commit review found no blocking issues; the default-theme rebuild and
+nine-file rerun passed **141 tests** in **34.02 seconds**. Commit only T021 and
+related notes, preserve unrelated edits, run `git diff --cached --check` and push
+without force only as the sole outgoing commit on `0d22fbf` after fetching origin.
+Original T042, T010 and T013 stay open.
+
 ## First-Person steering scoping (2026-11-10)
 
 - [x] T020 Add the owner-confirmed separate First-Person setting with Keyboard

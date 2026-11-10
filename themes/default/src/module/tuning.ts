@@ -1,7 +1,7 @@
 import { DEFAULT_GAME_SETTINGS } from "@multiplayer-game/protocol";
 
 export const PLAYER_SPEED = 180;
-/** First-Person fraction [0, 1] of the shortest input-to-facing angle. */
+/** All control modes' fraction [0, 1] of the shortest input-to-facing angle. */
 export const PLAYER_FACING_MOVEMENT_BLEND = 0.30;
 export const PLAYER_HEALTH = 100;
 export const PLAYER_RADIUS = 14;

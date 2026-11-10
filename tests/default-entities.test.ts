@@ -305,20 +305,21 @@ describe("default entity movement and pursuit", () => {
     simulation.module.dispose();
   });
 
-  it.each([
+  it.each((["first-person", "keyboard-only", "keyboard-mouse"] as const).flatMap(controlMode => [
     { inputDegrees: 0, facingDegrees: -90, magnitude: 1, expectedDegrees: -27 },
     { inputDegrees: 0, facingDegrees: 90, magnitude: 0.4, expectedDegrees: 27 },
     { inputDegrees: 170, facingDegrees: -170, magnitude: 1, expectedDegrees: 176 },
     { inputDegrees: -170, facingDegrees: 170, magnitude: 1, expectedDegrees: -176 }
-  ])("blends held input $inputDegrees toward facing $facingDegrees without drift or speed changes",
-    ({ inputDegrees, facingDegrees, magnitude, expectedDegrees }) => {
+  ].map(scenario => ({ ...scenario, controlMode }))))(
+    "blends held input $inputDegrees toward facing $facingDegrees in $controlMode without drift or speed changes",
+    ({ controlMode, inputDegrees, facingDegrees, magnitude, expectedDegrees }) => {
       const { context, module } = createSimulation([], { npcMovementSpeed: 0 });
       const radians = (degrees: number) => degrees * Math.PI / 180;
       const player = context.entities.get("player:player-a")!;
       const facing = { x: Math.cos(radians(facingDegrees)), y: Math.sin(radians(facingDegrees)) };
       try {
         module.applyInput("player-a", {
-          type: "combat", controlMode: "first-person",
+          type: "combat", controlMode,
           moveX: Math.cos(radians(inputDegrees)) * magnitude,
           moveY: Math.sin(radians(inputDegrees)) * magnitude,
           aimX: player.position.x + facing.x * 100,
@@ -339,13 +340,14 @@ describe("default entity movement and pursuit", () => {
     }
   );
 
-  it("steers travel 27 degrees upward while firing at the upward aim, not along travel", () => {
+  it.each(["first-person", "keyboard-only", "keyboard-mouse"] as const)(
+    "steers travel 27 degrees upward in %s while firing at the upward aim, not along travel", controlMode => {
     const { context, module } = createSimulation([], { npcMovementSpeed: 0 });
     const player = context.entities.get("player:player-a")!;
     const aim = { x: player.position.x, y: player.position.y - 100 };
     try {
       module.applyInput("player-a", {
-        type: "combat", controlMode: "first-person",
+        type: "combat", controlMode,
         moveX: 1, moveY: 0, aimX: aim.x, aimY: aim.y, fire: true
       });
       module.step(1 / 30, 1);
@@ -364,17 +366,17 @@ describe("default entity movement and pursuit", () => {
     } finally { module.dispose(); }
   });
 
-  it.each(["keyboard-only", "keyboard-mouse", undefined] as const)(
-    "keeps held movement unsteered in %s mode", (controlMode) => {
+  it.each(["first-person", "keyboard-only", "keyboard-mouse"] as const)(
+    "keeps legacy mode-less movement unsteered after %s mode", (controlMode) => {
       const { context, module } = createSimulation([], { npcMovementSpeed: 0 });
       const player = context.entities.get("player:player-a")!;
       try {
         module.applyInput("player-a", {
-          type: "combat", controlMode: "first-person", moveX: 0.4, moveY: 0,
+          type: "combat", controlMode, moveX: 0.4, moveY: 0,
           aimX: player.position.x, aimY: player.position.y - 100, fire: false
         });
         module.applyInput("player-a", {
-          type: "combat", controlMode, moveX: 0.4, moveY: 0,
+          type: "combat", moveX: 0.4, moveY: 0,
           aimX: player.position.x, aimY: player.position.y - 100, fire: false
         });
         for (let tick = 1; tick <= 10; tick++) {
@@ -389,14 +391,15 @@ describe("default entity movement and pursuit", () => {
     }
   );
 
-  it("spins through a full turn at rest without translating", () => {
+  it.each(["first-person", "keyboard-only", "keyboard-mouse"] as const)(
+    "spins through a full turn at rest without translating in %s", controlMode => {
     const { context, module } = createSimulation([], { npcMovementSpeed: 0 });
     const player = context.entities.get("player:player-a")!;
     try {
       for (let tick = 1; tick <= 12; tick++) {
         const angle = tick * Math.PI / 6;
         module.applyInput("player-a", {
-          type: "combat", controlMode: "first-person", moveX: 0, moveY: 0,
+          type: "combat", controlMode, moveX: 0, moveY: 0,
           aimX: player.position.x + Math.cos(angle) * 100,
           aimY: player.position.y + Math.sin(angle) * 100, fire: false
         });

@@ -1,5 +1,59 @@
 # Local verification
 
+## All-mode directional pull (2026-11-10, T021)
+
+Supersedes the First-Person-only behavior recorded below. All three explicit
+Dots and Squares control modes now use the existing 0.30 shortest-angle pull;
+mode-less legacy input remains unchanged. Bindings, movement speed, firing
+logic and NPC logic are unchanged.
+
+Local automated results:
+
+| Mode | Turn from rightward input | Measured travel bend | Skin input coverage |
+| --- | --- | --- | --- |
+| Keyboard Only | 90 degrees upward | 27 degrees upward | D held, Left Arrow turns |
+| Keyboard + Mouse | 90 degrees upward | 27 degrees upward | Right Arrow held, pointer moves upward |
+| First-Person | 90 degrees upward | 27 degrees upward | D held, Left Arrow turns |
+
+Angles are asserted to eight decimal places from authoritative position deltas,
+including actual skin-dispatched actions from keyboard/pointer events in the DOM
+test fixture. Each mode also passes full/partial-input speed, both signed
+wraparound directions, ten stable held steps, aim-based projectile velocity,
+full stationary rotation, and 60-step respawn collision/world/snapshot agreement.
+The skin-to-simulator cases additionally release movement and turn again,
+asserting exactly unchanged position.
+
+Default-theme build and default-theme/client type-checks passed. The focused
+suite passed **9 files / 141 tests**, zero failures, in **33.60 seconds**:
+
+```powershell
+npm run build --workspace @multiplayer-game/default-theme
+npm test -- tests\default-entities.test.ts tests\movement-collision.test.ts tests\default-combat.test.ts tests\default-respawn.test.ts tests\default-skin.test.ts tests\npc-engagement.test.ts tests\npc-ranged.test.ts tests\integration\gameplay.test.ts tests\default-theme.test.ts
+npm run check --workspace @multiplayer-game/default-theme
+npm run check --workspace @multiplayer-game/client
+node --check tests\browser\default-game.mjs
+git diff --check
+```
+
+Before the fix, ten new simulation assertions failed for the two previously
+unsteered modes. The initial skin fixture requested an unsupported zero-NPC
+wave; using one stationary NPC corrected that fixture. Its pre-fix rerun then
+failed only the Keyboard Only and mouse-aim bend assertions (received 0 degrees,
+expected -27), while First-Person passed. The final suite above passes.
+
+Browser expectations and controls help now describe all-mode pull. The mouse
+check is automated DOM-event/simulation coverage, not a real browser run.
+No browser, Lightsail, deployment or capacity result is claimed. No extension
+hooks file exists. The initial implementation remained uncommitted.
+Original T042, T010 and T013 remain open.
+
+Scoped commit review: no blocking findings. Rebuilt the default theme and reran
+the nine-file selection above: **141 tests passed** in **34.02 seconds**.
+The owner authorizes committing only all-mode steering, its tests and related
+notes, preserving unrelated edits. After fetching origin, both local HEAD and
+the remote branch were `0d22fbf3574220fcbcb475d0b714e0ee2770b3b1`.
+Push without force only with this slice as the sole outgoing commit on that base.
+
 ## First-Person-only steering (2026-11-10, T020)
 
 The original pull was unconditional. The owner confirmed a separate First-Person

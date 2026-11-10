@@ -55,17 +55,18 @@ A fresh movement-key press sets facing to the current screen-direction movement
 vector. Holding the key, including browser auto-repeat, maintains movement without
 reasserting facing. In Keyboard + Mouse mode, hold Down Arrow, move the pointer
 left and click to keep the downward input while aiming/firing left. In Keyboard
-Only mode, hold S, rotate with Left/Right Arrow and press Space: movement remains
-down while facing/firing follows the rotation. First-Person is a separate saved
-control choice using the same Keyboard Only bindings, with facing-steered movement.
-Keyboard Only and Keyboard + Mouse do not apply steering.
+Only mode, hold S, rotate with Left/Right Arrow and press Space: the held input
+remains down while travel bends toward facing and firing follows the rotation.
+First-Person is a separate saved control choice using the same Keyboard Only
+bindings. All three modes apply the same facing-steered movement, including
+mouse aim while a movement key is held.
 
 Dots and Squares exports the theme tuning setting `PLAYER_FACING_MOVEMENT_BLEND`
 from `themes/default/src/module/tuning.ts`, set to `0.30`. Its range is 0 to 1:
 0 follows movement input exactly; 1 follows facing whenever movement is held.
-Only First-Person applies this blend. Its combat intent includes
-`controlMode: "first-person"`; `keyboard-only`, `keyboard-mouse` and legacy
-actions without a mode follow the input exactly. Each authoritative update starts
+Combat intent includes `controlMode: "first-person"`, `"keyboard-only"` or
+`"keyboard-mouse"`; all three apply this blend. Legacy actions without a mode
+still follow the input exactly. Each authoritative update starts
 from the normalized held input and rotates it
 by that fraction of the shortest signed angle toward current facing, preserving
 input magnitude and speed. Rightward input with upward facing therefore travels

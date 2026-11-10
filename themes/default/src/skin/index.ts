@@ -99,9 +99,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     help.textContent = keyboardControls
       ? "The game is focused when the match opens; click it to refocus. WASD: move and face. Left/Right arrows: turn in place. Space: fire."
       : "The game is focused when the match opens; click it to refocus. Arrow keys: move and face. Mouse: aim. Left click: fire.";
-    if (controlMode === "first-person") {
-      help.textContent += " First-Person: held movement steers 30% toward facing.";
-    }
+    help.textContent += " Held movement steers 30% toward facing; turning at rest stays in place.";
     options.append(help);
     controls.append(options);
     world.append(canvas, life, terrainCoverage);

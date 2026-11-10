@@ -167,7 +167,7 @@ describe("default simulator movement near the map obstacle", () => {
       );
       // Held input is steered afresh toward the facing set by aim, not accumulated.
       const travelAngle = Math.atan2(movement.y, movement.x) +
-        shortestTurn * (controlMode === "first-person" ? PLAYER_FACING_MOVEMENT_BLEND : 0);
+        shortestTurn * PLAYER_FACING_MOVEMENT_BLEND;
       const magnitude = Math.hypot(movement.x, movement.y);
       const delta = {
         x: Math.cos(travelAngle) * magnitude * PLAYER_SPEED * TICK_SECONDS,

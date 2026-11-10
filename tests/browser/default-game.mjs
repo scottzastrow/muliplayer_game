@@ -493,10 +493,10 @@ async function verifyHeldControls() {
         const facingAngle = Math.atan2(facing.y, facing.x);
         const towardFacing = Math.atan2(Math.sin(facingAngle - Math.PI / 2),
           Math.cos(facingAngle - Math.PI / 2));
-        const expectedTravel = Math.PI / 2 + towardFacing * (mode === "first-person" ? 0.30 : 0);
+        const expectedTravel = Math.PI / 2 + towardFacing * 0.30;
         assert.ok(Math.abs(Math.atan2(Math.sin(travelAngle - expectedTravel),
           Math.cos(travelAngle - expectedTravel))) < 0.15,
-          `${mode} applies steering only in First-Person without accumulating rotation`);
+          `${mode} applies 30% steering without accumulating rotation`);
         assert.ok(turn === "mouse"
           ? own(held).facing.x < -0.99 && Math.abs(own(held).facing.y) < 0.15
           : Math.hypot(displayedFacing(held).x - localFacing.x,

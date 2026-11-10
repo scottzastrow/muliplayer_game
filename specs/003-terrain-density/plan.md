@@ -1,5 +1,20 @@
 # Implementation Plan: Per-Level Terrain Density
 
+## All-mode directional pull follow-up (2026-11-10)
+
+T021 supersedes the First-Person-only steering gate below. Keep the existing
+per-account intent flag/reset lifecycle and shortest-angle math, but enable the
+blend for every explicit supported control mode. Preserve mode-less legacy
+actions, input bindings, speed, combat and NPC logic. Parameterize angle,
+wraparound, held-input, firing and spin-in-place regressions across all modes;
+feed real skin keyboard/pointer events into the simulator to measure the exact
+27-degree bend. Update respawn/browser expectations and controls help. Report
+actual local results before any push; no deployment or original T042 completion.
+
+For the scoped commit review, stage only T021 code/tests and related note hunks.
+Preserve unrelated edits, run `git diff --cached --check`, fetch origin and push
+without force only as the sole outgoing commit on `0d22fbf`.
+
 ## First-Person steering scoping (2026-11-10)
 
 Add `first-person` to the existing account preference/API/UI, preserving prior
