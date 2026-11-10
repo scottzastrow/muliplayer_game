@@ -64,6 +64,46 @@ at `3de1894ed2a3ef91fa9a03707d1629c9e7b8a4a7`. Only the intended commits may be
 pushed without force after the full Linux suite passes with drift detection
 enabled. Unrelated mixed-file hunks remain unstaged; original T042 stays open.
 
+### Scoped commit and Linux release gate
+
+Committed only the reviewed T024 health/radar slice, tests and matching docs as
+`4d87681f34e830d8f7e5e081d1f4a3c8799c316a`. The separate consumer-pin change
+references that exact revision. The public-package delta against the previous
+pin contains only the two `playerMaxHealth` defaults changing 150 to 200;
+the SDK and drift-gate implementation are unchanged.
+
+Executed a disposable `node:24-bookworm` Linux x86_64 container on WSL2 kernel
+5.15.167.4, Node 24.22.2 and npm 11.19.1. The source checkout was mounted
+read-only and cloned locally into the container at the exact feature commit,
+then overlaid only the pending lock change. No unrelated worktree edits,
+Windows dependencies, environment files or runtime data entered the validation
+copy. Source/pin prechecks verified that the lock was the sole modified file
+and protocol/SDK matched the pin exactly. After the missing-TypeScript
+dependency preflight, restored the Linux dependencies with
+`npm ci --no-audit --no-fund`, ran `npm run build`, then unfiltered `npm test`
+with default workers and unchanged timeouts.
+
+Final build and full suite passed: **55 files / 391 tests**, zero failures or
+skips, in **40.15 seconds**. All five public-theme conformance tests passed,
+including the packed external consumer (5.774 seconds) with the immutable drift
+assertion enabled. Post-run whitespace and unchanged-source/gate checks passed.
+This supersedes the earlier T024 pre-commit drift blocker above.
+
+The initial shell invocation stopped before tests on Windows CRLF in the
+validation script. Normalizing the script inside the disposable container
+allowed a full 391-test pass in 40.62 seconds; that wrapper then failed only
+its final whitespace check because the host lock had CRLF. The final clean
+rerun normalized only that copied lock to Git's committed LF form; no source
+test or gate changed. Build reported non-fatal third-party Zod/Rollup comment
+annotation warnings. Raw build/test/install logs and the initial passing-suite
+log persist in this Copilot session's `files` directory.
+
+The separate pin commit includes this measured evidence. Push is authorized
+only after checking the fetched branch for exactly these two outgoing commits,
+without force. Unrelated edits remain local and original T042/live gates stay
+open; no real-browser, deployment or capacity result is claimed. No extension
+hooks file exists.
+
 ## Configurable player maximum health (2026-11-10, T023)
 
 The pre-change effective Dots and Squares health was **100**, from both

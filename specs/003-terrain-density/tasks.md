@@ -31,6 +31,17 @@ with an unfiltered Linux suite and drift detection enabled before a non-force
 push of only those intended commits. Preserve unrelated edits and original
 T042; record the actual Linux result and full remote tip after execution.
 
+T024 scoped release evidence: the health/radar commit is
+`4d87681f34e830d8f7e5e081d1f4a3c8799c316a`; the separate consumer pin references
+it exactly. A disposable Linux copy of that commit plus only the lock change
+passed `npm run build` and unfiltered `npm test`: **55 files / 391 tests**,
+zero failures/skips, in **40.15 seconds**, including packed external-consumer
+conformance with the immutable drift assertion enabled. Final source/gate and
+whitespace checks passed. `docs/verification.md` records environment, commands,
+line-ending-only wrapper corrections and actual results. Only these intended
+commits may be pushed without force after a final fetched-history check.
+Unrelated edits are preserved; original T042/live gates remain open.
+
 ## Player maximum health follow-up (2026-11-10)
 
 - [x] T023 Expose validated theme/SDK `playerMaxHealth`, default 150 from the
