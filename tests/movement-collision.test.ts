@@ -7,7 +7,9 @@ import {
 } from "@multiplayer-game/default-theme";
 import { SessionWorld, WorldGeometry, type Vector2 } from "../packages/engine/src/world.js";
 import { normalizeMovement } from "../themes/default/src/module/entities.js";
-import { PLAYER_RADIUS, PLAYER_SPEED, SAFE_SPAWN_MARGIN } from "../themes/default/src/module/tuning.js";
+import {
+  PLAYER_FACING_MOVEMENT_BLEND, PLAYER_RADIUS, PLAYER_SPEED, SAFE_SPAWN_MARGIN
+} from "../themes/default/src/module/tuning.js";
 
 const TICK_SECONDS = 1 / 30;
 // The northwest T cluster's first tile is part of the fixed Tile Cluster Arena.
@@ -152,8 +154,23 @@ describe("default simulator movement near the map obstacle", () => {
 
       let previous = spawned.position;
       module.applyInput("alice", { type: "combat", moveX: 1, moveY: 0.25, aimX: 0, aimY: 0, fire: false });
+      const aimed = world.getEntity("player:alice")!;
+      if (aimed.state.kind !== "player") throw new Error("Expected player after aiming.");
+      const movement = normalizeMovement(1, 0.25);
+      const facing = aimed.state.facing;
+      const shortestTurn = Math.atan2(
+        movement.x * facing.y - movement.y * facing.x,
+        movement.x * facing.x + movement.y * facing.y
+      );
+      // Held input is steered afresh toward the facing set by aim, not accumulated.
+      const travelAngle = Math.atan2(movement.y, movement.x) + shortestTurn * PLAYER_FACING_MOVEMENT_BLEND;
+      const magnitude = Math.hypot(movement.x, movement.y);
+      const delta = {
+        x: Math.cos(travelAngle) * magnitude * PLAYER_SPEED * TICK_SECONDS,
+        y: Math.sin(travelAngle) * magnitude * PLAYER_SPEED * TICK_SECONDS
+      };
       for (let tick = 153; tick < 213; tick += 1) {
-        const expected = world.geometry.moveCircle(previous, playerDelta(1, 0.25), PLAYER_RADIUS);
+        const expected = world.geometry.moveCircle(previous, delta, PLAYER_RADIUS);
         module.step(TICK_SECONDS, tick);
         const player = world.getEntity("player:alice")!;
         expect(player.position).toEqual(expected);
