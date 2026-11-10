@@ -33,7 +33,7 @@ describe("default combat", () => {
     { label: "host 75 HP", settings: { baseNpcHealth: 75 }, healthTrace: [75, 50, 25, 0] }
   ])("measures unboosted projectile hits in a clear lane: $label", ({ label, settings, healthTrace }) => {
     const { context, module } = createSimulation(generateMap(42).map.obstacles, {
-      ...settings, npcMovementSpeed: 0, npcDetectionRange: 0
+      ...settings, initialNpcsPerPlayer: 10, npcMovementSpeed: 0, npcDetectionRange: 0
     });
     try {
       const npcs = context.entities.values().filter(entity => entity.state.kind === "npc");

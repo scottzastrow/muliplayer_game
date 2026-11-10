@@ -59,7 +59,7 @@ function simulation(players = 1, npcMovementSpeed = 67.5, fixed = false, seed = 
     accountId: `p${index}`, username: `Player${index}`, joinedOrder: index
   }));
   const module = defaultModuleFactory.create(context, {
-    mapMode: "fixed", npcMovementSpeed
+    mapMode: "fixed", initialNpcsPerPlayer: 10, npcMovementSpeed
   }, roster, seed);
   module.initialize();
   const npcs = () => world.entities().filter(entity => entity.state.kind === "npc");
