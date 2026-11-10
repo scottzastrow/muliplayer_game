@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  DefaultEntitySimulator, defaultSkinFactory, generateMap, PLAYER_SPEED, type DefaultEntity
+  DefaultEntitySimulator, defaultModuleFactory, defaultSkinFactory, generateMap, loadMap,
+  LEVEL_INTERMISSION_TICKS, PLAYER_SPEED, type DefaultEntity
 } from "@multiplayer-game/default-theme";
-import { SessionWorld } from "@multiplayer-game/engine";
-import type { SkinHost } from "@multiplayer-game/theme-sdk";
+import { AuthoritativeMapTransition, BoundedNavigation, SessionWorld } from "@multiplayer-game/engine";
+import type { ModuleContext, SkinHost } from "@multiplayer-game/theme-sdk";
 import { DefaultCombatActionSchema } from "../themes/default/src/module/actions.js";
 import {
   DefaultViewSchema, interpolateEntities, worldToScreen, type DefaultView
@@ -89,6 +90,159 @@ class HudElement extends EventTarget {
 
 describe("Dots and Squares presentation", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it.each([
+    ["fixed", true], ["simple-generated", true],
+    ["fixed", false], ["simple-generated", false]
+  ] as const)("traces three health-pickup waves on %s (collect=%s)", (mapMode, collect) => {
+    vi.stubGlobal("document", Object.assign(new EventTarget(), {
+      createTextNode: (text: string) => Object.assign(new HudElement(), { textContent: text }),
+      createElement: () => new HudElement()
+    }));
+    vi.stubGlobal("window", new EventTarget());
+    const settings = { mapMode, maxLevels: 4, initialNpcsPerPlayer: 1,
+      npcMovementSpeed: 0, npcDetectionRange: 0 };
+    const definition = defaultModuleFactory.createInitialMap!(settings, 42);
+    if (!definition) throw new Error("The selected map mode must provide an initial map.");
+    const world = new SessionWorld<DefaultEntity>("pickup-waves", definition.bounds,
+      [...loadMap(definition).obstacles]);
+    const navigation = new BoundedNavigation(world.geometry);
+    const maps = new AuthoritativeMapTransition(world, navigation, () => {});
+    let spawned = 0;
+    const context: ModuleContext<DefaultEntity> & { defaultMapDefinition: typeof definition } = {
+      defaultMapDefinition: definition, maps,
+      clock: { nowMs: () => 0 }, random: { next: () => 0.5 },
+      entities: {
+        get: id => world.getEntity(id),
+        add: entity => {
+          if (entity.state.kind === "pickup" && entity.state.pickupType === "health") spawned++;
+          world.addEntity(entity);
+        },
+        update: (id, update) => world.addEntity(update(world.getEntity(id)!)),
+        remove: id => world.removeEntity(id), values: () => world.entities(),
+        queryRadius: (point, radius, maxCells) => world.queryEntities(point, radius, maxCells)
+      },
+      geometry: {
+        isWalkable: (x, y, radius = 0) => world.geometry.isCircleWalkable({ x, y }, radius),
+        intersectsObstacle: (x, y, radius) => world.geometry.intersectsObstacle({ x, y }, radius),
+        moveCircle: (point, delta, radius) => world.geometry.moveCircle(point, delta, radius)
+      },
+      navigation: { requestPath: () => undefined, getPath: () => undefined },
+      emit: () => {}, requestCompletion: () => {},
+      metrics: { gauge: () => {}, increment: () => {} }
+    };
+    const module = defaultModuleFactory.create(context, settings,
+      [{ accountId: "alice", username: "Alice", joinedOrder: 0 }], 42);
+    const healthPacks = () => world.entities().filter(entity =>
+      entity.state.kind === "pickup" && entity.state.pickupType === "health");
+    const skins = (["player", "spectator"] as const).map(role => {
+      const host: SkinHost = {
+        slots: new Map(["world", "hud", "controls"].map(name => [name, document.createElement("div")])),
+        selectedTarget: { accountId: "alice", username: "Alice" },
+        cameraAnchor: undefined, setCameraAnchor(anchor) { this.cameraAnchor = anchor; },
+        dispatchInput: vi.fn(), navigate: () => {}
+      };
+      return { role, host, skin: defaultSkinFactory.mount(host, {
+        image: async () => { throw new Error("No images used."); },
+        audio: async () => { throw new Error("No audio used."); }
+      }) };
+    });
+    const observe = () => {
+      const packs = healthPacks();
+      const ids = packs.map(pack => pack.id).sort();
+      for (const pack of packs) {
+        expect(world.geometry.isCircleWalkable(pack.position, pack.radius)).toBe(true);
+      }
+      // Center the camera on the authored health site, not on a distant player spawn.
+      const camera = packs[0]?.position ??
+        definition.spawns.find(spawn => spawn.pickupType === "health")!.position;
+      context.entities.update("player:alice", player => ({ ...player, position: camera }));
+      for (const { role, host, skin } of skins) {
+        const snapshot = DefaultViewSchema.parse(module.snapshot({ accountId: "alice", role }));
+        if (role === "spectator") {
+          const player = snapshot.players[0]!;
+          snapshot.spectatorView = {
+            targetAccountId: player.accountId, cameraAnchor: player.position,
+            hud: { health: player.health, points: player.points },
+            death: { alive: player.alive, remainingSeconds: 0 }
+          };
+        }
+        const markers = snapshot.radar!.markers.filter(marker => ids.includes(marker.id));
+        expect(snapshot.radar!.markers.filter(marker => marker.category === "pickup")
+          .map(marker => marker.id).sort()).toEqual(world.entities()
+          .filter(entity => entity.state.kind === "pickup").map(entity => entity.id).sort());
+        expect(markers.map(marker => marker.id).sort()).toEqual(ids);
+        for (const marker of markers) {
+          expect(marker.category).toBe("pickup");
+          expect(marker.position).toEqual(packs.find(pack => pack.id === marker.id)!.position);
+        }
+        skin.handleViewport(800, 600, 1);
+        skin.handleSnapshot(snapshot);
+        const canvas = (host.slots.get("world") as unknown as HudElement).children[0]!;
+        canvas.drawnPaths.length = 0;
+        skin.render(snapshot.tick * 1000 / 30, snapshot);
+        expect(canvas.drawnPaths.filter(path => path.color === "#66df8a")).toHaveLength(packs.length);
+        expect(canvas.drawnPaths.filter(path => path.color === "#0088ff")).toHaveLength(packs.length);
+      }
+      return { arena: packs.length, radar: ids.length };
+    };
+    const rows = [];
+    let tick = 0;
+    let previousSpawned = 0;
+    try {
+      module.initialize();
+      for (let level = 1; level <= 3; level++) {
+        expect(module.state).toMatchObject({ level, phase: "active" });
+        const start = observe();
+        const waveSpawned = spawned - previousSpawned;
+        previousSpawned = spawned;
+        const before = healthPacks().length;
+        context.entities.update("player:alice", player => ({
+          ...player, state: { ...player.state, health: collect ? 175 : 200 }
+        }));
+        module.step(0, ++tick);
+        const collected = before - healthPacks().length;
+        expect(world.getEntity("player:alice")!.state.health).toBe(collect ? 175 + collected * 25 : 200);
+        const remaining = observe();
+        if (level === 1 && collect) {
+          const powerup = world.entities().find(entity =>
+            entity.state.kind === "pickup" && entity.state.pickupType === "rapid-fire")!;
+          context.entities.update("player:alice", player => ({ ...player, position: powerup.position }));
+          module.step(0, ++tick);
+          expect(world.getEntity(powerup.id)).toBeUndefined();
+        }
+        const otherPickups = world.entities().filter(entity =>
+          entity.state.kind === "pickup" && entity.state.pickupType !== "health");
+        for (const npc of world.entities().filter(entity => entity.state.kind === "npc")) {
+          world.removeEntity(npc.id);
+        }
+        module.step(0, ++tick);
+        expect(module.state.phase).toBe("intermission");
+        expect(observe()).toEqual(remaining);
+        module.step(0, tick + LEVEL_INTERMISSION_TICKS - 1);
+        expect(observe()).toEqual(remaining);
+        tick += LEVEL_INTERMISSION_TICKS;
+        module.step(0, tick);
+        expect(module.state).toMatchObject({ level: level + 1, phase: "active" });
+        const next = observe();
+        expect(world.entities().filter(entity => entity.state.kind === "pickup" &&
+          entity.state.pickupType !== "health").map(entity => entity.id).sort())
+          .toEqual(otherPickups.map(entity => entity.id).sort());
+        rows.push({ level, spawned: waveSpawned, collected, start, remaining, next });
+      }
+      console.info(JSON.stringify({ mapMode, seed: 42, collect, healthPickupTrace: rows }));
+      expect(rows).toEqual([1, 2, 3].map(level => ({
+        level, spawned: collect || level === 1 ? 1 : 0, collected: collect ? 1 : 0,
+        start: { arena: 1, radar: 1 },
+        remaining: { arena: collect ? 0 : 1, radar: collect ? 0 : 1 },
+        next: { arena: 1, radar: 1 }
+      })));
+    } finally {
+      for (const { skin } of skins) skin.dispose();
+      module.dispose();
+      expect(healthPacks()).toEqual([]);
+    }
+  });
 
   it.each(["player", "spectator"] as const)(
     "renders health radar pickups as bright blue diamonds without changing other markers (%s)", role => {

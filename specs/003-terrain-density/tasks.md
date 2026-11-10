@@ -2,6 +2,40 @@
 
 Scoped sequential feature; retains original engine and Theme Credits context.
 
+## Health-pickup wave trace follow-up (2026-11-10)
+
+- [x] T027 Trace health spawns, collections and next-wave arena/radar counts
+  through the first three Dots and Squares waves on Fixed and Simple Generated.
+  Reproduce before fixing; replenish only consumed health packs at wave starts,
+  retaining existing packs and other pickup lifecycles. Verify both render
+  roles, intermission timing, safe relocation, healing, no duplicates and
+  disposal. Document counts and whether a per-wave pickup setting already
+  exists. Keep changes local for review and original T042 open. Follows T026.
+
+T027 evidence: seed-42 real-module traces reproduced one initial health spawn,
+one wave-1 collection and no replenishment in waves 2/3 on both map modes.
+Uncollected packs retained correct entity/marker positions and player/spectator
+Canvas draws; no radar-only bug reproduced. After the theme-only refill fix,
+each of waves 1/2/3 spawns and collects one health pack, with one arena pack and
+one radar marker at next starts 2/3/4. Full-health retained traces spawn 1/0/0,
+collect 0/0/0 and retain one pack/marker without duplicates. Intermission,
+generated relocation, 25-HP healing, consumed rapid-fire/unconsumed spread and
+disposal are covered. Default-theme build passed; focused **8 files / 152
+tests** passed in **15.75 seconds**. Detailed conditions, commands, baseline
+fixture correction and counts are in docs/verification.md. No per-wave health
+count/frequency setting exists; no setting, radar logic or public API added.
+The initial handoff made no real browser/full-suite/capacity/deployment claim,
+commit or push. No hooks file exists.
+
+Subsequent scoped review found no blocking defects. The isolated staged Linux
+candidate passed build, workspace/tool checks and the unfiltered suite:
+**56 files / 413 tests**, zero failures/skips, **41.81 seconds**, including the
+unchanged immutable consumer gate. See docs/verification.md for conditions and
+wrapper corrections. Owner authorization now permits only this fix, tests and
+matching notes to be committed and pushed without force, subject to a full Linux
+rerun on that exact committed candidate and a sole-outgoing-commit check.
+Unrelated edits and original T042/live gates remain preserved and open.
+
 ## 200-HP default and health radar follow-up (2026-11-10)
 
 - [x] T024 Raise the existing `playerMaxHealth` default from 150 to 200, preserve

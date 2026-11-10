@@ -1,5 +1,23 @@
 # Implementation Plan: Per-Level Terrain Density
 
+## Health-pickup wave trace follow-up (2026-11-10)
+
+Use seeded real module/SessionWorld progression and both skins' Canvas draws to
+trace three waves plus their next-start boundaries on each map. Stage overlap,
+damage and NPC removal explicitly; distinguish this from browser/free-play
+evidence. Reproduce before changing gameplay. Reuse entity creation in
+`DefaultEntitySimulator` to fill only missing authored health sites from the
+current map on `startLevel`; preserve retained IDs/state and other pickup types.
+Assert no early refill, safe relocated positions, exact entity/marker agreement,
+no duplicates, healing and disposal. Document counts and absence of a per-wave
+health setting. Leave public contracts, consumer pin and original T042 intact.
+
+For the scoped release review, isolate only this fix, tests and matching notes
+from mixed files. Validate a disposable Linux copy with the full unfiltered
+suite and unchanged consumer gate. Commit the scoped candidate, rerun the full
+Linux suite on that exact commit, then push without force only if it passes
+and is the sole outgoing commit. Preserve all unrelated edits and T042.
+
 ## 200-HP default and health radar follow-up (2026-11-10)
 
 Update the existing protocol default/schema fallback and theme manifest to 200;

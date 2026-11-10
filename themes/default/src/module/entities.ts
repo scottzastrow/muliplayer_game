@@ -173,26 +173,7 @@ export class DefaultEntitySimulator {
       1,
       npcSpawns
     );
-    const pickupSpawns = map.definition.spawns.filter((candidate) => candidate.kind === "pickup");
-    if (pickupSpawns.length > MAX_PICKUPS_PER_SESSION) {
-      this.context.metrics.increment("default.pickup.rejected_cap");
-      throw new RangeError("Map exceeds the supported pickup limit.");
-    }
-    for (const spawn of pickupSpawns) {
-      const pickupType = spawn.pickupType;
-      if (!pickupType) {
-        throw new TypeError(`Pickup spawn ${spawn.id} has no pickup type.`);
-      }
-      const pickupId = `pickup:${spawn.id}`;
-      this.context.entities.add({
-        id: pickupId,
-        typeId: `pickup.${pickupType}`,
-        position: spawn.position,
-        radius: spawn.radius,
-        state: { kind: "pickup", pickupType }
-      });
-      this.#pickupIds.add(pickupId);
-    }
+    this.#spawnPickups(map.definition.spawns.filter(spawn => spawn.kind === "pickup"));
     this.#initialized = true;
   }
 
@@ -211,6 +192,9 @@ export class DefaultEntitySimulator {
       throw new Error("Default entity simulator has no loaded map.");
     }
     this.#spawnNpcs(npcCount, npcHealth, level, []);
+    this.#spawnPickups(map.definition.spawns.filter(spawn =>
+      spawn.kind === "pickup" && spawn.pickupType === "health" &&
+      !this.context.entities.get(`pickup:${spawn.id}`)));
   }
 
   applyInput(accountId: string, action: Readonly<DefaultPlayerAction>): void {
@@ -278,6 +262,29 @@ export class DefaultEntitySimulator {
     this.#map = undefined;
     this.#roster = [];
     this.#disposed = true;
+  }
+
+  #spawnPickups(pickupSpawns: readonly MapSpawn[]): void {
+    const existing = this.context.entities.values().filter(entity => entity.state.kind === "pickup").length;
+    if (existing + pickupSpawns.length > MAX_PICKUPS_PER_SESSION) {
+      this.context.metrics.increment("default.pickup.rejected_cap");
+      throw new RangeError("Map exceeds the supported pickup limit.");
+    }
+    for (const spawn of pickupSpawns) {
+      const pickupType = spawn.pickupType;
+      if (!pickupType) {
+        throw new TypeError(`Pickup spawn ${spawn.id} has no pickup type.`);
+      }
+      const pickupId = `pickup:${spawn.id}`;
+      this.context.entities.add({
+        id: pickupId,
+        typeId: `pickup.${pickupType}`,
+        position: spawn.position,
+        radius: spawn.radius,
+        state: { kind: "pickup", pickupType }
+      });
+      this.#pickupIds.add(pickupId);
+    }
   }
 
   #spawnNpcs(

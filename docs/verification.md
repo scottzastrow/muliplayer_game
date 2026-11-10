@@ -1,5 +1,121 @@
 # Local verification
 
+## Health-pickup wave trace (2026-11-10, T027)
+
+The owner authorized automated runtime/Canvas checks instead of an IDE session
+(no IDE run configuration exists). Used seed **42**, one player, four configured
+levels to observe the boundary after wave 3, one initial NPC per player,
+stationary/non-detecting NPCs, default 200 player HP and default generated density
+3/0. Tests stage player overlap/175 HP and remove NPCs to advance real module
+progression; these are controlled traces, not unassisted gameplay or browser
+observations. Both player and selected-target spectator skins render the
+authoritative snapshots through the existing mocked DOM/Canvas at 800x600.
+The camera is centered on the health site to distinguish arena draw visibility
+from offscreen/radar visibility.
+
+Pre-fix, **both Fixed and Simple Generated** produced:
+
+| Wave | New health spawns | Collected | Remaining after collection | Arena at next start | Radar at next start |
+|------|-------------------|-----------|----------------------------|---------------------|---------------------|
+| 1 | 1 | 1 | 0 | 0 | 0 |
+| 2 | 0 | 0 | 0 | 0 | 0 |
+| 3 | 0 | 0 | 0 | 0 | 0 |
+
+`initialize` authored pickups once; `startLevel` spawned only NPCs. Generated
+map transitions retained only still-existing pickups, so they could not restore
+consumed health packs either. No independent radar-loss defect reproduced:
+uncollected health entities kept matching marker IDs/positions and blue diamond
+draws through every boundary in both roles.
+
+After reusing pickup creation to replenish only missing health sites at wave
+start, **both maps** produce:
+
+| Wave | New health spawns | Collected | Remaining after collection | Arena at next start | Radar at next start |
+|------|-------------------|-----------|----------------------------|---------------------|---------------------|
+| 1 | 1 | 1 | 0 | 1 | 1 |
+| 2 | 1 | 1 | 0 | 1 | 1 |
+| 3 | 1 | 1 | 0 | 1 | 1 |
+
+The next-start columns refer to waves **2, 3, 4**, respectively. A separate
+full-health/non-collection trace on each map reports new spawns **1, 0, 0**,
+collections **0, 0, 0**, with **1 arena pack / 1 radar marker** at every next
+start. Existing packs are not duplicated. Each trace checks no refill before
+the exact 150-tick intermission boundary, safe positions after generated-map
+changes, exact pickup entity/marker agreement, arena green/blue radar diamond
+draw counts for both roles, 25-HP healing and disposal. A consumed rapid-fire
+pack stays consumed while uncollected spread remains, preserving other pickups.
+
+No per-wave health-pickup count/frequency setting exists in the protocol
+settings schema, theme manifest or host editor. Maps author **one health site**;
+`HEALTH_PICKUP_AMOUNT = 25` and `MAX_PICKUPS_PER_SESSION = 100` are source tuning
+constants. `playerMaxHealth` sets the healing cap, not pickup quantity.
+No new setting, public contract API, radar logic or consumer-pin change.
+
+Executed in the existing Windows/npm workspace:
+
+```powershell
+npm run build --workspace @multiplayer-game/default-theme
+npm test -- tests\default-skin.test.ts -t 'traces three health-pickup waves'
+npm test -- tests\default-skin.test.ts tests\default-entities.test.ts tests\default-combat.test.ts tests\default-theme.test.ts tests\terrain-density.test.ts tests\radar.test.ts tests\player-max-health.test.ts tests\default-respawn.test.ts
+git diff --check
+```
+
+The initial fixture failed four cases because module snapshots need the
+host-supplied selected-target spectator projection; deriving it from the real
+player snapshot fixed the fixture. The corrected baseline passed both retained
+pack cases and failed both consumed-pack cases with the counts above.
+Post-fix build passed; the focused eight-file run passed **152 tests**, with no
+skips, in **15.75 seconds**. No real browser, full-suite, capacity or deployment
+execution is claimed. After adding an explicit missing-initial-map fixture
+guard, the final trace-only rerun passed **4 tests** (24 unrelated cases
+excluded by the name filter) in **10.52 seconds**. Whitespace checks passed.
+No extension hooks file exists. At that handoff, changes remained
+local/uncommitted; pre-existing local edits were preserved and original T042
+stayed unchecked.
+
+### Scoped review and Linux release gate
+
+The subsequent owner authorization permits only this replenishment fix, tests
+and matching notes to be committed and pushed without force after the full
+Linux suite passes on the exact candidate. Review found no blocking defects.
+Only health-related sections of mixed documentation files were staged; the
+public packages, immutable consumer pin and drift assertion remain unchanged.
+
+Validated staged tree `de146efa436e535e8c7561ef1ca769a44ee33afc` in a disposable
+`node:24-bookworm` Linux x86_64 container, Node **24.22.2**, npm **11.19.1**,
+WSL2 kernel **5.15.167.4-microsoft-standard-WSL2**. A local clone supplied Git
+history for the unchanged conformance check; a canonical-LF archive supplied
+only the staged candidate. Tree equality was checked before and after execution.
+No unrelated edits, Windows dependencies, local environment or runtime data
+entered the copy. Executed:
+
+```text
+npm ci --no-audit --no-fund
+npm run build
+npm run check
+npm test
+```
+
+Build, all workspace/tool checks and the unfiltered suite passed:
+**56 files / 413 tests**, zero failures or skips, **41.81 seconds**, with
+default workers/timeouts. All five public-theme conformance tests passed,
+including the packed external consumer (**5.131 seconds**). The four new
+wave traces passed within the full run. Dependency installation emitted
+non-fatal deprecation/install-script-policy warnings.
+
+Initial validation wrappers stopped before installation/tests on Windows
+argument quoting, wrapper CRLF and archive CRLF respectively. Normalizing only
+the disposable wrapper and exporting with `git -c core.autocrlf=false archive`
+resolved these without changing candidate sources or weakening any check.
+Raw successful output is retained as `health-linux-precommit.log` in the
+Copilot session files.
+
+The final release gate reruns the same build/check/unfiltered suite on the exact
+committed candidate, including these verification notes, before any push.
+Push only if that succeeds and a fresh fetch confirms this is the sole outgoing
+commit; use no force. Unrelated worktree edits and original T042 remain open.
+No real-browser, deployment or capacity result is claimed. No hooks file exists.
+
 ## Public SDK movement controller (2026-11-10, T026)
 
 Added public `MovementController` / `MovementControllerOptions` with validated

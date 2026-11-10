@@ -1,5 +1,22 @@
 # Feature Specification: Per-Level Terrain Density
 
+## Health-pickup wave trace follow-up (2026-11-10)
+
+Trace health spawn/collection counts through the first three Dots and Squares
+waves on Fixed and Simple Generated, including arena/radar state at each next
+wave start. Fix only confirmed replenishment or marker-loss issues. Replenish
+consumed health packs at authored sites when a wave starts, retaining rather
+than duplicating uncollected packs. Preserve intermission timing, other pickup
+lifecycles and generated-map safe relocation. Report existing settings rather
+than introducing a pickup-count option. Automated runtime/Canvas checks are
+authorized instead of an IDE session. Keep changes local for review and
+original T042 open; no commit, push or deployment.
+
+Subsequent review authorization permits only the health replenishment fix,
+its tests and matching verification notes to be committed and pushed without
+force after the full Linux suite passes on the exact candidate. Preserve
+unrelated edits and leave original T042 open; no deployment is authorized.
+
 ## 200-HP default and health radar follow-up (2026-11-10)
 
 Supersede only the earlier 150-HP default with 200 through the existing

@@ -23,6 +23,14 @@ both player and spectator views. Other pickups retain orange diamonds; player
 markers retain their roster colors and circular shape. Arena pickup styling is
 unchanged.
 
+There is no per-wave health-pickup count/frequency setting. Both Fixed and
+Simple Generated author one health spawn (heals 25 HP, capped by
+`playerMaxHealth`). On each wave start, Dots and Squares replenishes a consumed
+health pack at that map's authored site. An uncollected pack is retained, not
+duplicated; generated-map transitions relocate it safely. No refill occurs
+during intermission. Rapid-fire/spread pickups retain their existing one-time
+match lifecycle. Radar markers come from the authoritative surviving entities.
+
 ## Default-theme wave status and transitions
 
 The module emits `startingNpcCount`, `livingNpcCount` and ranked `levelStandings`

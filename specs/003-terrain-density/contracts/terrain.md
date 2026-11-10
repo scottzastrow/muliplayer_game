@@ -38,3 +38,9 @@ scores or identity; preserve absent players' death/presence timers and update
 their current respawn map. Retire projectiles, reset stale NPC goals, retain
 pickup state at safe authored positions. Full NPC wave placement remains bounded
 and explicit on insufficient space; no truncation.
+
+Dots and Squares replenishes missing health pickups at the new map's authored
+health sites when the next wave starts (not during intermission). Retained
+health packs are relocated without duplication; rapid-fire/spread consumption
+state is unchanged. This is theme-owned lifecycle behavior, not a new public
+map-transition service or host pickup-count setting.
