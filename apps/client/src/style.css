@@ -15,3 +15,78 @@ th, td { padding: 0.5rem; text-align: left; }
 .game-world canvas:focus { outline: 3px solid #1688bf; outline-offset: -3px; }
 .game-controls { font-size: 0.9rem; }
 .results-view .game-world { height: auto; overflow: auto; }
+
+body.match-view {
+  height: 100dvh;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.match-view > h1 { display: none; }
+.match-view > #status { flex: none; margin: 0; padding: 0 0.5rem; }
+.match-view > #status:empty { display: none; }
+.match-view #app {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.match-view #app > button { align-self: flex-start; }
+.match-view .game-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.match-view .game-hud {
+  flex: none;
+  align-items: center;
+  gap: 1rem;
+  margin: 0;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+.match-view .game-hud > button {
+  order: 1;
+  margin: 0 0 0 auto;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.85rem;
+}
+.match-view .game-world { flex: 1; min-height: 0; height: auto; position: relative; }
+.match-view .game-controls {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 0.5rem;
+  max-width: calc(100% - 1rem);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  color: #f5f7fa;
+  background: #101824e6;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+}
+.match-view .game-controls p { margin: 0; }
+.match-view .game-controls details > summary { cursor: pointer; }
+.match-view .game-controls fieldset { margin: 0.25rem 0 0; }
+.match-view .default-life,
+.match-view .default-terrain-coverage {
+  position: absolute;
+  left: 0.5rem;
+  color: #f5f7fa;
+  background: #101824e6;
+  padding: 0.25rem 0.5rem;
+  pointer-events: none;
+}
+.match-view .default-life { top: 0.5rem; }
+.match-view .default-terrain-coverage { top: 2.5rem; font-size: 0.8rem; }
+.match-view .default-level-summary {
+  order: 2;
+  max-height: 45dvh;
+  overflow: auto;
+  font-variant-numeric: normal;
+}

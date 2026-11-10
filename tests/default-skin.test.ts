@@ -67,7 +67,7 @@ class HudElement extends EventTarget {
 describe("Dots and Squares presentation", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it.each(["player", "spectator"] as const)("shows authoritative wave counts and intermission standings for %s", role => {
+  it.each(["player", "spectator"] as const)("shows compact stats, arena wave counts and intermission standings for %s", role => {
     const elements: HudElement[] = [];
     vi.stubGlobal("document", Object.assign(new EventTarget(), {
       createTextNode: (text: string) => Object.assign(new HudElement(), { textContent: text }),
@@ -90,6 +90,7 @@ describe("Dots and Squares presentation", () => {
     });
     const snapshot = {
       ...view(100), viewerRole: role, startingNpcCount: 10, livingNpcCount: 7,
+      waveRemainingSeconds: 42.2,
       map: { ...view(100).map, terrain: { level: 1, density: 10, targetCoveragePercent: 80,
         actualCoveragePercent: 60, budgetExhausted: true } },
       levelStandings: [
@@ -105,9 +106,15 @@ describe("Dots and Squares presentation", () => {
       skin.handleViewport(800, 600, 1);
       skin.handleSnapshot(snapshot);
       skin.render(0, snapshot);
-      const count = elements.find(element => element.className === "default-enemy-count")!;
+      const canvas = (host.slots.get("world") as unknown as HudElement).children[0]!;
+      const life = elements.find(element => element.className === "default-life")!;
       const summary = elements.find(element => element.className === "default-level-summary")!;
-      expect(count.textContent).toBe("Level 1 \u00b7 7 of 10 enemies remaining");
+      expect(elements.some(element => element.className === "default-enemy-count")).toBe(false);
+      expect(canvas.drawnText).toContain("Enemies remaining: 7");
+      expect(elements.find(element => element.className === "default-points")!.textContent).toBe("Score: 200");
+      expect(elements.find(element => element.className === "default-health")!.textContent).toBe("Health: 90");
+      expect(elements.some(element => element.className === "default-wave-time")).toBe(false);
+      expect(life.hidden).toBe(true);
       expect(elements.find(element => element.className === "default-terrain-coverage")!.textContent)
         .toBe("Terrain density 10: 60.00% coverage (target 80%) - limited by safe routes/spawns");
       expect(summary.hidden).toBe(true);
@@ -115,12 +122,13 @@ describe("Dots and Squares presentation", () => {
       filter.checked = false;
       filter.dispatchEvent(new Event("change"));
       skin.render(40, snapshot);
-      expect(count.textContent).toBe("Level 1 \u00b7 7 of 10 enemies remaining");
+      expect(canvas.drawnText).toContain("Enemies remaining: 7");
       const cleared = { ...snapshot, tick: 3, livingNpcCount: 0,
         phase: "intermission", intermissionEndsAtTick: 153 };
       skin.handleSnapshot(cleared);
       skin.render(80, cleared);
       expect(summary.hidden).toBe(false);
+      expect(life.hidden).toBe(true);
       expect(summary.children[0]!.textContent).toBe("Level 1 Complete");
       expect(summary.children[1]!.textContent).toBe("Points earned this level: 100");
       expect(summary.children[2]!.textContent).toBe("Level 2 starts in 5\u2026");
@@ -136,12 +144,11 @@ describe("Dots and Squares presentation", () => {
           obstacles: [{ x: 96, y: 96, width: 32, height: 32 }] } };
       skin.handleSnapshot(next);
       skin.render(160, next);
-      const canvas = (host.slots.get("world") as unknown as HudElement).children[0]!;
       expect(canvas.drawnRects).toEqual(expect.arrayContaining([
         expect.objectContaining({ x: 396, y: 296, width: 32, height: 32 })
       ]));
       expect(summary.hidden).toBe(true);
-      expect(count.textContent).toBe("Level 2 \u00b7 12 of 12 enemies remaining");
+      expect(canvas.drawnText).toContain("Enemies remaining: 12");
       skin.handleSnapshot({ ...next, tick: 154, phase: "complete" });
       skin.render(200, next);
       expect(summary.hidden).toBe(true);
@@ -361,7 +368,7 @@ describe("Dots and Squares presentation", () => {
     }
   });
 
-  it.each(["player", "spectator"] as const)("renders wave time in the %s HUD even during respawn", role => {
+  it.each(["player", "spectator"] as const)("omits wave time in the %s HUD even with legacy time fields during respawn", role => {
     const elements: HudElement[] = [];
     const documentTarget = new EventTarget();
     vi.stubGlobal("document", Object.assign(documentTarget, {
@@ -397,8 +404,7 @@ describe("Dots and Squares presentation", () => {
       skin.handleViewport(800, 600, 2);
       skin.handleSnapshot(snapshot);
       skin.render(performance.now(), snapshot);
-      const timer = elements.find(element => element.className === "default-wave-time")!;
-      expect(timer.textContent).toBe("Wave time remaining: 43s");
+      expect(elements.some(element => element.className === "default-wave-time")).toBe(false);
       expect(elements.find(element => element.className === "default-life")?.textContent)
         .toBe("Respawning in 3s");
       expect(elements.flatMap(element => element.drawnText))
@@ -415,20 +421,18 @@ describe("Dots and Squares presentation", () => {
         .toContainEqual({ x: 916, y: 84, radius: 72 });
       expect(elements.flatMap(element => element.drawnLabels))
         .toContainEqual({ text: "Enemies remaining: 1", x: 916, y: 164 });
-      expect(timer.textContent).toBe("Wave time remaining: 41s");
       const maximumBudget = { ...next, tick: 5, waveRemainingSeconds: 360 };
       skin.handleSnapshot(maximumBudget);
       skin.render(performance.now(), maximumBudget);
-      expect(timer.textContent).toBe("Wave time remaining: 360s");
       const cleared = { ...maximumBudget, tick: 6, phase: "intermission" };
       skin.handleSnapshot(cleared);
       skin.render(performance.now(), cleared);
-      expect(timer.textContent).toBe("");
+      expect(elements.some(element => element.className === "default-wave-time")).toBe(false);
       expect(host.dispatchInput).not.toHaveBeenCalled();
     } finally {
       skin.dispose();
     }
-    expect(elements.find(element => element.className === "default-wave-time")?.removed).toBe(true);
+    expect(elements.some(element => element.className === "default-wave-time")).toBe(false);
   });
 
   it.each(["player", "spectator"] as const)("keeps all four %s filters local and independent", role => {

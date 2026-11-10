@@ -69,6 +69,12 @@ retaining speed, pauses, path budgets and speed-zero semantics. No protocol/SDK
 or engine geometry changes; browser evidence must separate actual world draws
 from radar-rim visibility and local simulation from the uninspected deployment.
 
+T009 uses an optional client-local skin-host toolbar to place existing navigation
+beside default-theme Score/Health stats without SDK changes.
+Match-only flex sizing removes fixed height deductions; controls and secondary
+feedback overlay the arena, and standings retain a bounded scrollable region.
+Dispose restores the normal lobby/results document layout.
+
 T011 replaces only the default module's wave deadline with a private Countdown
 recreated on wave start and the combat kill-award callback. Keep SDK Countdown
 and fixed-budget helpers unchanged for other consumers. Add validated host/API

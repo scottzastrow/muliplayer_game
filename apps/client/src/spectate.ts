@@ -59,6 +59,9 @@ export function mountSpectate(
     return body;
   }
   function clearView(): void {
+    document.body.classList.remove("match-view");
+    heading.hidden = false;
+    root.insertBefore(back, view);
     viewListeners.abort();
     viewListeners = new AbortController();
     mounted?.dispose();
@@ -139,8 +142,11 @@ export function mountSpectate(
         if (action === "players") void refreshPlayers();
         else if (action === "lobby") void leave();
       },
+      toolbar: [back],
       onError: fail
     });
+    document.body.classList.add("match-view");
+    heading.hidden = true;
     const controls = mounted.host.slots.get("controls")!;
     const following = document.createElement("p");
     following.textContent = `Following ${player.username}`;

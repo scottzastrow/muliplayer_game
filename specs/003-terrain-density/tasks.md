@@ -38,6 +38,39 @@ The user authorized committing only this scoped work after that pass, supersedin
 the earlier no-commit instruction for this slice; unrelated edits remain unstaged.
 Original T042 is unchanged and open. No extension hooks file exists.
 
+## Compact match view and live roaming follow-up (2026-11-09)
+
+- [x] T009 Compact player and selected-target spectator views: hide application
+  and theme headings, use one slim Score/Health bar with compact Back to Lobby,
+  retain arena radar without duplicate level/enemy labels, fill the
+  desktop viewport without page scrolling, preserve lobby and wave standings.
+  Verify both roles at normal desktop sizes with actual browser evidence.
+- [ ] T010 Keep the reported deployed `1e94ff3` roaming issue open until a
+  15-second trace of visible out-of-range NPC positions in that live Fixed match
+  is available. Report positions advancing or the access/trace blocker; local
+  evidence does not close the live report. Do not change AI without reproducing
+  the cause. No push or deployment.
+
+T009 is authorized independently of T010. Existing T008 local observations do
+not resolve the user's reported deployed behavior.
+
+T009 evidence: both roles passed actual Chrome desktop-window checks at
+1366x768, 1440x900 and 1920x1080, a 36.375-pixel active bar, arena filling the
+remaining viewport, no page scrolling, reachable overlay filters and smallest-
+window intermission standings. Roster/re-follow and lobby restoration passed.
+Default-theme build, client type-check/production build and 7 files / 56 focused
+tests passed. The mock cleanup failure and intermediate standings/navigation
+ordering issue were corrected and rerun. See docs/verification.md for exact
+conditions and persisted screenshots.
+
+T010 remains blocked for the reported deployment: no attached live session/
+browser trace or IDE run configuration is available for that process. A separate
+unstaged local Fixed seed-12 run traced 233 snapshots over 15.430 seconds.
+Visible, continuously out-of-range npc:npc-northeast advanced in all three
+five-second windows (51.69/74.88/74.69 world units), world-painted in 233/233
+samples. This does not close the deployed report. No AI code was changed.
+Original T042 is unchanged; no push or deployment was performed.
+
 ## Evidence
 
 Checklist: 16 checked, 0 unchecked (PASS). The prerequisite helper resolved this

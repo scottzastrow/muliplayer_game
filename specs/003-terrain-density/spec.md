@@ -131,6 +131,22 @@ death/range replacement, denied contact, and overlapping two-player eligibility.
 Distinguish browser observations from deterministic simulation checks; do not
 infer the code revision or runtime behavior of an uninspected live deployment.
 
+### Compact active match follow-up
+
+Player and selected-target spectator views hide the application/theme headings.
+One slim top bar shows Score and Health, with compact Back to Lobby navigation.
+The canvas fills the remaining
+desktop viewport without page scrolling. Keep the arena radar and its enemy
+count; remove duplicate external level/enemy labels. Secondary controls remain
+available without reserving canvas height. Preserve lobby, respawn feedback,
+terrain coverage, intermission standings and saved final results.
+
+Verify both roles at normal desktop sizes. The reported deployed `1e94ff3`
+roaming problem remains open pending its own 15-second trace of actually visible,
+out-of-range NPC positions in a running Fixed match. Local results must not be
+presented as proof of the deployed match's behavior. Report trace blockers before
+any AI change; no push or deployment is authorized.
+
 ### Hidden no-kill timer follow-up
 
 Dots and Squares uses a server-authoritative no-kill timeout, configurable via

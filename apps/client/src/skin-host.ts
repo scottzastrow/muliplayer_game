@@ -18,6 +18,7 @@ export function mountSkinHost(
     readonly dispatchInput: (action: JsonValue) => void;
     readonly navigate: SkinHost["navigate"];
     readonly onError: (error: Error) => void;
+    readonly toolbar?: readonly HTMLElement[];
     readonly assets?: AssetLoader;
   }
 ): MountedSkinHost {
@@ -92,6 +93,7 @@ export function mountSkinHost(
   }
   try {
     skin = factory.mount(host, assets);
+    hud.prepend(...(options.toolbar ?? []));
     resize();
     observer.observe(world);
     window.addEventListener("resize", onResize);

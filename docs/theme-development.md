@@ -3,13 +3,26 @@
 ## Default-theme wave status and transitions
 
 The module emits `startingNpcCount`, `livingNpcCount` and ranked `levelStandings`
-for players and spectators. The HUD shows `Level 1 · 7 of 10 enemies remaining`
-independently of radar filters. On a non-final clear, the existing five-second
+for players and spectators. Active player and selected-target spectator views
+use a slim Score/Health bar with Back to Lobby; no wave timer is displayed.
+Application/theme headings and duplicate external
+level/enemy labels are omitted. The canvas fills the remaining desktop viewport,
+with radar and its authoritative enemy count overlaid independently of filters.
+Controls and radar filters are available in the arena's **Controls & radar**
+disclosure; spectator follow/switch controls remain available there as well.
+On a non-final clear, the existing five-second
 intermission shows the completed level, viewed player's level-earned points,
 running standings and next-level countdown. Totals persist across waves; only
 the per-level score baseline resets at the next spawn. Final clears retain the
 existing saved final-standings route. The preview includes an `intermission`
 scenario; older snapshot fixtures without the additive fields still render.
+
+The focused compact-layout browser check is `node tests\browser\default-game.mjs
+--compact-match`, targeting the same test-only staged-wave fixture described
+below. Set `BROWSER_TEST_ARTIFACT_DIR` for screenshots. It checks both roles at
+1366x768, 1440x900 and 1920x1080 normal browser window bounds, actual content
+viewport fit, a top bar at most 48 pixels high, reachable overlay filters,
+smallest-window intermission standings and restoration of the roster/lobby.
 
 The focused real-browser check is `node tests\browser\default-game.mjs
 --level-transitions`, using the existing Chrome debugging setup and

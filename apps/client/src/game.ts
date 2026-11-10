@@ -19,8 +19,6 @@ export function mountGame(
   let mounted: MountedSkinHost | undefined;
   let connection: RealtimeClient | undefined;
   let disposed = false;
-  const heading = document.createElement("h2");
-  heading.textContent = "Connecting to game...";
   const view = document.createElement("div");
   view.className = "game-view";
   const back = document.createElement("button");
@@ -28,7 +26,8 @@ export function mountGame(
   back.textContent = "Back to lobby";
   const listeners = new AbortController();
   back.addEventListener("click", () => navigate("lobby"), { signal: listeners.signal });
-  root.replaceChildren(heading, back, view);
+  root.replaceChildren(back, view);
+  document.body.classList.add("match-view");
   showStatus(status, "Connecting...");
   function stopRealtime(): void {
     if (disposed) return;
@@ -39,6 +38,7 @@ export function mountGame(
   function dispose(): void {
     stopRealtime();
     listeners.abort();
+    document.body.classList.remove("match-view");
   }
   function fail(message: string): void {
     stopRealtime();
@@ -69,9 +69,9 @@ export function mountGame(
             }
           },
           navigate,
+          toolbar: [back],
           onError: (error) => fail(error.message)
         });
-        heading.textContent = renderer.definition.name;
         showStatus(status, message.payload.sessionState === "waiting" ? "Waiting for the creator to start." : "");
       } else if (message.type === "server.snapshot") {
         if (!mounted || message.payload.protocolVersion !== 1 ||

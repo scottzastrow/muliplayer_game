@@ -56,16 +56,12 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     if (!context) throw new Error("This browser does not support Canvas 2D.");
     const points = document.createElement("div");
     points.className = "default-points";
-    points.style.fontSize = "2rem";
     points.style.fontWeight = "bold";
     const health = document.createElement("div");
     health.className = "default-health";
-    health.style.fontSize = "1.1rem";
     const life = document.createElement("div");
     life.className = "default-life";
     life.setAttribute("role", "status");
-    const enemyCount = document.createElement("div");
-    enemyCount.className = "default-enemy-count";
     const terrainCoverage = document.createElement("div");
     terrainCoverage.className = "default-terrain-coverage";
     const levelSummary = document.createElement("section");
@@ -91,13 +87,18 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     standings.append(standingsCaption, standingsHead, standingsBody);
     levelSummary.append(levelTitle, levelPoints, nextLevel, standings);
     levelSummary.hidden = true;
-    hud.append(points, health, enemyCount, terrainCoverage, life, levelSummary);
+    hud.append(points, health, levelSummary);
+    const options = document.createElement("details");
+    const optionsTitle = document.createElement("summary");
+    optionsTitle.textContent = "Controls & radar";
+    options.append(optionsTitle);
     const help = document.createElement("p");
     help.textContent = controlMode === "keyboard-only"
       ? "Click the game to focus. WASD: move and face. Left/Right arrows: turn in place. Space: fire."
       : "Click the game to focus. Arrow keys: move and face. Mouse: aim. Left click: fire.";
-    controls.append(help);
-    world.append(canvas);
+    options.append(help);
+    controls.append(options);
+    world.append(canvas, life, terrainCoverage);
     const listeners = new AbortController();
     const radarFilters = document.createElement("fieldset");
     radarFilters.className = "default-radar-filters";
@@ -121,7 +122,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
       label.append(input, document.createTextNode(filter.label));
       radarFilters.append(label);
     }
-    controls.append(radarFilters);
+    options.append(radarFilters);
     const keys = new Set<string>();
     let previous: DefaultView | undefined;
     let current: DefaultView | undefined;
@@ -429,18 +430,14 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
             RADAR_Y + RADAR_RADIUS + 8
           );
         }
-        points.textContent = `Points: ${observed?.hud.points ?? player.points}`;
+        points.textContent = `Score: ${observed?.hud.points ?? player.points}`;
         health.textContent = `Health: ${observed?.hud.health ?? player.health}`;
-        const living = current.livingNpcCount ?? current.radar?.markers.filter(marker =>
-          marker.category === "enemy").length ?? 0;
-        enemyCount.textContent = current.startingNpcCount === undefined
-          ? `Level ${current.level} \u00b7 ${living} enemies remaining`
-          : `Level ${current.level} \u00b7 ${living} of ${current.startingNpcCount} enemies remaining`;
         const terrain = current.map.terrain;
         terrainCoverage.textContent = terrain
           ? `Terrain density ${terrain.density}: ${terrain.actualCoveragePercent.toFixed(2)}% coverage ` +
             `(target ${terrain.targetCoveragePercent}%)${terrain.budgetExhausted ? " - limited by safe routes/spawns" : ""}`
           : "";
+        terrainCoverage.hidden = !terrain;
         levelSummary.hidden = current.phase !== "intermission";
         if (current.phase === "intermission") {
           levelTitle.textContent = `Level ${current.level} Complete`;
@@ -457,8 +454,8 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
           : !(observed?.death.alive ?? player.alive)
             ? (observed?.death.respawnBlocked ?? player.respawnBlocked)
               ? "Waiting for a safe respawn..." : `Respawning in ${remaining}s`
-          : current.phase === "intermission" ? `Level ${current.level} cleared. Next level soon.`
-          : `Level ${current.level}`;
+          : "";
+        life.hidden = life.textContent === "";
         if (focused && player.alive && current.phase === "active" && current.viewerRole === "player" &&
             time - lastInputAt >= INPUT_INTERVAL_MS) {
           const direction = movement();
@@ -484,11 +481,11 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
         points.remove();
         health.remove();
         life.remove();
-        enemyCount.remove();
         terrainCoverage.remove();
         levelSummary.remove();
         help.remove();
         radarFilters.remove();
+        options.remove();
         previous = undefined;
         current = undefined;
       }

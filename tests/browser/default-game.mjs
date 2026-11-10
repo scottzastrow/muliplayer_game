@@ -363,8 +363,8 @@ function centered(view) {
     `own dot centered horizontally (${dot.x} versus ${view.width / 2})`);
   assert.ok(Math.abs(dot.y - view.height / 2) < 0.1,
     `own dot centered vertically (${dot.y} versus ${view.height / 2})`);
-  assert.ok(view.pointsFont > view.healthFont, "points are visually dominant");
-  assert.equal(view.points, `Points: ${own(view).points}`);
+  assert.equal(view.pointsFont, view.healthFont, "stats share a compact type size");
+  assert.equal(view.points, `Score: ${own(view).points}`);
   assert.equal(view.health, `Health: ${own(view).health}`);
   const facing = player.facing ?? { x: 1, y: 0 };
   const expectedFacingDot = { x: dot.x + facing.x * 16, y: dot.y + facing.y * 16 };
@@ -724,7 +724,7 @@ try {
     const { verifyEndSession } = await import("./end-session.mjs");
     await verifyEndSession({ newWindow, signIn, evaluate, click, clickSessionButton,
       waitFor, cdp, waitForDialog, version });
-  } else if (process.argv.includes("--level-transitions")) {
+  } else if (process.argv.includes("--level-transitions") || process.argv.includes("--compact-match")) {
     const { verifyLevelTransitions } = await import("./level-transitions.mjs");
     await verifyLevelTransitions({ newWindow, signIn, evaluate, click, clickSessionButton,
       waitFor, cdp, delay, state, aim, version });

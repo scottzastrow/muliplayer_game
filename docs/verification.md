@@ -85,6 +85,96 @@ No extension hooks file exists. Existing edits were retained; the deployed
 T042 remains unchecked. No AI behavior, server deployment or capacity result
 is claimed.
 
+## Compact match view and separate roaming trace (2026-11-09)
+
+**Compact layout verified locally; deployed roaming report remains open.**
+Player and selected-target spectator views now have a single Score/Health/
+active-wave-time bar with compact Back to Lobby. Application/theme headings,
+the separate enemy-count row and redundant live-level status are removed.
+Radar/count, respawn feedback, terrain coverage and secondary controls remain
+inside the arena. Controls/radar filters use an expandable overlay. Intermission
+standings retain their content and countdown; navigation stays above them.
+Leaving play or returning to the spectator roster restores normal document
+layout. No AI, server, protocol or SDK behavior changed in this slice.
+
+Actual browser: headless Chrome **157.0.8103.40**, Windows, normal desktop window
+bounds, no device-metrics override. `node tests\browser\default-game.mjs
+--compact-match` passed twice using the existing loopback-only staged-wave
+fixture, server **18103**, client **15193**, Chrome debugging **19242** and
+disposable `var\compact-wave-check.sqlite`. Readiness/client/CDP endpoints
+returned HTTP 200. Final measurements were identical for both roles:
+
+| Browser window | Actual content viewport | Active top bar | Arena canvas |
+| --- | --- | --- | --- |
+| 1366x768 | 1334x665 | 36.375 px | 1334x628.625 |
+| 1440x900 | 1408x797 | 36.375 px | 1408x760.625 |
+| 1920x1080 | 1888x977 | 36.375 px | 1888x940.625 |
+
+At all six role/size combinations the document exactly matched the content
+viewport: no horizontal/vertical page scrolling, hidden application/theme
+headings, one stats/navigation row, no duplicate count, radar in the arena,
+and canvas immediately below the bar through the browser bottom. Expanding
+Controls & radar left filters reachable without scrolling or resizing the
+arena. The spectator dispatched no gameplay input.
+
+Final browser run cleared all ten wave-1 NPCs through real mouse combat with the
+existing test-only firing-lane staging (not natural NPC navigation). At the
+smallest window both roles showed Level 1 Complete, 1000 earned/total points,
+10 kills, running standings and next-level countdown. The timer hid during
+intermission and the document still did not scroll. Wave 2 began at tick 360
+after deadline 359 with 12 NPCs. Both roles returned to the lobby with its
+heading, session list and ordinary scrolling restored; spectator roster return
+and re-follow also passed. Saved-results behavior was checked by focused tests,
+not a new final-results browser run.
+
+Final focused checks passed: default-theme TypeScript build, client type-check
+and production build, **7 files / 56 tests**, and `git diff --check`:
+
+```powershell
+npm test -- tests\default-skin.test.ts tests\spectator-client.test.ts tests\wave-countdown.test.ts tests\radar.test.ts tests\results.test.ts tests\result-contract.test.ts tests\theme-preview.test.ts
+```
+
+The first focused run failed two mock cleanup assertions after moving filters
+into the disclosure. Explicitly disposing those existing child nodes restored
+the expected cleanup; the subsequent 43-test and final 56-test runs passed.
+An intermediate browser pass exposed Back to Lobby wrapping below standings;
+the final CSS order and smallest-window rerun verified it remains above them.
+The client build emitted dependency comment-annotation warnings from Zod;
+the build completed successfully.
+
+**Separate 15-second running Fixed-match trace:** normal, unstaged local server
+**18102**, client **15192**, fresh seed **12**, default tuning (NPC speed 67.5,
+detection range 512, ten NPCs, health 50, five levels), idle player at `(272,272)`,
+no gameplay input. Session `2b849a0e-7d39-4d7e-9ee1-a7a49b54b265` produced
+**233 samples**, ticks **2-466**, over **15.430 seconds**. Seven NPCs remained
+geometrically outside detection throughout, and every one advanced by more than
+10 world units in each five-second interval.
+
+The actually world-painted `npc:npc-northeast` appeared in **233/233 samples**,
+at least **778.59 units** from the player (not a clamped radar dot). Its position
+advanced from `(1070.875,144)` to `(1040,130.5625)`. Travel in successive
+five-second windows was **51.69 / 74.88 / 74.69 world units**, with **34.48 px**
+between first/last recorded draw positions. Thus positions **do advance in this
+local running match**, including beyond the initial movement leg. The idle
+player died at tick **378**; geometric-distance checks continued against the
+retained player position rather than excluding the dead player.
+
+**Live deployment blocker:** there is no attached browser/session trace from
+the user's reported deployed `1e94ff3` match, nor an IDE run configuration for
+that process. This run uses the local checkout at `1e94ff3` plus existing
+uncommitted test/docs work and these presentation edits. It does not establish
+which server/theme/client assets the deployed match loaded or reproduce that
+match's seed/settings. Its reported lack of visible roaming is **not resolved**.
+T010 and original T042 remain open. No AI behavior was changed, and no push,
+deployment, remote session mutation or capacity claim was made.
+
+Evidence is retained under
+`C:\Users\Owner\.copilot\session-state\b99c46fd-3b46-4133-8058-dc61ad3f1669\files`:
+`compact-layout-final` contains six active-role screenshots and two intermission
+screenshots; `roaming` contains endpoint screenshots, `roaming.json` and the
+full timestamped snapshots/Canvas draws in `frames.json`. All owned rooms were
+left with HTTP 204 and browser contexts disposed. No extension hooks file exists.
+
 ## NPC roaming and sticky attacker caps (2026-11-09)
 
 Scoped local follow-up; no production server, deployment or capacity run.
