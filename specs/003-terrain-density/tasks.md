@@ -73,7 +73,7 @@ Original T042 is unchanged; no push or deployment was performed.
 
 ## Explore default and match focus follow-up (2026-11-09)
 
-- [ ] T012 Make Explore the default state of every mobile Dots and Squares NPC
+- [x] T012 Make Explore the default state of every mobile Dots and Squares NPC
   on every wave (half configured speed, seeded reachable novelty destinations,
   first-update movement, bounded retries, short pauses; speed 0 stationary).
   Only holders of the two existing pursuit slots chase or deal contact damage;
@@ -91,8 +91,10 @@ T012 evidence (local only; see docs/verification.md): the deterministic
 player kept the two closest in pursuit for 899/900 ticks and every other NPC
 exploring 978.24-1002.57 units with a longest stationary interval of
 0.233-0.367 s, including the two in-range NPCs without slots (978.24 and
-991.56 units). The saved local Chrome 157 report (Fixed seed 42), from the combined
-Explore/focus worktree, has a 30-second idle trace that showed all eight non-pursuing NPCs exploring 1001.30-1015.21 units with
+991.56 units). A real local Chrome 157 window (Fixed seed 42) focused the arena
+2 ms after mount, moved 66 units on an arrow key without a click, left focus on
+Tab, refocused on rejoin and moved 84 units after respawn. Its 30-second idle
+trace showed all eight non-pursuing NPCs exploring 1001.30-1015.21 units with
 longest stationary intervals of 0.133-0.333 s. The browser saw at most three
 NPCs in range at once, so its four-in-range condition is not browser-verified.
 No deployed-release run was possible from this environment.
@@ -106,9 +108,6 @@ the browser's three-in-range limit are recorded in `docs/verification.md`.
 T010, T013 and original T042 stay open. Ranged combat is not authorized until
 the owner confirms sustained exploration after deployment in a normal live
 match; its eventual implementation must remain local for review.
-
-T012 is partially committed: Explore is included; the keyboard-focus slice and
-its browser harness remain for the separate next commit.
 
 ## Evidence
 

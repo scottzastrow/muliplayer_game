@@ -94,8 +94,8 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     options.append(optionsTitle);
     const help = document.createElement("p");
     help.textContent = controlMode === "keyboard-only"
-      ? "Click the game to focus. WASD: move and face. Left/Right arrows: turn in place. Space: fire."
-      : "Click the game to focus. Arrow keys: move and face. Mouse: aim. Left click: fire.";
+      ? "The game is focused when the match opens; click it to refocus. WASD: move and face. Left/Right arrows: turn in place. Space: fire."
+      : "The game is focused when the match opens; click it to refocus. Arrow keys: move and face. Mouse: aim. Left click: fire.";
     options.append(help);
     controls.append(options);
     world.append(canvas, life, terrainCoverage);
@@ -132,6 +132,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     let height = 1;
     let dpr = 1;
     let focused = false;
+    let autoFocused = false;
     let fire = false;
     let sending = false;
     let disposed = false;
@@ -292,6 +293,14 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
         if (current && parsed.data.tick <= current.tick) return;
         previous = current;
         current = parsed.data;
+        if (!autoFocused && current.viewerRole === "player") {
+          autoFocused = true;
+          // Focus the arena once on entry/rejoin unless the user already focused another control.
+          const active = document.activeElement;
+          if (!active || active === document.body || !active.isConnected) {
+            canvas.focus({ preventScroll: true });
+          }
+        }
         if (current.viewerRole === "spectator") {
           help.textContent = "Spectator mode. Use Back to Players to switch whom you follow.";
           canvas.setAttribute("aria-label", "Dots and Squares spectator view.");

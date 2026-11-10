@@ -160,7 +160,7 @@ countdown, compact layout, Score/Health and both roles' standings. Keep the
 public SDK fixed-deadline Countdown available for other themes; do not change
 NPC behavior, close the deployed roaming report or mark T042 complete.
 
-### Explore follow-up
+### Explore and match focus follow-up
 
 On live release `4b7371c` one enemy approached while the others appeared
 stationary; treat it as an unresolved playtest failure. Explore is the default
@@ -177,8 +177,12 @@ existing pursuit slots may interrupt exploration to chase or deal contact damage
 to that player; others keep exploring inside detection range. Exploration resumes
 immediately when pursuit ends.
 
+On entering a playable match, including rejoin, focus the mounted game surface
+once so movement keys work without a click; normal Tab navigation remains.
+
 Verify per NPC: in a default Fixed match keep the player idle and report, for 30
 seconds, each non-pursuing NPC's distance and longest stationary interval, with
-four NPCs in range and the two without slots still moving. Roaming is resolved
+four NPCs in range and the two without slots still moving. Verify keyboard
+movement immediately after entry without clicking the arena. Roaming is resolved
 only after a normal browser match on the deployed release. Keep T042 open and
 report results before pushing or deploying.

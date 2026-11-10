@@ -15,13 +15,15 @@ files (300 tests / 52 files total):
 Both failures were reproduced with the two original test files in an isolated
 `git archive HEAD` snapshot (no checkout changes or worktree), with all workspace
 package aliases directed to that snapshot's sources and existing dependencies
-linked read-only for execution. The rerun had 6 passing / 2 failing tests.
+reused via junctions for execution. The rerun had 6 passing / 2 failing tests.
 The first archive attempt reproduced the collision failure but could not import
 `better-sqlite3`; linking the existing server workspace dependencies allowed the
 database assertion to execute. Neither unrelated baseline failure is fixed here.
 An archive of the exact staged Explore-only tree also passed all 36 tests in
 `default-entities`, `npc-engagement` and `integration/gameplay`, using that tree's
 workspace sources rather than the dirty checkout's built packages.
+The exact staged focus tree passed all 17 `default-skin` tests and the roaming
+browser harness syntax check. No new browser execution is claimed for this review.
 
 The saved local Chrome report in `%TEMP%\npc-explore-browser\roaming.json`
 was inspected during review: the center observation has 226 samples, at most
@@ -37,6 +39,87 @@ T010, T013 and original T042 remain open. No Lightsail staging commands were
 executed, and the live release must not be switched by this task. Ranged combat
 is deferred until the owner deploys and confirms sustained exploration in a
 normal live match; that later change must remain local for review.
+
+## Explore default NPC state and match focus (2026-11-09)
+
+**Implemented and verified locally only; the `4b7371c` live playtest failure is
+not resolved.** Scoped commit/push authorization is recorded above; no deployment
+was performed. T010, T013
+(deployed-release browser check) and original T042 remain open.
+
+Change: every mobile Dots and Squares NPC now defaults to Explore on every wave.
+It moves on the first simulation update at half configured speed (33.75 u/s by
+default) toward seeded clear cell centers 192-512 units away. Goals prefer
+never-visited 256-unit regions, then least recently visited, then farthest from
+spawn. It steers directly (with collision-checked axis fallbacks) until a path
+arrives and pauses 6-12 ticks on arrival. Rejected requests retry on the 15-tick
+repath interval while steering continues. No-path/limit results or 30 ticks
+without progress replace the goal (`default.npc_explore.*` metrics). Only holders
+of the unchanged two sticky per-player pursuit slots chase or deal contact
+damage; others explore inside detection range, and exploration resumes on the
+step pursuit ends. Speed 0 stays stationary. The default skin focuses the canvas
+once on the first player snapshot (entry or rejoin) unless another control is
+already focused; Tab then leaves normally.
+
+Checks on Windows, Node 24.11.0:
+
+| Check | Result |
+| --- | --- |
+| `npm run check` | Passed |
+| `npm run build` | Passed (client Vite build OK) |
+| `npm test -- --reporter=dot` (full review rerun) | 298 passed / 2 failed tests; 50 passed / 2 failed files. The obsolete 135-unit wander assertion was updated; `tests/integration/gameplay.test.ts` passes 4/4. |
+| Pre-existing failures | Both exact failures reproduced in an isolated archive of pre-change HEAD; see the review table above. |
+| `tests/default-entities.test.ts`, `tests/npc-engagement.test.ts` | 32 tests passed |
+| `tests/default-skin.test.ts` | 17 tests passed, including focus on entry, no stealing from spectators/other controls, and no refocus after blur |
+
+Deterministic 30-second per-NPC trace (`tests/npc-engagement.test.ts`, default
+Fixed seed 42, idle player kept alive, four NPCs staged 120/200/280/360 units
+from the player, real `BoundedNavigation`):
+
+| NPC | In range at start | Pursuit ticks | Explore distance | Longest stationary (s) | Farthest from start |
+| --- | --- | --- | --- | --- | --- |
+| npc-northwest | no | 0 | 996.75 | 0.233 | 874.14 |
+| npc-southwest | no | 0 | 1001.83 | 0.267 | 752.69 |
+| npc-northeast | no | 0 | 988.72 | 0.367 | 543.90 |
+| npc-southeast | no | 0 | 998.84 | 0.333 | 698.70 |
+| level-1-0005 | yes (slot) | 899 | - | - | - |
+| level-1-0006 | yes (slot) | 899 | - | - | - |
+| level-1-0007 | yes (no slot) | 0 | 978.24 | 0.367 | 977.91 |
+| level-1-0008 | yes (no slot) | 0 | 991.56 | 0.300 | 697.22 |
+| level-1-0009 | no | 0 | 1001.75 | 0.267 | 786.63 |
+| level-1-0010 | no | 0 | 1002.57 | 0.267 | 748.91 |
+
+The test also requires >100 units of travel in every five-second window for each
+non-pursuing NPC. The slot holders' 900th tick is a partial closing step.
+
+Actual local browser run: `node tests\browser\default-game.mjs --npc-roaming`
+passed in a visible Chrome 157.0.8103.40 window (1920x1080 bounds, no device
+metrics override) against an isolated server on `127.0.0.1:18083` with a
+disposable SQLite file, Vite on `127.0.0.1:15174` and loopback CDP `19223`.
+Fixed, default tuning, seed 42, no entity staging, no arena clicks:
+
+- Entry: canvas focused 2 ms after mount; ArrowRight moved the player 66 units.
+- Tab moved focus to the "Controls & radar" summary and was not stolen back.
+- Reload + Rejoin (player was dead): canvas focused 2 ms after mount; after
+  respawn ArrowLeft moved the player 84 units.
+- 30-second idle trace (ticks 50-960, 456 snapshots): two NPCs reached the
+  player's corner and pursued (one death); all eight others explored
+  1001.30-1015.21 units with longest stationary intervals 0.133-0.333 s.
+- 15-second idle trace after walking to (1064, 1296): at most **three** NPCs were
+  in range at once; the non-slot one explored 13.5 units across its 12 in-range
+  ticks. Exploring NPCs were visibly painted moving (up to 414 px of on-screen
+  travel). The browser did not achieve four NPCs in range, so that condition is
+  verified only by the deterministic test above.
+
+Harness corrections before the passing run: a missing disposable DB path, the
+idle check not allowing death/respawn, the wrong movement keys (`KeyD` in
+keyboard-mouse mode), a non-navigating `keyDown` Tab (now `rawKeyDown`), and the
+frame recorder lost on reload. Artifacts (screenshots, `roaming.json`,
+`frames.json`) were written to `%TEMP%\npc-explore-browser`, outside Git.
+Local processes and the isolated Chrome profile were stopped/removed.
+
+The deployed release was not inspected or exercised. Roaming must be verified in
+a normal browser match on the deployed release before it is called resolved.
 
 ## Hidden Dots and Squares no-kill timer (2026-11-09)
 

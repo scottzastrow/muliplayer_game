@@ -90,7 +90,8 @@ seeded 192-512 unit cell-center goals preferring unvisited 256-unit regions,
 direct steering until a path arrives, 6-12 tick arrival pauses and goal
 replacement on no-path/limit or 30 ticks without progress, all within the
 existing request/pending/search budgets. Slot assignment and contact damage stay
-in the unchanged sticky two-per-player pursuit branch. No
+in the unchanged sticky two-per-player pursuit branch. The default skin focuses
+the canvas once on the first player snapshot when nothing else is focused. No
 protocol/SDK/engine changes. Verify per-NPC deterministic 30-second traces with
-four NPCs in range, a local browser run; the
+four NPCs in range, focus/keyboard skin tests and a local browser run; the
 deployed release still needs its own browser verification.

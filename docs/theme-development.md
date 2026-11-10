@@ -365,11 +365,17 @@ never acquires a player, including at the exact same position. Speed 0 remains
 stationary in either mode and preserves in-range contact damage.
 
 Distant radar markers are clamped to the radar rim, so their angular changes can
-look small, and the normal follow-camera hides offscreen NPC bodies. For a local browser check, run
+look small, and the normal follow-camera hides offscreen NPC bodies. The skin
+focuses the arena once when a player view first receives a snapshot (entry or
+rejoin), unless another control already has focus, so movement keys work without
+a click; Tab then leaves the arena normally. For a local browser check, run
 `node tests\browser\default-game.mjs --npc-roaming` with the existing loopback
 Chrome setup, a disposable `BROWSER_TEST_DATABASE_PATH`, and
-`BROWSER_TEST_ARTIFACT_DIR` (optionally `BROWSER_TEST_SEED`). The combined Explore/focus browser evidence is recorded in docs/verification.md;
-the browser reached at most three NPCs in range, not four.
+`BROWSER_TEST_ARTIFACT_DIR` (optionally `BROWSER_TEST_SEED`). Without staging
+entities or changing defaults it verifies no-click keyboard movement on entry,
+a 30-second idle per-NPC report (exploring distance, longest stationary interval,
+pursuit/in-range ticks, painted squares), Tab focus exit, rejoin focus/movement,
+and a 15-second idle observation near the arena center.
 This is not evidence that a deployed process has rebuilt/reloaded local changes.
 
 Dots and Squares defaults level-1 NPCs to **50 HP**: two standard, unboosted

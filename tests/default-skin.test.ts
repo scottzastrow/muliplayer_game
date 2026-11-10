@@ -20,6 +20,13 @@ function view(x: number, deaths = 0): DefaultView {
   });
 }
 
+// Players' arenas are focused on entry, so a focused idle player sends neutral input.
+function expectOnlyIdleInput(dispatchInput: ReturnType<typeof vi.fn>): void {
+  for (const [action] of dispatchInput.mock.calls) {
+    expect(action).toMatchObject({ type: "combat", moveX: 0, moveY: 0, fire: false });
+  }
+}
+
 class HudElement extends EventTarget {
   readonly style: Record<string, string> = {};
   readonly dataset: Record<string, string> = {};
@@ -36,6 +43,7 @@ class HudElement extends EventTarget {
   textContent = "";
   removed = false;
   hidden = false;
+  isConnected = true;
   setAttribute(): void {}
   append(...children: HudElement[]): void { this.children.push(...children); }
   replaceChildren(...children: HudElement[]): void { this.children.splice(0, this.children.length, ...children); }
@@ -152,11 +160,73 @@ describe("Dots and Squares presentation", () => {
       skin.handleSnapshot({ ...next, tick: 154, phase: "complete" });
       skin.render(200, next);
       expect(summary.hidden).toBe(true);
-      expect(host.dispatchInput).not.toHaveBeenCalled();
+      expectOnlyIdleInput(host.dispatchInput as ReturnType<typeof vi.fn>);
     } finally {
       skin.dispose();
     }
   });
+
+  it.each(["player", "spectator", "other-control"] as const)(
+    "focuses the arena once on entry so movement keys work without a click (%s)", scenario => {
+      class TestKeyboardEvent extends Event {
+        constructor(type: string, readonly code: string, readonly repeat = false) { super(type); }
+      }
+      vi.stubGlobal("KeyboardEvent", TestKeyboardEvent);
+      const otherControl = new HudElement();
+      vi.stubGlobal("document", Object.assign(new EventTarget(), {
+        activeElement: scenario === "other-control" ? otherControl : undefined,
+        createTextNode: (text: string) => Object.assign(new HudElement(), { textContent: text }),
+        createElement: () => new HudElement()
+      }));
+      vi.stubGlobal("window", new EventTarget());
+      const slots = new Map(["world", "hud", "controls"].map(name => [name, document.createElement("div")]));
+      const dispatchInput = vi.fn();
+      const host: SkinHost = {
+        slots, selectedTarget: { accountId: "alice", username: "Alice" },
+        cameraAnchor: undefined, setCameraAnchor(anchor) { this.cameraAnchor = anchor; },
+        dispatchInput, navigate: () => {}
+      };
+      const skin = defaultSkinFactory.mount(host, {
+        image: async () => { throw new Error("No images used."); },
+        audio: async () => { throw new Error("No audio used."); }
+      });
+      const canvas = slots.get("world")!.children[0] as unknown as HudElement;
+      const focus = vi.spyOn(canvas, "focus");
+      const snapshot = view(500);
+      if (scenario === "spectator") {
+        snapshot.viewerRole = "spectator";
+        snapshot.spectatorView = {
+          targetAccountId: "alice", cameraAnchor: { x: 500, y: 100 },
+          hud: { points: 200, health: 90 }, death: { alive: true, remainingSeconds: 0 }
+        };
+      }
+      try {
+        skin.handleViewport(800, 600, 1);
+        expect(focus).not.toHaveBeenCalled();
+        skin.handleSnapshot(snapshot);
+        // No pointerdown or test-initiated focus: the first snapshot alone enables keys.
+        canvas.dispatchEvent(new TestKeyboardEvent("keydown", "ArrowRight"));
+        skin.render(40, snapshot);
+        if (scenario !== "player") {
+          expect(focus).not.toHaveBeenCalled();
+          expect(dispatchInput).not.toHaveBeenCalled();
+          return;
+        }
+        expect(focus).toHaveBeenCalledTimes(1);
+        expect(dispatchInput.mock.lastCall![0]).toMatchObject({ moveX: 1, moveY: 0 });
+        // Tabbing away is allowed and later snapshots must not pull focus back.
+        canvas.dispatchEvent(new Event("blur"));
+        skin.handleSnapshot({ ...snapshot, tick: 3 });
+        skin.handleSnapshot({ ...snapshot, tick: 4 });
+        expect(focus).toHaveBeenCalledTimes(1);
+        const calls = dispatchInput.mock.calls.length;
+        skin.render(200, snapshot);
+        expect(dispatchInput.mock.calls.length).toBe(calls);
+      } finally {
+        skin.dispose();
+      }
+    }
+  );
 
   it.each([
     { mode: "keyboard-mouse", right: "ArrowRight", up: "ArrowUp" },
@@ -507,7 +577,7 @@ describe("Dots and Squares presentation", () => {
         input.dispatchEvent(new Event("change"));
       }
       expect(snapshot).toEqual(original);
-      expect(dispatchInput).not.toHaveBeenCalled();
+      expectOnlyIdleInput(dispatchInput);
     } finally {
       skin.dispose();
     }
