@@ -8,6 +8,7 @@ export const NPC_SPEED = DEFAULT_GAME_SETTINGS.npcMovementSpeed;
 export const NPC_ATTRACTION_RADIUS = DEFAULT_GAME_SETTINGS.npcDetectionRange;
 export const NPC_CONTACT_DAMAGE = 10;
 export const NPC_CONTACT_COOLDOWN_TICKS = 30;
+export const MAX_NPC_ATTACKERS_PER_PLAYER = 2;
 export const PLAYER_BULLET_DAMAGE = 25;
 export const PLAYER_FIRE_RATE_PER_SECOND = 5;
 export const PLAYER_RAPID_FIRE_RATE_PER_SECOND = 10;

@@ -309,6 +309,7 @@ describe("default combat", () => {
       npcPopulationGrowthPercent: 0,
       baseNpcHealth: 10,
       npcHealthGrowthPercent: 100,
+      npcMovementSpeed: 0,
       maxLevels: 2
     });
     const { context, module, completionRequests } = simulation;

@@ -18,6 +18,26 @@ T002 follows T001; T003 follows T002; T004 follows T003; T005 follows T004;
 T006 follows T005. No blocked Theme Credits task or original T042 is a prerequisite.
 T042 must remain open. No commits, push, deployment or unrelated edit removal.
 
+## Scoped NPC playtest follow-up (2026-11-09)
+
+- [x] T007 Reproduce default Fixed wave-start roaming with actual browser evidence;
+  remove the initial navigation wait without changing speed-zero behavior; add
+  sticky closest-two pursuit/contact slots per player, verify replacement and
+  multiplayer isolation, and document the observed visibility limits.
+  Authorized follow-up to T006/FR-008; leave original T042 open and changes local.
+
+T007 evidence: `docs/verification.md` records the successful pre-change default
+roaming observation (no sustained stall reproduced), the initial queue wait and
+visibility limits, two passing post-change browser runs with actual world
+draw/pixel movement, 9 focused files / 88 passing tests and `npm run check`.
+The initially failing integration navigation fixture staged an NPC inside
+existing Fixed terrain. The authorized follow-up replaced only that start and
+its distance references with verified-clear `(112,16)`; all four cases in
+`tests/integration/gameplay.test.ts` then passed with unchanged assertions/timeouts.
+The user authorized committing only this scoped work after that pass, superseding
+the earlier no-commit instruction for this slice; unrelated edits remain unstaged.
+Original T042 is unchanged and open. No extension hooks file exists.
+
 ## Evidence
 
 Checklist: 16 checked, 0 unchecked (PASS). The prerequisite helper resolved this

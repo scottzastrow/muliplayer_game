@@ -114,3 +114,19 @@ Hosts and viewers can see the actual coverage, including constrained layouts.
 - Dense layouts can fall short because safe-spawn clearance takes precedence.
 - Source-constant legacy mode remains available for settings without explicit mode.
 - No browser or capacity claim is made without execution. T042 is not in this slice.
+
+## Authorized NPC playtest follow-up (2026-11-09)
+
+Preserve FR-008 with immediate local roaming on the first simulation step of
+every wave, even with all living players outside detection range. Explicit
+NPC speed 0 remains stationary, including admitted contact attackers.
+
+Limit pursuit/contact to two NPCs per living player. Initially admit closest
+eligible pairs, then retain engagements until an NPC dies, its player dies or
+disappears, or detection range is lost. Refill vacant slots on the next step;
+unassigned NPCs roam and cannot damage a full-slot player. Each NPC has at most
+one target; multiplayer caps are independent. Verify default Fixed roaming in a
+real local browser, plus first-step waves, four-NPC admission, stability,
+death/range replacement, denied contact, and overlapping two-player eligibility.
+Distinguish browser observations from deterministic simulation checks; do not
+infer the code revision or runtime behavior of an uninspected live deployment.

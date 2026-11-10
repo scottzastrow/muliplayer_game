@@ -316,18 +316,37 @@ targets only within this radius and still uses bounded spatial queries. Zero dis
 automatic pursuit. The host exposes it on create/edit; values lock on start, and the
 additive v1 schema supplies 512 for older rooms/results that omit it.
 
-Outside detection range, NPCs wander locally at one quarter of their configured
-speed. The session's seeded RNG chooses clear cell-center destinations within
-128 units; NPCs move only after the existing navigation service finds a reachable
-path, then pause for 30-60 ticks (1-2 seconds). Candidate selection is capped at
+NPCs without an engagement slot wander locally at one quarter of their configured
+speed, including when all players are outside detection range. At each wave's
+first simulation step, a seeded, collision-checked adjacent cell starts their
+first leg immediately (at most four direction checks, no queued path wait).
+The same bootstrap applies when losing a target. Subsequent legs use the
+session's seeded RNG to choose clear cell-center destinations within
+128 units and the navigation service to find a reachable path, with pauses of
+30-60 ticks (1-2 seconds) between legs. Candidate selection is capped at
 8 attempts; wandering and pursuit share the existing 8 requests/tick, 64 pending
 requests and engine search/node budgets. Unreachable/limited paths and rejected
 requests report `default.npc_wander.*` metrics and retry with bounded delay.
-Entry into range switches immediately to normal-speed pursuit; losing all living
-in-range players discards pursuit waypoints and resumes wandering. Pending stale
+Each living player has **two sticky pursuit/contact slots**. Existing in-range
+engagements retain their slots, even if another NPC or player becomes closer.
+Unassigned NPC/player pairs are admitted by distance (stable ID tie-breaks), with
+at most one target per NPC and two attackers independently per player. Death,
+removal or loss of detection range frees a slot for the next eligible NPC on the
+next simulation step. Denied NPCs keep wandering and cannot damage that player,
+even on contact. Losing a target discards pursuit waypoints. Pending stale
 results are drained but never followed. Detection range 0 allows wandering but
 never acquires a player, including at the exact same position. Speed 0 remains
 stationary in either mode and preserves in-range contact damage.
+
+At the default speed, roaming is 16.875 world units/second; distant radar markers
+are clamped to the radar rim, so their small angular changes can look stationary.
+The normal follow-camera also hides offscreen NPC bodies. For a local browser
+check, run `node tests\browser\default-game.mjs --npc-roaming` with the existing
+loopback Chrome setup, a disposable `BROWSER_TEST_DATABASE_PATH`, and
+`BROWSER_TEST_ARTIFACT_DIR`. It selects Fixed seed 42 without changing gameplay
+defaults or staging entities, enlarges the viewport to expose distant NPCs, checks
+snapshot movement and actual world-square draws/pixels, and captures screenshots.
+This is not evidence that a deployed process has rebuilt/reloaded local changes.
 
 Dots and Squares defaults level-1 NPCs to **50 HP**: two standard, unboosted
 25-damage projectile hits kill one. The default 10% health growth yields 55 HP

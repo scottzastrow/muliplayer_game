@@ -1,5 +1,101 @@
 # Local verification
 
+## NPC roaming and sticky attacker caps (2026-11-09)
+
+Scoped local follow-up; no production server, deployment or capacity run.
+The initial worktree edits to this document, the arena browser runner/module,
+accounts-lobby test and `.idea/` were retained.
+
+**Reproduction and wave-start trace:** a fresh default Fixed seed-42 match on
+the rebuilt pre-change theme did **not** reproduce prolonged stationary NPCs.
+With the idle player at `(272,272)`, eight NPCs stayed outside the default
+512-unit detection range and moved 41.35-58.44 world units between snapshot
+ticks 4 and 108. The ordinary headless window's world canvas was only 701x240,
+and only one NPC body was drawn. Most bodies were offscreen. The radar clamps
+distant points to its rim; its motion is angular rather than proportional to
+world travel. This explains the local appearance, not an established diagnosis
+of an uninspected deployed process or its loaded build.
+
+At initialization and subsequent `startLevel`, NPC navigation starts without
+a path. Previously its first idle step only submitted an asynchronous wander
+request (at most eight per tick), so it waited for processing/polling before
+moving. New first-step regressions failed with zero movement before the fix.
+The simulator now starts a seeded collision-checked adjacent leg synchronously,
+at the unchanged quarter-speed, before subsequent bounded navigation legs and
+existing pauses. At most four directions are checked; speed 0 exits without
+moving or requesting a path.
+
+Pursuit/contact admission reserves surviving in-range engagements first, then
+sorts remaining eligible pairs by distance and stable IDs. Each NPC gets at
+most one player; each player gets at most two NPCs. Denied NPCs roam and never
+enter the contact-attack call. Death/removal/defeat or loss of detection frees
+the slot on the next step. Becoming closer alone does not displace a holder;
+existing per-player contact cooldowns and damage are unchanged.
+
+**Actual post-change browser observation:** headless Chrome 157.0.8103.40 on
+Windows, Node 24.11.0/npm 11.6.1, disposable SQLite server on loopback 18084,
+Vite/client 15179 and isolated CDP 19225. Server readiness, proxied readiness,
+client and CDP returned 200 before execution. The `--npc-roaming` scenario kept
+all gameplay defaults (10 NPCs, 50 HP, speed 67.5, detection 512, five levels)
+and selected Fixed seed 42. There was no entity staging or player movement.
+The viewport was deliberately enlarged to 4096x4096 CSS pixels at device scale
+0.5 (actual world canvas 4049x3836) to expose distant NPCs.
+
+The final browser run sampled ticks 2-106. All eight out-of-range NPCs had moved
+by the next sampled snapshot, tick 4; their net snapshot travel was 25.25-31.73
+world units, including normal endpoint pauses. All ten NPC bodies were drawn at
+both endpoints. The eight distant bodies' actual Canvas draw positions changed
+30.11-30.97 CSS pixels; endpoint NPC centers had opaque `#ed6b61` pixels.
+Their **calculated** radar-rim displacement was only 0.32-1.16 CSS pixels,
+consistent with the apparently stationary radar. These are world draw/pixel
+and snapshot checks, not a human playtest, a headed/cross-browser result, or
+a browser check of the four-NPC/multiplayer cap.
+
+Two post-change browser runs passed; the second added explicit draw-distance
+and calculated radar-displacement checks. Both left their rooms (HTTP 204);
+the harness disposed its contexts. Screenshots, measured reports and final log
+are retained in
+`C:\Users\Owner\.copilot\session-state\e9059766-149f-47f8-aa55-151b4e3fc3c2\files\npc-roaming-evidence`
+under `npc-roaming-before`, `npc-roaming-after` and `npc-roaming-browser.log`.
+
+**Deterministic checks:** `tests/npc-engagement.test.ts` verifies first-step
+roaming for all 10/12 NPCs on Fixed waves 1/2 with a living player outside every
+detection radius, stationary speed 0, closest-two admission among four NPCs
+inserted farthest-first, closer challengers not swapping holders, death/range
+replacement, zero-health and missing targets, overlapping two-player eligibility
+with independent caps, denied contact, and admitted speed-zero contact.
+Existing asynchronous-path tests now wait through the immediate first leg
+before exercising pending/stale/unreachable work. The exact-tick simultaneous
+combat fixture explicitly uses speed 0; its navigation stub previously kept
+out-of-range NPCs stationary, while the new initial leg correctly moves them.
+
+Final focused run: **9 files / 88 tests passed**:
+
+```powershell
+npm test -- tests\default-entities.test.ts tests\npc-engagement.test.ts tests\default-combat.test.ts tests\default-respawn.test.ts tests\npc-spawns.test.ts tests\fixed-arena-spawn.test.ts tests\wave-countdown.test.ts tests\integration\session-lifecycle.test.ts tests\terrain-density.test.ts
+```
+
+`npm run theme:build`, `npm run check`, browser harness syntax and
+`git diff --check` passed. Initial failing runs are not counted as passes.
+A separate broader `tests/integration/gameplay.test.ts` run passed three cases
+and failed its navigation case while staging `(100,100)`, before simulation:
+the existing Fixed tile at `(96,96,32,32)` makes that point unwalkable at radius
+8. A direct geometry-only check confirmed this independently of NPC simulation.
+That fixture was left unchanged in the initial slice; no all-suite pass is claimed.
+
+The authorized follow-up moved only the distant-roamer fixture to `(112,16)`,
+a cell center verified walkable at both NPC radius 8 and player radius 14 in
+the current Fixed geometry plus the encounter wall. It stays outside both
+players' detection ranges and retains the original obstacle-pursuit encounter.
+The same movement, determinism, walkability, node/search budgets and 135-unit
+local-roaming assertions remain; distance references now use the corrected
+start point. No production behavior or timeout changed in this follow-up.
+`npm test -- tests\integration\gameplay.test.ts` passed **1 file / 4 tests**.
+
+T042 remains unchecked. The user authorized a local commit of only the NPC
+roaming/cap implementation, directly related tests and documentation after this
+pass. Unrelated edits remain unstaged; no push or deployment was performed.
+
 ## Fixed-arena minimal browser and slot-19 simulation (2026-11-09)
 
 The separate minimal browser check passed in a fresh loopback room with one

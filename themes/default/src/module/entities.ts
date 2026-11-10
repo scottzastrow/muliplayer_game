@@ -14,6 +14,7 @@ import {
   NPC_ATTRACTION_RADIUS,
   NPC_CONTACT_COOLDOWN_TICKS,
   NPC_CONTACT_DAMAGE,
+  MAX_NPC_ATTACKERS_PER_PLAYER,
   NPC_REPATH_INTERVAL_TICKS,
   NPC_SPEED,
   PLAYER_HEALTH,
@@ -322,8 +323,9 @@ export class DefaultEntitySimulator {
     }
     const npcs = this.context.entities.values().filter(
       (entity): entity is DefaultEntity =>
-        entity.state.kind === "npc" && entity.typeId === "npc"
+        entity.state.kind === "npc" && entity.typeId === "npc" && entity.state.health > 0
     );
+    const targets = this.#assignNpcTargets(npcs);
     let pendingPaths = this.#pendingPathCount();
     for (const npc of npcs) {
       let navigation = this.#npcNavigation.get(npc.id);
@@ -331,15 +333,7 @@ export class DefaultEntitySimulator {
         navigation = { nextPathPoint: 0, lastRequestTick: -Infinity, goalVersion: 0 };
         this.#npcNavigation.set(npc.id, navigation);
       }
-      const nearbyPlayers = this.npcDetectionRange === 0 ? [] : this.context.entities
-        .queryRadius(npc.position, this.npcDetectionRange, MAX_ATTRACTION_QUERY_CELLS)
-        .filter(
-          (entity): entity is DefaultEntity =>
-            entity.typeId === "player" &&
-            entity.state.kind === "player" &&
-            entity.state.health > 0
-        );
-      const target = nearestEntity(npc.position, nearbyPlayers);
+      const target = targets.get(npc.id);
       const targetChanged = navigation.targetId !== target?.id;
       if (targetChanged) {
         navigation.goalVersion += 1;
@@ -400,6 +394,42 @@ export class DefaultEntitySimulator {
     }
   }
 
+  #assignNpcTargets(npcs: readonly DefaultEntity[]): Map<string, DefaultEntity> {
+    const targets = new Map<string, DefaultEntity>();
+    if (this.npcDetectionRange === 0) return targets;
+    const slots = new Map<string, number>();
+    const candidates: { npcId: string; player: DefaultEntity; distance: number }[] = [];
+    for (const npc of npcs) {
+      const previousId = this.#npcNavigation.get(npc.id)?.targetId;
+      const previous = previousId ? this.context.entities.get(previousId) : undefined;
+      if (previous?.state.kind === "player" && previous.state.health > 0 &&
+        distance(npc.position, previous.position) <= this.npcDetectionRange &&
+        (slots.get(previous.id) ?? 0) < MAX_NPC_ATTACKERS_PER_PLAYER) {
+        targets.set(npc.id, previous);
+        slots.set(previous.id, (slots.get(previous.id) ?? 0) + 1);
+        continue;
+      }
+      for (const player of this.context.entities.queryRadius(
+        npc.position, this.npcDetectionRange, MAX_ATTRACTION_QUERY_CELLS
+      )) {
+        if (player.typeId === "player" && player.state.kind === "player" &&
+          player.state.health > 0) {
+          candidates.push({ npcId: npc.id, player, distance: distance(npc.position, player.position) });
+        }
+      }
+    }
+    // Reserve all surviving engagements before admitting globally closest free pairs.
+    candidates.sort((a, b) => a.distance - b.distance ||
+      compareIds(a.npcId, b.npcId) || compareIds(a.player.id, b.player.id));
+    for (const candidate of candidates) {
+      if (targets.has(candidate.npcId) ||
+        (slots.get(candidate.player.id) ?? 0) >= MAX_NPC_ATTACKERS_PER_PLAYER) continue;
+      targets.set(candidate.npcId, candidate.player);
+      slots.set(candidate.player.id, (slots.get(candidate.player.id) ?? 0) + 1);
+    }
+    return targets;
+  }
+
   #wander(
     npc: DefaultEntity,
     navigation: NpcNavigationState,
@@ -410,6 +440,28 @@ export class DefaultEntitySimulator {
   ): boolean {
     if (this.npcMovementSpeed === 0 || dtSeconds === 0 ||
       tick < (navigation.pauseUntilTick ?? 0)) return false;
+
+    if (!navigation.path && !navigation.requestId && navigation.lastRequestTick === -Infinity) {
+      // Start with a collision-checked adjacent leg, without waiting for the path queue.
+      const directions = [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 0, y: -1 }];
+      const first = Math.floor(this.context.random.next() * directions.length);
+      for (let index = 0; index < directions.length; index += 1) {
+        const direction = directions[(first + index) % directions.length]!;
+        const destination = {
+          x: (Math.floor(npc.position.x / MAP_CELL_SIZE) + 0.5 + direction.x) * MAP_CELL_SIZE,
+          y: (Math.floor(npc.position.y / MAP_CELL_SIZE) + 0.5 + direction.y) * MAP_CELL_SIZE
+        };
+        if (!isWalkable(this.context, destination, npc.radius)) continue;
+        const moved = this.context.geometry.moveCircle(npc.position, {
+          x: destination.x - npc.position.x, y: destination.y - npc.position.y
+        }, npc.radius);
+        if (distance(moved, destination) > 1e-6) continue;
+        navigation.path = [npc.position, destination];
+        navigation.nextPathPoint = 1;
+        navigation.lastRequestTick = tick;
+        break;
+      }
+    }
 
     const pathPoint = navigation.path?.[navigation.nextPathPoint];
     if (pathPoint) {
@@ -562,17 +614,8 @@ function isWalkable(
   );
 }
 
-function nearestEntity(from: Point2, entities: readonly DefaultEntity[]): DefaultEntity | undefined {
-  let nearest: DefaultEntity | undefined;
-  let nearestDistance = Infinity;
-  for (const entity of entities) {
-    const candidateDistance = distance(from, entity.position);
-    if (candidateDistance < nearestDistance) {
-      nearest = entity;
-      nearestDistance = candidateDistance;
-    }
-  }
-  return nearest;
+function compareIds(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function normalizedDelta(from: Point2, to: Point2, distanceToMove: number): Point2 {

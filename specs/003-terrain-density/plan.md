@@ -57,3 +57,14 @@ with no schedule resolves to Incremental 3/0. Fixed never consumes density.
 Saved editor preserves absent mode/schedule unless the host selects a mode.
 Immutable external-consumer pin stays unchanged until a reviewed commit exists;
 its drift gate is not a claimed passing check for uncommitted public changes.
+
+## Scoped NPC playtest follow-up
+
+T007 stays within the authoritative default entity simulator. Reserve existing
+valid NPC/player engagements before sorting unassigned in-range pairs by distance;
+admit at most two per player and one per NPC. Denied NPCs use the same roaming
+path as distant NPCs, with no contact call. Start roaming with at most four
+collision-checked adjacent directions before the asynchronous navigation legs,
+retaining speed, pauses, path budgets and speed-zero semantics. No protocol/SDK
+or engine geometry changes; browser evidence must separate actual world draws
+from radar-rim visibility and local simulation from the uninspected deployment.

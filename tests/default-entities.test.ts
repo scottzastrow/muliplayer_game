@@ -66,7 +66,9 @@ describe("default entity movement and pursuit", () => {
     "wanders outside the %i-unit range, pursues on entry and resumes wandering on exit",
     npcDetectionRange => {
       const npcMovementSpeed = 33.75;
-      const simulation = createSimulation([], { npcMovementSpeed, npcDetectionRange });
+      const simulation = createSimulation([], {
+        npcMovementSpeed, npcDetectionRange, initialNpcsPerPlayer: 1
+      });
       try {
         const npc = simulation.context.entities.get("npc:npc-northwest")!;
         const player = simulation.context.entities.get("player:player-a")!;
@@ -212,13 +214,20 @@ describe("default entity movement and pursuit", () => {
       simulation.context.entities.update("player:player-a", entity => ({
         ...entity, position: { x: 1_900, y: 1_900 }
       }));
-      simulation.module.step(1 / 30, 1);
+      let requestTick = 0;
+      do {
+        requestTick += 1;
+        simulation.module.step(1 / 30, requestTick);
+      } while (simulation.navigation.outstandingRequests === 0 && requestTick < 240);
       expect(simulation.navigation.outstandingRequests).toBe(1);
       simulation.navigation.processTick();
+      simulation.context.entities.update(id, entity => ({
+        ...entity, position: { x: 720, y: 700 }
+      }));
       simulation.context.entities.update("player:player-a", entity => ({
         ...entity, position: { x: 620, y: 700 }
       }));
-      simulation.module.step(1 / 30, 2);
+      simulation.module.step(1 / 30, requestTick + 1);
       expect(simulation.context.entities.get(id)!.position).toEqual({ x: 717.75, y: 700 });
 
       simulation.context.entities.update(id, entity => ({
@@ -227,19 +236,19 @@ describe("default entity movement and pursuit", () => {
       simulation.context.entities.update("player:player-a", entity => ({
         ...entity, position: { x: 820, y: 700 }
       }));
-      simulation.module.step(1 / 30, 3);
+      simulation.module.step(1 / 30, requestTick + 2);
       expect(simulation.navigation.outstandingRequests).toBe(1);
       simulation.context.entities.update("player:player-a", entity => ({
         ...entity, position: { x: 1_900, y: 1_900 }
       }));
       const before = simulation.context.entities.get(id)!.position;
-      simulation.module.step(1 / 30, 4);
+      simulation.module.step(1 / 30, requestTick + 3);
       expect(simulation.context.entities.get(id)!.position).toEqual(before);
       simulation.context.entities.update("player:player-a", entity => ({
         ...entity, position: { x: 620, y: 700 }
       }));
       simulation.navigation.processTick();
-      simulation.module.step(1 / 30, 5);
+      simulation.module.step(1 / 30, requestTick + 4);
       expect(simulation.context.entities.get(id)!.position).toEqual({
         x: before.x - 2.25, y: 700
       });
@@ -247,7 +256,7 @@ describe("default entity movement and pursuit", () => {
         ...entity, position: { x: 1_900, y: 1_900 }
       }));
       const returning = simulation.context.entities.get(id)!.position;
-      for (let tick = 6; tick <= 120; tick += 1) {
+      for (let tick = requestTick + 5; tick <= requestTick + 120; tick += 1) {
         simulation.navigation.processTick();
         simulation.module.step(1 / 30, tick);
       }
@@ -260,7 +269,7 @@ describe("default entity movement and pursuit", () => {
       npcDetectionRange: 0, initialNpcsPerPlayer: 100
     });
     try {
-      for (let tick = 1; tick <= 30; tick += 1) {
+      for (let tick = 1; tick <= 240; tick += 1) {
         const before = simulation.navigation.requestsSubmitted;
         // Leave results pending to exercise the shared outstanding-request ceiling.
         simulation.module.step(1 / 30, tick);
@@ -278,25 +287,37 @@ describe("default entity movement and pursuit", () => {
     );
     const id = "npc:npc-northwest";
     const metric = vi.spyOn(simulation.context.metrics, "increment");
-    vi.spyOn(simulation.context.random, "next")
-      .mockReturnValueOnce(0.99).mockReturnValueOnce(0.5).mockReturnValue(0.2);
+    const random = vi.spyOn(simulation.context.random, "next").mockReturnValue(0.99);
     try {
       simulation.context.entities.update(id, entity => ({
         ...entity, position: { x: 720, y: 700 }
       }));
       simulation.module.step(1 / 30, 1);
-      for (let tick = 2; tick <= 10; tick += 1) {
+      let requestTick = 1;
+      while (simulation.context.entities.get(id)!.position.y !== 656 && requestTick < 240) {
+        requestTick += 1;
+        simulation.module.step(1 / 30, requestTick);
+      }
+      expect(simulation.context.entities.get(id)!.position).toEqual({ x: 720, y: 656 });
+      random.mockReturnValueOnce(0.99).mockReturnValueOnce(0.5).mockReturnValue(0.2);
+      do {
+        requestTick += 1;
+        simulation.module.step(1 / 30, requestTick);
+      } while (simulation.navigation.outstandingRequests === 0 && requestTick < 240);
+      expect(simulation.navigation.outstandingRequests).toBe(1);
+      const waiting = simulation.context.entities.get(id)!.position;
+      for (let tick = requestTick + 1; tick <= requestTick + 10; tick += 1) {
         simulation.navigation.processTick();
         simulation.module.step(1 / 30, tick);
-        expect(simulation.context.entities.get(id)!.position).toEqual({ x: 720, y: 700 });
+        expect(simulation.context.entities.get(id)!.position).toEqual(waiting);
       }
       expect(metric).toHaveBeenCalledWith("default.npc_wander.no-path");
-      for (let tick = 11; tick <= 120; tick += 1) {
+      for (let tick = requestTick + 11; tick <= requestTick + 120; tick += 1) {
         simulation.navigation.processTick();
         simulation.module.step(1 / 30, tick);
       }
       const position = simulation.context.entities.get(id)!.position;
-      expect(position).not.toEqual({ x: 720, y: 700 });
+      expect(position).not.toEqual(waiting);
       expect(position.x).toBeLessThan(736);
       expect(simulation.navigation.requestsSubmitted).toBeGreaterThanOrEqual(2);
       expect(simulation.context.geometry.isWalkable(position.x, position.y, 8)).toBe(true);

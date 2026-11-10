@@ -52,6 +52,7 @@ describe("integrated default gameplay", () => {
 
   it("repeats bounded obstacle navigation deterministically and attracts only local NPCs", () => {
     const wall: Rect = { x: 600, y: 800, width: 32, height: 400 };
+    const distantStart = { x: 112, y: 16 };
     const a = simulation("nav-a", [wall]);
     const b = simulation("nav-b", [wall]);
     try {
@@ -59,7 +60,7 @@ describe("integrated default gameplay", () => {
         session.update("player:alice", (entity) => ({ ...entity, position: { x: 700, y: 1000 } }));
         session.update("player:bob", (entity) => ({ ...entity, position: { x: 1776, y: 1776 } }));
         session.update("npc:npc-northwest", (entity) => ({ ...entity, position: { x: 590, y: 1000 } }));
-        session.update("npc:npc-southwest", (entity) => ({ ...entity, position: { x: 100, y: 100 } }));
+        session.update("npc:npc-southwest", (entity) => ({ ...entity, position: distantStart }));
       }
       const positions: Point2[] = [];
       for (let tick = 1; tick <= 240; tick++) {
@@ -77,9 +78,9 @@ describe("integrated default gameplay", () => {
         position.x > wall.x + wall.width && Math.abs(position.y - 1000) > wall.height / 2
       )).toBe(true);
       const distant = a.world.getEntity("npc:npc-southwest")!.position;
-      expect(distant).not.toEqual({ x: 100, y: 100 });
+      expect(distant).not.toEqual(distantStart);
       expect(distant).toEqual(b.world.getEntity("npc:npc-southwest")!.position);
-      expect(Math.hypot(distant.x - 100, distant.y - 100)).toBeLessThan(135);
+      expect(Math.hypot(distant.x - distantStart.x, distant.y - distantStart.y)).toBeLessThan(135);
     } finally {
       a.module.dispose();
       b.module.dispose();
