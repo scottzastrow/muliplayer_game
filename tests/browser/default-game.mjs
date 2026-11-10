@@ -698,14 +698,15 @@ async function fireWhileAiming(page, targetForView, duration, npcTrace) {
 }
 
 try {
-  if (process.argv.includes("--npc-roaming")) {
+  if (process.argv.includes("--npc-roaming") || process.argv.includes("--npc-explore-routes")) {
     const playerPage = await newWindow();
     const creator = `Roam_${Date.now().toString(36)}`;
     await signIn(playerPage, creator, randomUUID());
     const { verifyNpcRoaming } = await import("./npc-roaming.mjs");
     await verifyNpcRoaming({
       playerPage, creator, cdp, evaluate, waitFor, click, clickSessionButton,
-      state, own, delay, browser: version.Browser, origin
+      state, own, delay, browser: version.Browser, origin,
+      routeOnly: process.argv.includes("--npc-explore-routes")
     });
   } else if (process.argv.includes("--fixed-arena-minimal")) {
     const playerPage = await newWindow();

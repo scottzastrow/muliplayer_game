@@ -3,7 +3,7 @@ import {
   BoundedNavigation, SeededRandom, SessionWorld
 } from "@multiplayer-game/engine";
 import {
-  defaultModuleFactory, generateMap, MAX_NPC_PATH_REQUESTS_PER_TICK,
+  defaultModuleFactory, generateMap, MAX_NPC_PATH_REQUESTS_PER_TICK, MAX_PENDING_NPC_PATHS,
   NPC_EXPLORE_PAUSE_TICKS, NPC_EXPLORE_SPEED_FACTOR, type DefaultEntity
 } from "@multiplayer-game/default-theme";
 import type {
@@ -207,6 +207,7 @@ describe("NPC wave-start roaming and per-player engagement", () => {
 
   it.each([67.5, 0])("starts both Fixed waves outside detection at speed %s", speed => {
     const s = simulation(1, speed, true);
+    const requests = vi.spyOn(s.context.navigation, "requestPath");
     try {
       for (const [wave, start] of [[1, 1], [2, 153]] as const) {
         if (wave === 2) {
@@ -221,14 +222,17 @@ describe("NPC wave-start roaming and per-player engagement", () => {
           ));
         expect(distant, "a living player remains outside every NPC's detection range").toBeDefined();
         s.place("player:p0", distant!.position);
+        const before = requests.mock.calls.length;
         const travel = s.step(start);
         expect(travel.size).toBe(wave === 1 ? 10 : 12);
         for (const amount of travel.values()) {
           expect(amount).toBeCloseTo(speed * NPC_EXPLORE_SPEED_FACTOR / 30, 8);
         }
         // Explore requests a path toward each new goal, within the shared per-tick budget.
-        expect(s.navigation.outstandingRequests)
+        expect(requests.mock.calls.length - before)
           .toBeLessThanOrEqual(speed === 0 ? 0 : MAX_NPC_PATH_REQUESTS_PER_TICK);
+        expect(s.navigation.outstandingRequests)
+          .toBeLessThanOrEqual(speed === 0 ? 0 : MAX_PENDING_NPC_PATHS);
         for (const npc of s.npcs()) {
           expect(s.world.geometry.isCircleWalkable(npc.position, npc.radius)).toBe(true);
         }

@@ -109,6 +109,34 @@ T010, T013 and original T042 stay open. Ranged combat is not authorized until
 the owner confirms sustained exploration after deployment in a normal live
 match; its eventual implementation must remain local for review.
 
+## Map-spanning Explore follow-up (2026-11-09)
+
+- [x] T014 Scale Explore destination distance to half the map's shorter side
+  (1024 units in Fixed), prefer less-visited areas across successive legs and
+  fall back to closer reachable goals after bounded failed searches. Preserve
+  Explore default, movement/pursuit speeds, two sticky attackers and speed zero.
+  Measure completed routes/new-area coverage on Fixed and a smaller map; verify
+  fallback and navigation budgets. Leave changes local, ranged combat separate,
+  and T010, T013 and original T042 open.
+
+T014 evidence: workspace check and 9 focused files / 93 tests passed. Real
+navigation/simulation completed three Fixed routes of 1088/1280/992 units,
+visiting 13 regions and distinct endpoints across the arena. A 768x512 map
+scaled its target to 256 and completed 384/320/256-unit routes in 14 regions.
+An enclosed-area test completed two closer reachable routes after long goals
+returned no-path; a node-limit regression also recovered. Actual destination,
+route and travel measurements plus initial failures/corrections are recorded
+in `docs/verification.md`. Existing speeds, caps, zero-speed and navigation
+budgets pass. A local route-only Chrome check then traced a normal Fixed seed-42
+match for 45.344 seconds with an idle player and default settings. One visible
+exploring NPC traveled 1099.84 world units, moving 297.43 CSS pixels while drawn
+and reaching 821.9 units from its first tracked position; seven offscreen,
+never-pursuing NPCs traveled 1512-1519 units. Their longest stationary intervals
+were 0.2-0.4 seconds; the visible NPC had no stationary interval during its
+painted samples. The browser saw at most two NPCs in range, so no four-in-range
+browser claim is made. Full conditions and limits are in `docs/verification.md`.
+No live-release result is claimed. Changes stay local; T010, T013 and original
+T042 remain open.
 ## Evidence
 
 Checklist: 16 checked, 0 unchecked (PASS). The prerequisite helper resolved this

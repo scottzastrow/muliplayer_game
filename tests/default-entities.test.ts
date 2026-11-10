@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { DefaultEntitySimulator } from "../themes/default/src/module/entities.js";
+import type { LoadedMap } from "../themes/default/src/module/maps.js";
 import type { GameSettings } from "@multiplayer-game/protocol";
 import {
   BoundedNavigation,
@@ -16,11 +18,11 @@ import type {
 } from "@multiplayer-game/theme-sdk";
 import {
   defaultModuleFactory,
+  generateMap,
   MAX_NPC_PATH_REQUESTS_PER_TICK,
   MAX_PENDING_NPC_PATHS,
   NPC_CONTACT_COOLDOWN_TICKS,
-  NPC_EXPLORE_MAX_DISTANCE,
-  NPC_EXPLORE_MIN_DISTANCE,
+  NPC_EXPLORE_MAP_DISTANCE_FACTOR,
   NPC_EXPLORE_PAUSE_TICKS,
   NPC_EXPLORE_SPEED_FACTOR,
   NPC_REPATH_INTERVAL_TICKS,
@@ -34,6 +36,184 @@ const roster: readonly RosterMember[] = [
 ];
 
 describe("default entity movement and pursuit", () => {
+  it.each(["fixed", "small"] as const)(
+    "completes successive map-scaled Explore routes into new areas (%s)", mode => {
+      const bounds = mode === "fixed"
+        ? { width: 2048, height: 2048 } : { width: 768, height: 512 };
+      const fixed = generateMap(42, "fixed").map;
+      const map: LoadedMap = mode === "fixed" ? fixed : {
+        ...fixed,
+        definition: { ...fixed.definition, bounds,
+          spawns: [{ id: "player", kind: "player", position: { x: 80, y: 80 }, radius: 14 }] },
+        obstacles: [],
+        isWalkable: (point, radius) => point.x >= radius && point.y >= radius &&
+          point.x <= bounds.width - radius && point.y <= bounds.height - radius
+      };
+      const s = createSimulation(map.obstacles, { npcDetectionRange: 0 }, 42, bounds);
+      s.module.dispose();
+      const simulator = new DefaultEntitySimulator(s.context, 67.5, 0, 42);
+      simulator.initialize(map, roster, 1);
+      const npc = s.context.entities.values().find(entity => entity.state.kind === "npc")!;
+      const targetDistance = Math.min(bounds.width, bounds.height) / 2;
+      const routes: { goal: Point2; direct: number; path: number; travel: number }[] = [];
+      const pending = new Map<string, { goal: Point2; direct: number; path: number; travel: number }>();
+      const request = s.context.navigation.requestPath;
+      const get = s.context.navigation.getPath;
+      let active: typeof routes[number] | undefined;
+      vi.spyOn(s.context.navigation, "requestPath").mockImplementation((from, goal) => {
+        const id = request(from, goal);
+        if (id) {
+          active = { goal, direct: Math.hypot(goal.x - from.x, goal.y - from.y), path: 0, travel: 0 };
+          pending.set(id, active);
+        }
+        return id;
+      });
+      vi.spyOn(s.context.navigation, "getPath").mockImplementation(id => {
+        const result = get(id);
+        if (result?.status === "found") {
+          const route = pending.get(id)!;
+          route.path = result.path.reduce((sum, point, index) => {
+            const previous = result.path[index - 1];
+            return sum + (previous ? Math.hypot(point.x - previous.x, point.y - previous.y) : 0);
+          }, 0);
+        }
+        return result;
+      });
+      const regions = new Set<string>();
+      const regionSize = Math.min(256, Math.min(bounds.width, bounds.height) / 8);
+      try {
+        for (let tick = 1; tick <= 6500 && routes.length < 3; tick++) {
+          const previous = s.context.entities.get(npc.id)!.position;
+          const requests = s.navigation.requestsSubmitted;
+          s.navigation.processTick();
+          simulator.step(1 / 30, tick);
+          const position = s.context.entities.get(npc.id)!.position;
+          const travel = Math.hypot(position.x - previous.x, position.y - previous.y);
+          expect(travel).toBeLessThanOrEqual(67.5 * NPC_EXPLORE_SPEED_FACTOR / 30 + 1e-8);
+          expect(s.context.geometry.isWalkable(position.x, position.y, 8)).toBe(true);
+          expect(s.navigation.requestsSubmitted - requests).toBeLessThanOrEqual(8);
+          expect(s.navigation.outstandingRequests).toBeLessThanOrEqual(MAX_PENDING_NPC_PATHS);
+          expect(s.navigation.stats.nodesProcessed).toBeLessThanOrEqual(2048);
+          regions.add(`${Math.floor(position.x / regionSize)},${Math.floor(position.y / regionSize)}`);
+          if (active) {
+            active.travel += travel;
+            if (Math.hypot(position.x - active.goal.x, position.y - active.goal.y) < 1e-6) {
+              routes.push(active);
+              active = undefined;
+            }
+          }
+        }
+        console.log(JSON.stringify({ map: mode, targetDistance, routes, visitedRegions: regions.size }));
+        expect(routes).toHaveLength(3);
+        for (const route of routes) {
+          expect(route.direct).toBeGreaterThanOrEqual(targetDistance * 0.75);
+          expect(route.direct).toBeLessThanOrEqual(targetDistance * 1.15 + 32);
+          expect(route.path).toBeGreaterThanOrEqual(route.direct - 32);
+          expect(route.travel).toBeGreaterThanOrEqual(route.direct - 1e-6);
+        }
+        expect(new Set(routes.map(route =>
+          `${Math.floor(route.goal.x / regionSize)},${Math.floor(route.goal.y / regionSize)}`)).size).toBe(3);
+        expect(regions.size).toBeGreaterThanOrEqual(8);
+      } finally { simulator.dispose(); }
+    }
+  );
+
+  it("falls back to closer reachable legs in an enclosed area, then retries the full target", () => {
+    const walls = [
+      { x: 320, y: 0, width: 32, height: 352 },
+      { x: 0, y: 320, width: 352, height: 32 }
+    ];
+    const s = createSimulation(walls, { npcDetectionRange: 0, initialNpcsPerPlayer: 1 });
+    const id = "npc:npc-northwest";
+    s.context.entities.update(id, npc => ({ ...npc, position: { x: 144, y: 144 } }));
+    const request = s.context.navigation.requestPath;
+    const get = s.context.navigation.getPath;
+    const requests: { goal: Point2; direct: number; status?: string; path?: number }[] = [];
+    const pending = new Map<string, typeof requests[number]>();
+    let active: typeof requests[number] | undefined;
+    const completed: { direct: number; path: number; goal: Point2 }[] = [];
+    vi.spyOn(s.context.navigation, "requestPath").mockImplementation((from, goal) => {
+      const requestId = request(from, goal);
+      if (requestId) {
+        active = { goal, direct: Math.hypot(goal.x - from.x, goal.y - from.y) };
+        requests.push(active);
+        pending.set(requestId, active);
+      }
+      return requestId;
+    });
+    vi.spyOn(s.context.navigation, "getPath").mockImplementation(requestId => {
+      const result = get(requestId);
+      if (result) {
+        const row = pending.get(requestId)!;
+        row.status = result.status;
+        if (result.status === "found") {
+          row.path = result.path.reduce((sum, point, index) => {
+            const previous = result.path[index - 1];
+            return sum + (previous ? Math.hypot(point.x - previous.x, point.y - previous.y) : 0);
+          }, 0);
+        }
+      }
+      return result;
+    });
+    try {
+      for (let tick = 1; tick <= 3000 && completed.length < 2; tick++) {
+        const before = requests.length;
+        s.navigation.processTick();
+        s.module.step(1 / 30, tick);
+        const position = s.context.entities.get(id)!.position;
+        expect(position.x).toBeLessThan(320);
+        expect(position.y).toBeLessThan(320);
+        expect(s.context.geometry.isWalkable(position.x, position.y, 8)).toBe(true);
+        expect(requests.length - before).toBeLessThanOrEqual(8);
+        expect(s.navigation.stats.nodesProcessed).toBeLessThanOrEqual(2048);
+        expect(s.navigation.outstandingRequests).toBeLessThanOrEqual(MAX_PENDING_NPC_PATHS);
+        if (active?.status === "found" &&
+          Math.hypot(position.x - active.goal.x, position.y - active.goal.y) < 1e-6) {
+          completed.push({ direct: active.direct, path: active.path!, goal: active.goal });
+          active = undefined;
+        }
+      }
+      console.log(JSON.stringify({ map: "enclosed-320", requests, completed }));
+      expect(requests[0]!.direct).toBeGreaterThanOrEqual(768);
+      expect(requests.some(row => row.status === "no-path")).toBe(true);
+      expect(completed).toHaveLength(2);
+      expect(completed.every(row => row.direct < 512 && row.path > 32)).toBe(true);
+      expect(completed[0]!.goal).not.toEqual(completed[1]!.goal);
+      const firstFound = requests.findIndex(row => row.status === "found");
+      expect(requests.slice(firstFound + 1).some(row => row.direct >= 768)).toBe(true);
+    } finally { s.module.dispose(); }
+  });
+
+  it("shortens an Explore goal after a navigation search reaches its node limit", () => {
+    const s = createSimulation([], { npcDetectionRange: 0, initialNpcsPerPlayer: 1 });
+    const requests = vi.spyOn(s.context.navigation, "requestPath");
+    const get = s.context.navigation.getPath;
+    let limited = false;
+    let recovered = false;
+    vi.spyOn(s.context.navigation, "getPath").mockImplementation(id => {
+      const result = get(id);
+      if (result && !limited) {
+        limited = true;
+        return { status: "limit", path: [], expandedNodes: 2048 };
+      }
+      if (result?.status === "found") recovered = true;
+      return result;
+    });
+    const metric = vi.spyOn(s.context.metrics, "increment");
+    try {
+      for (let tick = 1; tick <= 90; tick++) {
+        s.navigation.processTick();
+        s.module.step(1 / 30, tick);
+      }
+      expect(metric).toHaveBeenCalledWith("default.npc_explore.limit");
+      expect(recovered).toBe(true);
+      const distances = requests.mock.calls.map(([from, to]) =>
+        Math.hypot(to.x - from.x, to.y - from.y));
+      expect(distances[0]).toBeGreaterThanOrEqual(768);
+      expect(distances[1]).toBeLessThanOrEqual(1024 / 2 * 1.1 + 32);
+    } finally { s.module.dispose(); }
+  });
+
   it("normalizes diagonal player movement to the configured speed", () => {
     const simulation = createSimulation();
     const player = simulation.context.entities.get("player:player-a")!;
@@ -145,7 +325,7 @@ describe("default entity movement and pursuit", () => {
     let longestStationary = 0;
     let farthestFromSpawn = 0;
     try {
-      for (let tick = 1; tick <= 900; tick += 1) {
+      for (let tick = 1; tick <= 2400; tick += 1) {
         const previous = a.context.entities.get(id)!.position;
         for (const simulation of [a, b, other]) {
           const requests = simulation.navigation.requestsSubmitted;
@@ -172,7 +352,7 @@ describe("default entity movement and pursuit", () => {
         farthestFromSpawn = Math.max(farthestFromSpawn,
           Math.hypot(position.x - spawn.x, position.y - spawn.y));
       }
-      expect(movingTicks).toBeGreaterThan(780);
+      expect(movingTicks).toBeGreaterThan(2100);
       expect(pausedAfterMovement).toBeGreaterThan(0);
       expect(longestStationary).toBeLessThanOrEqual(2 * NPC_EXPLORE_PAUSE_TICKS);
       expect(farthestFromSpawn, "explores beyond its spawn neighbourhood").toBeGreaterThan(384);
@@ -205,7 +385,7 @@ describe("default entity movement and pursuit", () => {
         ...entity, position: { x: 720, y: 700 }
       }));
       let travelled = 0;
-      for (let tick = 1; tick <= 600; tick += 1) {
+      for (let tick = 1; tick <= 2400; tick += 1) {
         const previous = simulation.context.entities.get(id)!.position;
         simulation.navigation.processTick();
         simulation.module.step(1 / 30, tick);
@@ -213,12 +393,13 @@ describe("default entity movement and pursuit", () => {
         expect(simulation.context.geometry.isWalkable(position.x, position.y, 8)).toBe(true);
         travelled += Math.hypot(position.x - previous.x, position.y - previous.y);
       }
-      expect(travelled).toBeGreaterThan(0.75 * 600 * 67.5 * NPC_EXPLORE_SPEED_FACTOR / 30);
+      expect(travelled).toBeGreaterThan(0.75 * 2400 * 67.5 * NPC_EXPLORE_SPEED_FACTOR / 30);
       expect(requests.mock.calls.length).toBeGreaterThanOrEqual(2);
       for (const [from, to] of requests.mock.calls) {
         const separation = Math.hypot(to.x - from.x, to.y - from.y);
-        expect(separation).toBeGreaterThanOrEqual(NPC_EXPLORE_MIN_DISTANCE / 2);
-        expect(separation).toBeLessThanOrEqual(NPC_EXPLORE_MAX_DISTANCE + 32 * Math.SQRT2);
+        expect(separation).toBeGreaterThanOrEqual(32 * 0.75);
+        expect(separation).toBeLessThanOrEqual(
+          2048 * NPC_EXPLORE_MAP_DISTANCE_FACTOR * 1.1 + 32 * Math.SQRT2);
         expect(simulation.context.geometry.isWalkable(to.x, to.y, 8)).toBe(true);
       }
     } finally { simulation.module.dispose(); }
@@ -513,7 +694,10 @@ describe("default entity movement and pursuit", () => {
   });
 });
 
-function createSimulation(obstacles: readonly Rect[] = [], settings: Partial<GameSettings> = {}, seed = 42) {
+function createSimulation(
+  obstacles: readonly Rect[] = [], settings: Partial<GameSettings> = {}, seed = 42,
+  bounds = { width: 2_048, height: 2_048 }
+) {
   const entities = new Map<string, DefaultEntity>();
   const spatialGrid = new SpatialGrid(32);
   const store: EntityStore<DefaultEntity> = {
@@ -542,7 +726,7 @@ function createSimulation(obstacles: readonly Rect[] = [], settings: Partial<Gam
     queryRadius: (center, radius, maxCells) =>
       spatialGrid.queryRadius(center, radius, maxCells).map(({ id }) => entities.get(id)!)
   };
-  const geometry = new WorldGeometry({ width: 2_048, height: 2_048 }, obstacles);
+  const geometry = new WorldGeometry(bounds, obstacles);
   const navigation = new BoundedNavigation(geometry, {
     cellSize: 32,
     agentRadius: 8

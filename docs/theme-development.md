@@ -345,13 +345,20 @@ at the default), including inside detection range. On each wave's first
 simulation step every NPC picks a destination and starts moving immediately,
 steering directly toward it (with collision-checked axis fallbacks) until its
 navigation path arrives. Destinations use the session's seeded RNG to sample at
-most 8 clear cell centers 192-512 units away, preferring 256-unit regions the NPC
-has never visited, then least recently visited, then farthest from its spawn.
+most 8 clear cell centers around half the map's shorter side (1024 units in the
+2048-unit Fixed arena; 256 in a 768x512 map). Seeded samples use 90-110% of that
+target before snapping to cell centers; overly clipped candidates below 75% are
+discarded. Prefer regions the NPC has never visited, then least recently visited,
+then farthest from its spawn. Visit regions are at most 256 units wide, scaled to
+one eighth of the shorter side on smaller maps (minimum one 32-unit cell).
 On arrival it pauses 6-12 ticks (0.2-0.4 seconds) and chooses another. Exploring
 and pursuit share the existing 8 requests/tick, 64 pending requests and engine
 search/node budgets. Rejected requests retry on the 15-tick repath interval while
-the NPC keeps steering; unreachable/limited paths and 30 ticks without progress
-replace the destination. These report `default.npc_explore.*` metrics.
+the NPC keeps steering. Unreachable/limited paths, 30 ticks without progress or
+no clear candidate halve the next destination's target down to one cell. This
+finds closer reachable legs without adding synchronous searches or increasing
+navigation budgets. Arrival and pursuit transitions restore the full map-scaled
+target. Failures report `default.npc_explore.*` metrics.
 Each living player has **two sticky pursuit/contact slots**. Existing in-range
 engagements retain their slots, even if another NPC or player becomes closer.
 Unassigned NPC/player pairs are admitted by distance (stable ID tie-breaks), with
@@ -371,11 +378,15 @@ rejoin), unless another control already has focus, so movement keys work without
 a click; Tab then leaves the arena normally. For a local browser check, run
 `node tests\browser\default-game.mjs --npc-roaming` with the existing loopback
 Chrome setup, a disposable `BROWSER_TEST_DATABASE_PATH`, and
-`BROWSER_TEST_ARTIFACT_DIR` (optionally `BROWSER_TEST_SEED`). Without staging
-entities or changing defaults it verifies no-click keyboard movement on entry,
-a 30-second idle per-NPC report (exploring distance, longest stationary interval,
+`BROWSER_TEST_ARTIFACT_DIR` (optionally `BROWSER_TEST_SEED` and
+`BROWSER_TEST_NPC_IDLE_SECONDS`, an integer from 30 to 60; default 30). Without
+staging entities or changing defaults it verifies no-click keyboard movement on
+entry, an idle per-NPC report (exploring distance, longest stationary interval,
 pursuit/in-range ticks, painted squares), Tab focus exit, rejoin focus/movement,
 and a 15-second idle observation near the arena center.
+Use `node tests\browser\default-game.mjs --npc-explore-routes` for a focused
+30-60-second idle route trace without arena keyboard events or the additional
+focus/rejoin phases.
 This is not evidence that a deployed process has rebuilt/reloaded local changes.
 
 Dots and Squares defaults level-1 NPCs to **50 HP**: two standard, unboosted

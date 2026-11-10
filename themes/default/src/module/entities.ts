@@ -25,8 +25,7 @@ import {
   MAX_PENDING_NPC_PATHS,
   MAX_ATTRACTION_QUERY_CELLS,
   NPC_EXPLORE_SPEED_FACTOR,
-  NPC_EXPLORE_MIN_DISTANCE,
-  NPC_EXPLORE_MAX_DISTANCE,
+  NPC_EXPLORE_MAP_DISTANCE_FACTOR,
   NPC_EXPLORE_REGION_SIZE,
   NPC_EXPLORE_PAUSE_TICKS,
   NPC_EXPLORE_STUCK_TICKS,
@@ -68,6 +67,7 @@ interface NpcNavigationState {
   readonly home: Point2;
   readonly visitedAt: Map<number, number>;
   exploreGoal?: Point2;
+  exploreDistanceScale: number;
   bestGoalDistance: number;
   progressTick: number;
 }
@@ -75,7 +75,8 @@ interface NpcNavigationState {
 function newNavigation(home: Point2): NpcNavigationState {
   return {
     nextPathPoint: 0, lastRequestTick: -Infinity, goalVersion: 0,
-    home, visitedAt: new Map(), bestGoalDistance: Infinity, progressTick: 0
+    home, visitedAt: new Map(), exploreDistanceScale: 1,
+    bestGoalDistance: Infinity, progressTick: 0
   };
 }
 
@@ -356,6 +357,7 @@ export class DefaultEntitySimulator {
         delete navigation.path;
         delete navigation.pauseUntilTick;
         delete navigation.exploreGoal;
+        navigation.exploreDistanceScale = 1;
         navigation.nextPathPoint = 0;
         navigation.lastRequestTick = -Infinity;
         if (target) navigation.targetId = target.id;
@@ -463,6 +465,7 @@ export class DefaultEntitySimulator {
       const goal = this.#chooseExploreGoal(npc, navigation, tick);
       if (!goal) {
         this.context.metrics.increment("default.npc_explore.no_destination");
+        this.#shortenExploreDistance(navigation);
         navigation.pauseUntilTick = tick + NPC_EXPLORE_PAUSE_TICKS;
         return false;
       }
@@ -525,10 +528,12 @@ export class DefaultEntitySimulator {
 
     if (arrived) {
       this.#clearExploreGoal(navigation);
+      navigation.exploreDistanceScale = 1;
       navigation.pauseUntilTick = tick + NPC_EXPLORE_PAUSE_TICKS +
         Math.floor(this.context.random.next() * (NPC_EXPLORE_PAUSE_TICKS + 1));
     } else if (tick - navigation.progressTick > NPC_EXPLORE_STUCK_TICKS) {
       this.context.metrics.increment("default.npc_explore.stuck");
+      this.#shortenExploreDistance(navigation);
       this.#clearExploreGoal(navigation);
     }
     return requested;
@@ -540,6 +545,14 @@ export class DefaultEntitySimulator {
     navigation.nextPathPoint = 0;
     // Any in-flight request for the abandoned goal is drained but never followed.
     navigation.goalVersion += 1;
+  }
+
+  #shortenExploreDistance(navigation: NpcNavigationState): void {
+    const bounds = this.#map!.definition.bounds;
+    const target = Math.min(bounds.width, bounds.height) * NPC_EXPLORE_MAP_DISTANCE_FACTOR;
+    navigation.exploreDistanceScale = Math.max(
+      MAP_CELL_SIZE / target, navigation.exploreDistanceScale / 2
+    );
   }
 
   #steer(from: Point2, goal: Point2, step: number, radius: number): Point2 {
@@ -570,19 +583,20 @@ export class DefaultEntitySimulator {
     const bounds = this.#map!.definition.bounds;
     const columns = Math.floor(bounds.width / MAP_CELL_SIZE);
     const rows = Math.floor(bounds.height / MAP_CELL_SIZE);
+    const target = Math.min(bounds.width, bounds.height) *
+      NPC_EXPLORE_MAP_DISTANCE_FACTOR * navigation.exploreDistanceScale;
     let best: Point2 | undefined;
     let bestNovelty = -Infinity;
     let bestAway = -Infinity;
     for (let attempt = 0; attempt < MAX_NPC_EXPLORE_CANDIDATES; attempt += 1) {
       const angle = this.context.random.next() * Math.PI * 2;
-      const reach = NPC_EXPLORE_MIN_DISTANCE +
-        this.context.random.next() * (NPC_EXPLORE_MAX_DISTANCE - NPC_EXPLORE_MIN_DISTANCE);
+      const reach = target * (0.9 + this.context.random.next() * 0.2);
       const column = clamp(Math.floor((npc.position.x + Math.cos(angle) * reach) / MAP_CELL_SIZE),
         0, columns - 1);
       const row = clamp(Math.floor((npc.position.y + Math.sin(angle) * reach) / MAP_CELL_SIZE),
         0, rows - 1);
       const candidate = { x: (column + 0.5) * MAP_CELL_SIZE, y: (row + 0.5) * MAP_CELL_SIZE };
-      if (distance(npc.position, candidate) < NPC_EXPLORE_MIN_DISTANCE / 2 ||
+      if (distance(npc.position, candidate) < target * 0.75 ||
         !isWalkable(this.context, candidate, npc.radius)) continue;
       const lastVisit = navigation.visitedAt.get(this.#regionOf(candidate));
       // Unvisited regions win, then the least recently visited, then distance from spawn.
@@ -602,9 +616,11 @@ export class DefaultEntitySimulator {
   }
 
   #regionOf(position: Point2): number {
-    const columns = Math.ceil(this.#map!.definition.bounds.width / NPC_EXPLORE_REGION_SIZE);
-    return Math.floor(position.y / NPC_EXPLORE_REGION_SIZE) * columns +
-      Math.floor(position.x / NPC_EXPLORE_REGION_SIZE);
+    const bounds = this.#map!.definition.bounds;
+    const size = Math.max(MAP_CELL_SIZE,
+      Math.min(NPC_EXPLORE_REGION_SIZE, Math.min(bounds.width, bounds.height) / 8));
+    const columns = Math.ceil(bounds.width / size);
+    return Math.floor(position.y / size) * columns + Math.floor(position.x / size);
   }
 
   #pollPath(navigation: NpcNavigationState, tick: number): boolean {
@@ -630,6 +646,7 @@ export class DefaultEntitySimulator {
       if (!navigation.targetId) {
         // Pick another destination at once; the request interval still bounds retries.
         this.context.metrics.increment(`default.npc_explore.${result.status}`);
+        this.#shortenExploreDistance(navigation);
         this.#clearExploreGoal(navigation);
       }
     }

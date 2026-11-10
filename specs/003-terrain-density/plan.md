@@ -94,4 +94,14 @@ in the unchanged sticky two-per-player pursuit branch. The default skin focuses
 the canvas once on the first player snapshot when nothing else is focused. No
 protocol/SDK/engine changes. Verify per-NPC deterministic 30-second traces with
 four NPCs in range, focus/keyboard skin tests and a local browser run; the
-deployed release still needs its own browser verification.
+deployed release still needs its own browser verification. T014 below supersedes
+only that original destination-distance/region policy.
+
+T014 replaces the fixed 192-512-unit Explore sampling range with a target of
+half the current map's shorter side. Sample eight seeded candidates around that
+distance, rank less-visited regions and discard excessively boundary-clipped
+goals. Halve the requested distance after no-path/limit, stalled goals or no
+clear candidate; reset to full target on arrival or pursuit transitions.
+Keep existing async navigation, per-tick/pending budgets and steering, with no
+new synchronous searches. Scale visit regions down on smaller maps. Measure
+completed paths, actual travel and region coverage with real BoundedNavigation.

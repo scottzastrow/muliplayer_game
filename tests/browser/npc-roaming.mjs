@@ -5,12 +5,15 @@ import { seedWaitingRoom } from "./npc-spawns.mjs";
 
 export async function verifyNpcRoaming({
   playerPage, creator, cdp, evaluate, waitFor, click, clickSessionButton,
-  state, own, delay, browser, origin
+  state, own, delay, browser, origin, routeOnly = false
 }) {
   const artifacts = process.env.BROWSER_TEST_ARTIFACT_DIR;
   assert.ok(artifacts, "provide a directory for actual browser evidence");
   const seed = Number(process.env.BROWSER_TEST_SEED ?? 12);
   assert.ok(Number.isSafeInteger(seed), "provide a safe integer match seed");
+  const idleSeconds = Number(process.env.BROWSER_TEST_NPC_IDLE_SECONDS ?? 30);
+  assert.ok(Number.isSafeInteger(idleSeconds) && idleSeconds >= 30 && idleSeconds <= 60,
+    "provide an idle observation from 30 to 60 seconds");
   mkdirSync(artifacts, { recursive: true });
   let sessionId;
   const frameRecorder = `window.__startNpcFrames = () => {
@@ -24,7 +27,7 @@ export async function verifyNpcRoaming({
             squares: structuredClone(canvas?.__draw?.squares ?? []),
             renderedTick: canvas?.__draw?.snapshotTick
           });
-          if (window.__npcFrames.length >= 2000) clearInterval(window.__npcFrameTimer);
+          if (window.__npcFrames.length >= 2400) clearInterval(window.__npcFrameTimer);
         }, 10);
       };`;
 
@@ -92,14 +95,36 @@ export async function verifyNpcRoaming({
       writeFileSync(join(artifacts, `${name}.png`), Buffer.from(image.data, "base64"));
     };
     // No mouse event reaches the arena: entry focus alone must make movement keys work.
-    const entry = await keyboardWithoutClick("entry");
+    const entry = routeOnly
+      ? { label: "idle-observation", noArenaInput: true }
+      : await keyboardWithoutClick("entry");
+    if (routeOnly) {
+      await waitFor(playerPage, `window.__probe.snapshot?.viewerRole === 'player' &&
+        document.querySelector('canvas') !== null`, 15_000);
+      await cdp("Page.bringToFront", {}, playerPage.session);
+      await evaluate(playerPage, "document.querySelector('canvas').focus()");
+      for (const [key, code, windowsVirtualKeyCode] of [
+        ["ArrowUp", "ArrowUp", 38], ["ArrowDown", "ArrowDown", 40],
+        ["ArrowLeft", "ArrowLeft", 37], ["ArrowRight", "ArrowRight", 39],
+        ["w", "KeyW", 87], ["a", "KeyA", 65], ["s", "KeyS", 83], ["d", "KeyD", 68]
+      ]) {
+        await cdp("Input.dispatchKeyEvent", {
+          type: "keyUp", key, code, windowsVirtualKeyCode
+        }, playerPage.session);
+      }
+      await delay(250);
+      const beforeIdle = own(await state(playerPage)).position;
+      await delay(250);
+      assert.deepEqual(own(await state(playerPage)).position, beforeIdle,
+        "player is stationary before the idle trace starts");
+    }
     await capture("wave-start");
     const firstView = await state(playerPage);
     await delay(500);
     await evaluate(playerPage, "window.__startNpcFrames()");
-    await delay(30_000);
+    await delay(idleSeconds * 1000);
     await waitFor(playerPage, `window.__npcFrames.at(-1).snapshot.tick -
-      window.__npcFrames[0].snapshot.tick >= 900`, 5_000);
+      window.__npcFrames[0].snapshot.tick >= ${idleSeconds * 30}`, 5_000);
     const lastView = await state(playerPage);
     await capture("wave-plus-thirty-seconds");
     const frames = await evaluate(playerPage, `(() => {
@@ -136,7 +161,7 @@ export async function verifyNpcRoaming({
       let distance = 0; let stationaryTicks = 0; let longestStationaryTicks = 0;
       let pursuingTicks = 0; let exploringTicks = 0; let inRangeTicks = 0;
       let inRangeExploringTicks = 0; let inRangeExploringDistance = 0; let farthest = 0;
-      const windows = [0, 0, 0, 0, 0, 0];
+      const windows = Array(Math.ceil(idleSeconds / 5)).fill(0);
       for (let index = 1; index < samples.length; index++) {
         const previous = samples[index - 1]; const current = samples[index];
         const ticks = current.tick - previous.tick;
@@ -153,7 +178,8 @@ export async function verifyNpcRoaming({
         exploringTicks += ticks;
         current.exploring = true;
         distance += travel;
-        windows[Math.min(5, Math.floor((current.tick - first.tick - 1) / 150))] += travel;
+        windows[Math.min(windows.length - 1,
+          Math.floor((current.tick - first.tick - 1) / 150))] += travel;
         if (inRange) { inRangeExploringTicks += ticks; inRangeExploringDistance += travel; }
         stationaryTicks = travel === 0 ? stationaryTicks + ticks : 0;
         longestStationaryTicks = Math.max(longestStationaryTicks, stationaryTicks);
@@ -195,6 +221,36 @@ export async function verifyNpcRoaming({
     };
     const idle = analyze(frames, firstView);
     const movements = idle.movements;
+    if (routeOnly) {
+      const report = {
+        browser, sessionId, seed, settings, firstTick: first.tick, lastTick: last.tick,
+        idleSeconds,
+        elapsedMs: frames.at(-1).elapsedMs - frames[0].elapsedMs, samples: frames.length,
+        playerPosition: ownAt(first).position, playerHealthAtEnd: ownAt(last)?.health,
+        playerDeaths, playerInputMoves: inputMoves.length, focus: null,
+        idle: { maxInRange: idle.maxInRange,
+          ticksWithFourInRange: idle.ticksWithFourInRange, movements },
+        center: null, viewport: { width: lastView.width, height: lastView.height },
+        conditions: `Local server, Fixed, default tuning, idle player for ${idleSeconds} s with no arena keyboard events or entity staging; normal 1920x1080 browser window, no device metrics override`
+      };
+      writeFileSync(join(artifacts, "roaming.json"), JSON.stringify(report, null, 2));
+      writeFileSync(join(artifacts, "frames.json"), JSON.stringify(frames));
+      console.log(JSON.stringify({ ...report, movements: undefined }, null, 2));
+      console.log(`Idle ${idleSeconds}-second observation`);
+      console.table(movements.map(({ from, to, travelPerFiveSeconds, survivedTicks, ...row }) => row));
+      for (const npc of movements) {
+        if (npc.exploringTicks < 150) continue;
+        assert.ok(npc.longestStationarySeconds <= 1, `${npc.id} never idles more than one second`);
+        assert.ok(npc.distanceExploring >= npc.exploringTicks * fullStep * 0.5 * 0.6,
+          `${npc.id} keeps exploring at half speed`);
+      }
+      assert.ok(movements.filter(npc =>
+        npc.exploringTicks >= idleSeconds * 30 * 0.9).length >= 6,
+      "most NPCs explore for the full observation");
+      assert.ok(movements.some(npc => npc.paintedExploringTravel > 60),
+        "an exploring NPC is visibly moving in the rendered arena");
+      return;
+    }
     const tab = await evaluate(playerPage, "document.activeElement === document.querySelector('canvas')");
     await cdp("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Tab", code: "Tab",
       windowsVirtualKeyCode: 9 }, playerPage.session);
@@ -240,6 +296,7 @@ export async function verifyNpcRoaming({
     const center = analyze(centerFrames, centerView);
     const report = {
       browser, sessionId, seed, settings, firstTick: first.tick, lastTick: last.tick,
+      idleSeconds,
       elapsedMs: frames.at(-1).elapsedMs - frames[0].elapsedMs, samples: frames.length,
       playerPosition: ownAt(first).position, playerHealthAtEnd: ownAt(last)?.health, playerDeaths,
       focus: { entry, canvasFocusedBeforeTab: tab, afterTab, rejoin },
@@ -248,13 +305,13 @@ export async function verifyNpcRoaming({
         maxInRange: center.maxInRange, ticksWithFourInRange: center.ticksWithFourInRange,
         movements: center.movements },
       viewport: { width: lastView.width, height: lastView.height },
-      conditions: "Local server, Fixed, default tuning, idle player for 30 s after a no-click keyboard check, no entity staging; normal 1920x1080 browser window, no device metrics override"
+      conditions: `Local server, Fixed, default tuning, idle player for ${idleSeconds} s after a no-click keyboard check, no entity staging; normal 1920x1080 browser window, no device metrics override`
     };
     writeFileSync(join(artifacts, "roaming.json"), JSON.stringify(report, null, 2));
     writeFileSync(join(artifacts, "frames.json"), JSON.stringify(frames));
     console.log(JSON.stringify({ ...report, movements: undefined }, null, 2));
     const table = rows => rows.map(({ from, to, travelPerFiveSeconds, survivedTicks, ...row }) => row);
-    console.log("Idle 30-second observation"); console.table(table(movements));
+    console.log(`Idle ${idleSeconds}-second observation`); console.table(table(movements));
     console.log("Center 15-second observation", { maxInRange: center.maxInRange,
       ticksWithFourInRange: center.ticksWithFourInRange });
     console.table(table(center.movements));
@@ -269,7 +326,8 @@ export async function verifyNpcRoaming({
       assert.ok(npc.distanceExploring >= npc.exploringTicks * fullStep * 0.5 * 0.6,
         `${npc.id} keeps exploring at half speed`);
     }
-    assert.ok(movements.filter(npc => npc.exploringTicks >= 850).length >= 6,
+    assert.ok(movements.filter(npc =>
+      npc.exploringTicks >= idleSeconds * 30 * 0.9).length >= 6,
       "most NPCs explore for the full observation");
     const centerExplorersInRange = center.movements.filter(npc => npc.inRangeExploringTicks >= 30);
     for (const npc of centerExplorersInRange) {

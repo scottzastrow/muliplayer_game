@@ -1,5 +1,86 @@
 # Local verification
 
+## Map-spanning Explore legs (2026-11-09, T014)
+
+Local-only change: target half the map's shorter side instead of 192-512 units,
+with eight seeded 90-110% samples, cell-center snapping and a 75% lower cutoff
+for boundary-clipped candidates. Prefer never/least-recently visited regions,
+then distance from spawn. Regions scale to one eighth of the shorter side,
+capped at 256 units and floored at one 32-unit cell. Failed/limited paths,
+stalled goals or no clear candidates halve the next target down to one cell;
+arrival/pursuit transitions restore full distance. No synchronous path searches
+or increased budgets. Explore remains default, movement stays 33.75 u/s and
+pursuit 67.5 u/s at defaults, two sticky attackers and speed zero are unchanged.
+Contact combat is unchanged; ranged combat is not part of this slice.
+
+Executed seed-42 simulator tests with real `BoundedNavigation`, one NPC,
+detection disabled and default speed. Each run continues until three goals are
+actually reached (not merely requested). Straight-line destination distance,
+returned navigation-polyline length and actual collision-resolved travel are
+reported separately, in world units:
+
+| Map / leg | Target | Destination distance | Navigation route | Actual travel | Reached destination |
+| --- | --- | --- | --- | --- | --- |
+| Fixed 2048x2048 / 1 | 1024 | 1088.00 | 1088.00 | 1088.00 | (2032,1584) |
+| Fixed / 2 | 1024 | 1104.81 | 1280.00 | 1279.89 | (944,1776) |
+| Fixed / 3 | 1024 | 930.20 | 992.00 | 992.90 | (16,1712) |
+| Open 768x512 / 1 | 256 | 275.27 | 384.00 | 383.95 | (464,208) |
+| Open 768x512 / 2 | 256 | 230.76 | 320.00 | 320.03 | (592,16) |
+| Open 768x512 / 3 | 256 | 256.00 | 256.00 | 256.00 | (336,16) |
+
+Fixed visited 13 distinct 256-unit regions; the smaller map visited 14 distinct
+64-unit regions. All three endpoints were in distinct regions on each map:
+successive legs reached new areas, and Fixed crossed from the east to west edge.
+Navigation uses axis-aligned grid routes; actual travel differs slightly because
+the NPC steers while the queued path is pending.
+
+A separate 320x320 enclosed area inside a 2048 arena returned real `no-path`
+results for successive 1088.00/467.38/240.19-unit goals, then completed a
+113.06-unit destination via a 178.37-unit route. After resetting to the full
+target, it again fell back and completed a different 114.54-unit destination via
+a 141.82-unit route. An injected node-limit result also recovered via a shorter
+found route. Tests check collision safety, at most eight requests per tick,
+64 pending and 2048 processed nodes per tick. The existing 100-NPC pending-work,
+rejected-request, pursuit transition, two-wave first-step, two-attacker and
+zero-speed regressions pass.
+
+`npm run check` passed. The focused run passed **9 files / 93 tests**:
+`default-entities`, `npc-engagement`, `integration/gameplay`, `npc-spawns`,
+`default-combat`, `default-respawn`, `default-theme`, `terrain-density`,
+`generated-map-integration`. Initial new tests failed on the old Fixed distances
+and unscaled small-map distances. The first implementation run exposed two old
+observation windows too short to see another long-leg request/arrival pause;
+they now observe 2400 ticks. A two-wave test incorrectly conflated per-tick
+submissions with total pending requests; it now verifies both limits separately.
+No failing run is counted as passing. No full-suite run is claimed for this
+slice; earlier full-suite failures and live-browser limits remain below.
+
+A local route-only Chrome run used a normal 1920x1080 window (1908x748.4 CSS-pixel
+world canvas), Fixed seed 42, default tuning, and no staged entities. The idle
+player stayed at `(272,272)`, at 100 health with no deaths and zero input-driven
+movement. It recorded 679 snapshots over 45.344 seconds (ticks 48-1406); at most
+two NPCs were in detection range at once.
+
+The visible `level-1-0007` NPC was painted exploring in 133 snapshots and moved
+297.43 CSS pixels while painted. Its authoritative Explore travel was 1099.84
+world units, reaching 821.9 units from its first tracked position `(1520,666.7)`
+to `(706.1,299.2)` before removal; that is well outside its initial 256-unit
+region. It spent 34 ticks pursuing and 36 ticks in range, so it was non-pursuing
+for most of the trace but not all of it. Its longest stationary interval was
+0.0 seconds at snapshot resolution; no arrival pause was captured while it was
+visible. Seven other NPCs never pursued but remained outside the world viewport;
+they traveled 1512-1519 units, reached 1027-1358 units from their first tracked
+positions, and had 0.2-0.4 second longest stationary intervals. These distances
+show that they left their spawn regions, but only one exploring body was actually
+visible in this follow-camera view.
+
+The full roaming harness initially failed its idle-player assertion after its
+keyboard-focus check. That run was discarded; the focused route-only mode releases
+direction keys before tracing and asserts a stationary baseline. No four-NPC
+in-range condition was observed, and no live deployment, push or deployment
+claim is made. T010, T013 and original T042 stay open; unrelated edits remain
+preserved.
+
 ## Explore review and release gate (2026-11-09)
 
 The scoped review found no blocking defect in Explore or match-entry focus.

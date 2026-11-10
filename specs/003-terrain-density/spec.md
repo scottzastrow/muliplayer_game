@@ -186,3 +186,14 @@ four NPCs in range and the two without slots still moving. Verify keyboard
 movement immediately after entry without clicking the arena. Roaming is resolved
 only after a normal browser match on the deployed release. Keep T042 open and
 report results before pushing or deploying.
+
+### Map-spanning Explore follow-up
+
+Explore destinations target roughly half the shorter map side (1024 world units
+in the 2048-unit Fixed arena), scaling down on smaller maps. Prefer reachable,
+less-visited areas so successive legs cross the arena. When a target-distance
+destination cannot be reached within existing navigation budgets, retry closer
+reachable destinations without halting exploration. Movement and pursuit speeds,
+Explore default, two-attacker cap and speed zero are unchanged. Measure actual
+completed-route distances and new areas over successive legs on Fixed and a
+smaller map. Keep T042 open, ranged combat separate and changes local for review.
