@@ -583,13 +583,30 @@ export class DefaultEntitySimulator {
     const bounds = this.#map!.definition.bounds;
     const columns = Math.floor(bounds.width / MAP_CELL_SIZE);
     const rows = Math.floor(bounds.height / MAP_CELL_SIZE);
-    const target = Math.min(bounds.width, bounds.height) *
-      NPC_EXPLORE_MAP_DISTANCE_FACTOR * navigation.exploreDistanceScale;
+    const shorterSide = Math.min(bounds.width, bounds.height);
+    const target = shorterSide * NPC_EXPLORE_MAP_DISTANCE_FACTOR *
+      navigation.exploreDistanceScale;
+    const currentEdgeDistance = Math.min(
+      npc.position.x,
+      npc.position.y,
+      bounds.width - npc.position.x,
+      bounds.height - npc.position.y
+    );
+    const seekInterior = currentEdgeDistance < shorterSide * 0.25 &&
+      navigation.exploreDistanceScale === 1;
+    const centerBearing = Math.atan2(
+      bounds.height / 2 - npc.position.y,
+      bounds.width / 2 - npc.position.x
+    );
     let best: Point2 | undefined;
+    let bestInward = -Infinity;
     let bestNovelty = -Infinity;
     let bestAway = -Infinity;
     for (let attempt = 0; attempt < MAX_NPC_EXPLORE_CANDIDATES; attempt += 1) {
-      const angle = this.context.random.next() * Math.PI * 2;
+      const randomAngle = this.context.random.next();
+      const angle = seekInterior
+        ? attempt === 0 ? centerBearing : centerBearing + (randomAngle - 0.5) * Math.PI
+        : randomAngle * Math.PI * 2;
       const reach = target * (0.9 + this.context.random.next() * 0.2);
       const column = clamp(Math.floor((npc.position.x + Math.cos(angle) * reach) / MAP_CELL_SIZE),
         0, columns - 1);
@@ -598,12 +615,25 @@ export class DefaultEntitySimulator {
       const candidate = { x: (column + 0.5) * MAP_CELL_SIZE, y: (row + 0.5) * MAP_CELL_SIZE };
       if (distance(npc.position, candidate) < target * 0.75 ||
         !isWalkable(this.context, candidate, npc.radius)) continue;
+      const candidateEdgeDistance = Math.min(
+        candidate.x,
+        candidate.y,
+        bounds.width - candidate.x,
+        bounds.height - candidate.y
+      );
+      const inward = seekInterior
+        ? candidateEdgeDistance >= shorterSide * 0.25
+          ? attempt === 0 ? 3 : 2
+          : candidateEdgeDistance > currentEdgeDistance ? 1 : 0
+        : 0;
       const lastVisit = navigation.visitedAt.get(this.#regionOf(candidate));
       // Unvisited regions win, then the least recently visited, then distance from spawn.
       const novelty = lastVisit === undefined ? Infinity : tick - lastVisit;
       const away = distance(navigation.home, candidate);
-      if (novelty > bestNovelty || (novelty === bestNovelty && away > bestAway)) {
+      if (inward > bestInward || (inward === bestInward &&
+        (novelty > bestNovelty || (novelty === bestNovelty && away > bestAway)))) {
         best = candidate;
+        bestInward = inward;
         bestNovelty = novelty;
         bestAway = away;
       }

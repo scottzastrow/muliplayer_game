@@ -36,6 +36,35 @@ const roster: readonly RosterMember[] = [
 ];
 
 describe("default entity movement and pursuit", () => {
+  it("routes an ordinarily spawned edge NPC into Fixed interior regions within 30 seconds", () => {
+    const simulation = createSimulation([], { npcDetectionRange: 0 }, 42);
+    const bounds = { width: 2_048, height: 2_048 };
+    const edgeDistance = (position: Point2) => Math.min(
+      position.x, position.y, bounds.width - position.x, bounds.height - position.y
+    );
+    const npc = simulation.context.entities.values().find(entity =>
+      entity.state.kind === "npc" && edgeDistance(entity.position) < bounds.width * 0.1);
+    expect(npc, "the wave includes an ordinary outer-band spawn").toBeDefined();
+    const id = npc!.id;
+    let enteredInterior = false;
+    let travelled = 0;
+    try {
+      for (let tick = 1; tick <= 900; tick += 1) {
+        const previous = simulation.context.entities.get(id)!.position;
+        simulation.navigation.processTick();
+        simulation.module.step(1 / 30, tick);
+        const position = simulation.context.entities.get(id)!.position;
+        expect(simulation.context.geometry.isWalkable(position.x, position.y, 8)).toBe(true);
+        travelled += Math.hypot(position.x - previous.x, position.y - previous.y);
+        if (edgeDistance(position) >= bounds.width * 0.25) enteredInterior = true;
+      }
+      expect(enteredInterior).toBe(true);
+      expect(travelled).toBeGreaterThan(500);
+      expect(simulation.navigation.requestsSubmitted).toBeGreaterThan(0);
+      expect(simulation.navigation.outstandingRequests).toBeLessThanOrEqual(MAX_PENDING_NPC_PATHS);
+    } finally { simulation.module.dispose(); }
+  });
+
   it.each(["fixed", "small"] as const)(
     "completes successive map-scaled Explore routes into new areas (%s)", mode => {
       const bounds = mode === "fixed"

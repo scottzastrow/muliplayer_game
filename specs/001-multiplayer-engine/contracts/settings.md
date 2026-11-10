@@ -106,8 +106,11 @@ without a migration; invalid explicit values are rejected. The value freezes on
 start and other themes decide how to interpret it.
 
 Dots and Squares NPCs default to Explore at 50% of `npcMovementSpeed` from the
-first wave update, choosing seeded clear cell centers 192-512 units away that
-prefer unvisited 256-unit regions, and pausing 6-12 fixed ticks on arrival.
+first wave update, targeting seeded clear cell centers roughly half the shorter
+map side away (1024 units in Fixed). Smaller maps scale down proportionally;
+failed/limited searches fall back to closer reachable goals within the same
+navigation budgets. Prefer unvisited regions (at most 256 units, scaled down
+on smaller maps), and pause 6-12 fixed ticks on arrival.
 Detection makes an NPC eligible; only holders of a player's two pursuit slots
 chase or deal contact damage, and others keep exploring inside the radius.
 All candidates and requests remain bounded by existing navigation limits; failed,

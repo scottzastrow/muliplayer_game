@@ -129,7 +129,9 @@ players, enemies, and spectators; produce a reproducible measured report.
 - **FR-008**: The default game module MUST provide range-triggered enemy pursuit, obstacle navigation, weapons, projectiles, damage, health/power/weapon pickups, and authoritative scoring.
   Explore is the default state of every mobile NPC on every wave: from the first
   simulation update it moves at half configured speed toward seeded reachable
-  destinations 192-512 units away, preferring unvisited regions over its spawn
+  destinations roughly half the shorter map side away (1024 units in Fixed),
+  scaling down for smaller maps and falling back to closer reachable goals
+  within existing navigation budgets, preferring unvisited regions over its spawn
   area, choosing a new destination on arrival after a pause of at most 0.4
   seconds. Blocked, rejected or unavailable paths retry within the existing
   navigation budgets instead of idling. Detection only makes an NPC eligible;

@@ -99,7 +99,9 @@ async function clickSessionButton(page, creator, label) {
     button.textContent === ${JSON.stringify(label)} && !button.disabled).click()`);
 }
 const probe = `(() => {
-  window.__probe = { documentId: crypto.randomUUID(), snapshot: null, actions: [] };
+  window.__probe = {
+    documentId: crypto.randomUUID(), snapshot: null, firstActiveSnapshot: null, actions: []
+  };
   const NativeSocket = window.WebSocket;
   window.WebSocket = class extends NativeSocket {
     constructor(...args) {
@@ -108,6 +110,10 @@ const probe = `(() => {
         const message = JSON.parse(event.data);
         if (message.type === 'server.snapshot') {
           window.__probe.snapshot = message.payload;
+          if (!window.__probe.firstActiveSnapshot && message.payload.phase === 'active' &&
+              message.payload.entities?.some(entity => entity.state.kind === 'npc')) {
+            window.__probe.firstActiveSnapshot = structuredClone(message.payload);
+          }
           if (window.__heldShots) {
             for (const entity of message.payload.entities) {
               if (entity.state.kind === 'projectile' &&
@@ -704,7 +710,7 @@ try {
     await signIn(playerPage, creator, randomUUID());
     const { verifyNpcRoaming } = await import("./npc-roaming.mjs");
     await verifyNpcRoaming({
-      playerPage, creator, cdp, evaluate, waitFor, click, clickSessionButton,
+      playerPage, creator, newWindow, cdp, evaluate, waitFor, click, clickSessionButton,
       state, own, delay, browser: version.Browser, origin,
       routeOnly: process.argv.includes("--npc-explore-routes")
     });

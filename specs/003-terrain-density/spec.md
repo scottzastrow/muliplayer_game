@@ -197,3 +197,26 @@ reachable destinations without halting exploration. Movement and pursuit speeds,
 Explore default, two-attacker cap and speed zero are unchanged. Measure actual
 completed-route distances and new areas over successive legs on Fixed and a
 smaller map. Keep T042 open, ranged combat separate and changes local for review.
+
+### NPC perimeter-spread follow-up
+
+Ordinary Fixed waves distribute NPCs across outer, middle and interior bands,
+where band distance is the nearest map edge divided by the shorter map side:
+outer is below 10%, middle is 10% to below 25%, and interior is at least 25%.
+A ten-NPC wave targets 2/4/4 respectively and spreads placements across all
+quadrants. Every placement retains reachable-cell, wall-clearance, non-overlap
+and safe player-spawn checks. If a band lacks eligible positions, its quota is
+redistributed rather than truncating the wave or concentrating it at the edge.
+
+Explore goals for edge-near NPCs include reachable interior destinations so
+they can travel inward and across the arena. Failed long routes retry closer
+reachable goals within the existing navigation budget. Preserve map-scaled
+range, region novelty, the two-attacker cap, configured movement speeds and
+stationary speed-zero behavior.
+
+For verification, run an ordinary default Fixed match with an idle player and
+no staged entities. Record first-wave spawn bands and a 30-second authoritative
+track map; report how many spawned in the interior, how many outer-band NPCs
+entered the interior, and the travel and pause bounds of visible non-pursuing
+NPCs. A local seeded browser result does not imply results for other seeds or
+the deployed release.

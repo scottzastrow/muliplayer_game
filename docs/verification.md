@@ -81,6 +81,60 @@ in-range condition was observed, and no live deployment, push or deployment
 claim is made. T010, T013 and original T042 stay open; unrelated edits remain
 preserved.
 
+## NPC perimeter-spread follow-up (2026-11-09, T015)
+
+Ordinary Fixed wave spawn candidates are classified by nearest-edge distance
+divided by the shorter map side: outer `<10%`, middle `10%-<25%`, and interior
+`>=25%`. The ten-NPC target is 2/4/4. Eligible placements remain reachable,
+wall-clear, non-overlapping and outside safe player-spawn clearance. Seeded
+zone/quadrant balancing continues across the wave, and shortages in a band
+redistribute to reachable bands rather than truncating the wave.
+
+Edge-near Explore goals now prioritize progress toward the interior only for
+full-range goals. Closer retries keep the established random-angle ordering;
+navigation budgets, pursuit speed/cap and speed-zero behavior are unchanged.
+After the final steering adjustment, `npm run check` passed, as did these
+focused runs individually: `npm test -- tests\default-entities.test.ts`
+(27 tests), `npm test -- tests\npc-engagement.test.ts` (10 tests), and
+`npm test -- tests\npc-spawns.test.ts` (12 tests). The default-entity suite
+covers an ordinarily spawned outer NPC reaching Fixed interior within 30
+seconds; spawn tests cover the target bands/quadrants and quota redistribution.
+An interim focused run had 46 passing and 3 failing tests (two Explore
+region/retry assertions and one engagement timeout) after overly strong inward
+candidate ranking changed random-angle behavior. The final steering correction
+restricts the preference to full-range goals and preserves the existing random
+stream when inactive; the focused files were rerun separately and passed. No
+interim failure is counted as passing.
+
+The final local browser run used Chrome 157, a normal 1920x1080 window with a
+1908x748.4 CSS-pixel world canvas, Fixed seed 42, default tuning, and no staged
+entities. Ordinary first-wave spawning produced 2 outer, 4 middle and 4 interior
+NPCs; **4 spawned interior** and **1 of 2 outer-band NPCs entered the interior**.
+The other outer-band NPC moved from the outer to middle band. The route-only
+trace captured 456 authoritative snapshots over 30.692 seconds (ticks 2-912).
+The idle player stayed at `(272,272)`, had zero input-driven movement and no
+deaths, ending at 30 health after contact damage. At most two NPCs were in
+detection range at once.
+
+Eight NPCs never pursued during the trace. They each traveled 1020.41-1023.61
+world units, reached 722.50-992.27 units from their starting positions, and had
+longest sampled stationary intervals of 0-0.067 seconds. Two of these bodies
+were visible while not pursuing: `npc:npc-northeast` was painted in 204 samples
+and traveled 454.65 CSS pixels while drawn (1022.94 world units over the full
+track); `npc:npc-southeast` was painted in 237 samples and traveled 529 CSS
+pixels while drawn (1022.20 world units overall). Neither had an observed pause.
+The other six never-pursuing bodies were offscreen during this follow-camera
+trace. Two additional NPCs entered pursuit for part of the window and are not
+included in the non-pursuing totals.
+
+The generated spawn-and-track map is `var\npc-perimeter-playtest-final-v2-evidence\npc-spawn-tracks.png`
+(SVG and the authoritative `frames.json`/`roaming.json` are alongside it).
+This is one local seed and one 30-second observation; it does not establish
+behavior across seeds, later waves, or the deployed release. The camera did not
+show all NPCs simultaneously, and the browser saw no more than two NPCs in range.
+T010, T013 and original T042 remain open. No ranged combat, push or deployment
+is included.
+
 ## Explore review and release gate (2026-11-09)
 
 The scoped review found no blocking defect in Explore or match-entry focus.

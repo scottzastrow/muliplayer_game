@@ -1,10 +1,87 @@
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { generateMap } from "@multiplayer-game/default-theme";
+import { MAP_CELL_SIZE } from "@multiplayer-game/theme-sdk";
 import { seedWaitingRoom } from "./npc-spawns.mjs";
 
+const trackColors = [
+  "#e63946", "#457b9d", "#2a9d8f", "#f4a261", "#8e5ea2",
+  "#1d70a2", "#d1495b", "#6a994e", "#c77dff", "#e76f51"
+];
+
+function classifyBand(position, bounds) {
+  const ratio = Math.min(position.x, position.y, bounds.width - position.x,
+    bounds.height - position.y) / Math.min(bounds.width, bounds.height);
+  return ratio < 0.1 ? "outer" : ratio < 0.25 ? "middle" : "interior";
+}
+
+function spawnCellCenter(position) {
+  const coordinate = value =>
+    (Math.round(value / MAP_CELL_SIZE - 0.5) + 0.5) * MAP_CELL_SIZE;
+  return { x: coordinate(position.x), y: coordinate(position.y) };
+}
+
+function createTrackMap(seed, tracks, counts, outerToInteriorIds, bounds) {
+  const map = generateMap(seed, "fixed").map;
+  const width = 1_240;
+  const height = 1_000;
+  const mapSize = 800;
+  const scale = mapSize / Math.max(bounds.width, bounds.height);
+  const mapWidth = bounds.width * scale;
+  const mapHeight = bounds.height * scale;
+  const mapX = 56;
+  const mapY = 112;
+  const x = value => mapX + value * scale;
+  const y = value => mapY + value * scale;
+  const rect = (left, top, rectWidth, rectHeight, fill, opacity = 1) =>
+    `<rect x="${left}" y="${top}" width="${rectWidth}" height="${rectHeight}" fill="${fill}" opacity="${opacity}"/>`;
+  const paths = tracks.map(track => {
+    const points = [track.spawn, ...track.samples].map(point =>
+      `${x(point.x).toFixed(1)},${y(point.y).toFixed(1)}`).join(" ");
+    const end = track.samples.at(-1) ?? track.spawn;
+    return `<polyline points="${points}" fill="none" stroke="${track.color}" stroke-width="2.2" stroke-opacity=".88" stroke-linecap="round" stroke-linejoin="round"/>` +
+      `<circle cx="${x(track.spawn.x)}" cy="${y(track.spawn.y)}" r="6" fill="${track.color}" stroke="#fff" stroke-width="2"/>` +
+      `<text x="${x(track.spawn.x) + 8}" y="${y(track.spawn.y) - 7}" class="number">${track.index + 1}</text>` +
+      `<circle cx="${x(end.x)}" cy="${y(end.y)}" r="4" fill="#fff" stroke="${track.color}" stroke-width="2"/>`;
+  }).join("");
+  const obstacles = map.obstacles.map(obstacle =>
+    rect(x(obstacle.x), y(obstacle.y), obstacle.width * scale, obstacle.height * scale,
+      "#17212b", 0.9)).join("");
+  const legend = tracks.map(track => {
+    const startText = `${track.index + 1}. ${track.id.replace(/^npc:/, "")} (${track.initialBand})`;
+    return `<line x1="932" y1="${155 + track.index * 29}" x2="960" y2="${155 + track.index * 29}" stroke="${track.color}" stroke-width="4"/>` +
+      `<text x="970" y="${160 + track.index * 29}" class="label">${startText}</text>`;
+  }).join("");
+  const outer = Math.min(bounds.width, bounds.height) * 0.1;
+  const inner = Math.min(bounds.width, bounds.height) * 0.25;
+  const countsText = `Spawns: ${counts.outer} outer / ${counts.middle} middle / ${counts.interior} interior`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <style>text{font-family:Arial,sans-serif;fill:#17212b}.title{font-size:24px;font-weight:700}.label{font-size:13px}.number{font-size:12px;font-weight:700;paint-order:stroke;stroke:#fff;stroke-width:3px}.small{font-size:14px}</style>
+    <rect width="100%" height="100%" fill="#f3f5f7"/>
+    <text x="56" y="42" class="title">Fixed NPC spawn positions and 30-second tracks (seed ${seed})</text>
+    <text x="56" y="70" class="small">${countsText}; outer-to-interior: ${outerToInteriorIds.length}/${counts.outer}</text>
+    ${rect(mapX, mapY, mapWidth, mapHeight, "#e9a1a1", 0.72)}
+    ${rect(x(outer), y(outer), (bounds.width - 2 * outer) * scale,
+      (bounds.height - 2 * outer) * scale, "#f3d28b", 0.82)}
+    ${rect(x(inner), y(inner), (bounds.width - 2 * inner) * scale,
+      (bounds.height - 2 * inner) * scale, "#a9d6ad", 0.86)}
+    ${obstacles}
+    <rect x="${x(outer)}" y="${y(outer)}" width="${(bounds.width - 2 * outer) * scale}" height="${(bounds.height - 2 * outer) * scale}" fill="none" stroke="#af3d3d" stroke-dasharray="6 4"/>
+    <rect x="${x(inner)}" y="${y(inner)}" width="${(bounds.width - 2 * inner) * scale}" height="${(bounds.height - 2 * inner) * scale}" fill="none" stroke="#38834a" stroke-dasharray="6 4"/>
+    ${paths}
+    <rect x="${mapX}" y="${mapY}" width="${mapWidth}" height="${mapHeight}" fill="none" stroke="#253443" stroke-width="2"/>
+    <text x="900" y="116" class="small">NPC tracks and spawn bands</text>
+    ${legend}
+    <text x="900" y="480" class="small">Band definitions: edge distance / shorter map side</text>
+    <text x="900" y="505" class="small">Outer &lt;10%; middle 10%–&lt;25%; interior ≥25%</text>
+    <text x="900" y="550" class="small">Dashed outlines: 10% and 25% thresholds</text>
+    <text x="900" y="575" class="small">Filled circles: spawn; white circles: final sample</text>
+  </svg>`;
+}
+
 export async function verifyNpcRoaming({
-  playerPage, creator, cdp, evaluate, waitFor, click, clickSessionButton,
+  playerPage, creator, newWindow, cdp, evaluate, waitFor, click, clickSessionButton,
   state, own, delay, browser, origin, routeOnly = false
 }) {
   const artifacts = process.env.BROWSER_TEST_ARTIFACT_DIR;
@@ -20,7 +97,9 @@ export async function verifyNpcRoaming({
         window.__npcFrames = [];
         window.__npcFrameTimer = setInterval(() => {
           const snapshot = window.__probe.snapshot;
-          if (!snapshot || window.__npcFrames.at(-1)?.snapshot.tick === snapshot.tick) return;
+          if (!snapshot || snapshot.phase !== 'active' ||
+              !snapshot.entities?.some(entity => entity.state.kind === 'npc') ||
+              window.__npcFrames.at(-1)?.snapshot.tick === snapshot.tick) return;
           const canvas = document.querySelector('canvas');
           window.__npcFrames.push({
             elapsedMs: performance.now(), snapshot: structuredClone(snapshot),
@@ -88,6 +167,7 @@ export async function verifyNpcRoaming({
     assert.equal(settings.initialNpcsPerPlayer, 10);
     assert.equal(settings.baseNpcHealth, 50);
     assert.equal(settings.maxLevels, 5);
+    if (routeOnly) await evaluate(playerPage, "window.__startNpcFrames()");
     await clickSessionButton(playerPage, creator, "Start Session");
     await cdp("Page.bringToFront", {}, playerPage.session);
     const capture = async name => {
@@ -120,11 +200,12 @@ export async function verifyNpcRoaming({
     }
     await capture("wave-start");
     const firstView = await state(playerPage);
-    await delay(500);
-    await evaluate(playerPage, "window.__startNpcFrames()");
-    await delay(idleSeconds * 1000);
+    if (!routeOnly) {
+      await delay(500);
+      await evaluate(playerPage, "window.__startNpcFrames()");
+    }
     await waitFor(playerPage, `window.__npcFrames.at(-1).snapshot.tick -
-      window.__npcFrames[0].snapshot.tick >= ${idleSeconds * 30}`, 5_000);
+      window.__npcFrames[0].snapshot.tick >= ${idleSeconds * 30}`, idleSeconds * 1000 + 5_000);
     const lastView = await state(playerPage);
     await capture("wave-plus-thirty-seconds");
     const frames = await evaluate(playerPage, `(() => {
@@ -222,19 +303,67 @@ export async function verifyNpcRoaming({
     const idle = analyze(frames, firstView);
     const movements = idle.movements;
     if (routeOnly) {
+      const spawnSnapshot = await evaluate(playerPage, "window.__probe.firstActiveSnapshot");
+      assert.ok(spawnSnapshot, "captured the first active server snapshot");
+      const bounds = { width: spawnSnapshot.map.width, height: spawnSnapshot.map.height };
+      const spawnNpcs = spawnSnapshot.entities.filter(entity => entity.state.kind === "npc");
+      assert.equal(spawnNpcs.length, settings.initialNpcsPerPlayer,
+        "all initial NPCs came from the ordinary wave spawn");
+      const spawnBands = { outer: 0, middle: 0, interior: 0 };
+      const tracks = spawnNpcs.map((npc, index) => {
+        const spawn = spawnCellCenter(npc.position);
+        const initialBand = classifyBand(spawn, bounds);
+        spawnBands[initialBand] += 1;
+        const samples = frames.flatMap(({ snapshot }) => {
+          const position = snapshot.entities.find(entity => entity.id === npc.id)?.position;
+          return position ? [position] : [];
+        });
+        const movedToInterior = initialBand === "outer" &&
+          samples.some(position => classifyBand(position, bounds) === "interior");
+        return {
+          id: npc.id, index, color: trackColors[index % trackColors.length],
+          spawn, initialBand, samples, movedToInterior
+        };
+      });
+      assert.deepEqual(spawnBands, { outer: 2, middle: 4, interior: 4 },
+        "the ordinary Fixed wave meets the target spawn-band mix");
+      const outerToInteriorIds = tracks.filter(track => track.movedToInterior)
+        .map(track => track.id);
+      const trackRows = tracks.map(track => ({
+        id: track.id, spawn: track.spawn, initialBand: track.initialBand,
+        firstSample: track.samples[0], lastSample: track.samples.at(-1),
+        movedToInterior: track.movedToInterior
+      }));
+      const mapSvg = createTrackMap(
+        seed, tracks, spawnBands, outerToInteriorIds, bounds
+      );
+      writeFileSync(join(artifacts, "npc-spawn-tracks.svg"), mapSvg);
       const report = {
         browser, sessionId, seed, settings, firstTick: first.tick, lastTick: last.tick,
         idleSeconds,
         elapsedMs: frames.at(-1).elapsedMs - frames[0].elapsedMs, samples: frames.length,
         playerPosition: ownAt(first).position, playerHealthAtEnd: ownAt(last)?.health,
         playerDeaths, playerInputMoves: inputMoves.length, focus: null,
+        spawnSnapshotTick: spawnSnapshot.tick, spawnBands,
+        spawnPositionSource: "first active authoritative snapshot, snapped to Fixed 32-unit spawn-cell centers",
+        interiorSpawns: spawnBands.interior,
+        outerToInteriorCount: outerToInteriorIds.length,
+        outerToInteriorIds, npcTracks: trackRows,
+        mapArtifacts: ["npc-spawn-tracks.svg", "npc-spawn-tracks.png"],
         idle: { maxInRange: idle.maxInRange,
           ticksWithFourInRange: idle.ticksWithFourInRange, movements },
         center: null, viewport: { width: lastView.width, height: lastView.height },
         conditions: `Local server, Fixed, default tuning, idle player for ${idleSeconds} s with no arena keyboard events or entity staging; normal 1920x1080 browser window, no device metrics override`
       };
       writeFileSync(join(artifacts, "roaming.json"), JSON.stringify(report, null, 2));
-      writeFileSync(join(artifacts, "frames.json"), JSON.stringify(frames));
+      writeFileSync(join(artifacts, "frames.json"), JSON.stringify(frames.map(({ elapsedMs, snapshot }) => ({
+        elapsedMs,
+        tick: snapshot.tick,
+        players: snapshot.players.map(({ accountId, health, position }) =>
+          ({ accountId, health, position })),
+        npcs: snapshot.entities.filter(entity => entity.state.kind === "npc")
+          .map(({ id, position }) => ({ id, position }))
+      }))));
       console.log(JSON.stringify({ ...report, movements: undefined }, null, 2));
       console.log(`Idle ${idleSeconds}-second observation`);
       console.table(movements.map(({ from, to, travelPerFiveSeconds, survivedTicks, ...row }) => row));
@@ -249,6 +378,16 @@ export async function verifyNpcRoaming({
       "most NPCs explore for the full observation");
       assert.ok(movements.some(npc => npc.paintedExploringTravel > 60),
         "an exploring NPC is visibly moving in the rendered arena");
+      const mapPage = await newWindow();
+      await cdp("Emulation.setDeviceMetricsOverride", {
+        width: 1240, height: 1000, deviceScaleFactor: 1, mobile: false
+      }, mapPage.session);
+      await cdp("Page.navigate", {
+        url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(mapSvg)}`
+      }, mapPage.session);
+      await waitFor(mapPage, "document.documentElement?.tagName?.toLowerCase() === 'svg'", 5_000);
+      const mapImage = await cdp("Page.captureScreenshot", { format: "png" }, mapPage.session);
+      writeFileSync(join(artifacts, "npc-spawn-tracks.png"), Buffer.from(mapImage.data, "base64"));
       return;
     }
     const tab = await evaluate(playerPage, "document.activeElement === document.querySelector('canvas')");

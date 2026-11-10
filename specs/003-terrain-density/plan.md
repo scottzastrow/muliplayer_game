@@ -105,3 +105,16 @@ clear candidate; reset to full target on arrival or pursuit transitions.
 Keep existing async navigation, per-tick/pending budgets and steering, with no
 new synchronous searches. Scale visit regions down on smaller maps. Measure
 completed paths, actual travel and region coverage with real BoundedNavigation.
+
+### NPC perimeter-spread follow-up
+
+Classify reachable, wall-clear spawn candidates by nearest-edge distance over
+the shorter side. Use proportional 20/40/40 outer/middle/interior targets with
+largest-remainder rounding, redistribute shortages to bands with capacity, and
+continue the existing seeded zone/quadrant balancing and player-clearance
+filters. For Explore, score interior progress ahead of region novelty only for
+full-range goals when an NPC is within the 25% edge band. Aim the first sample
+toward arena center and bias later samples inward; reduced-distance retries
+retain their prior random-angle ordering so enclosed-area fallback remains
+available. Do not change navigation budgets, pursuit behavior or speed zero.
+Cover band allocation/redistribution and an ordinary 30-second browser trace.

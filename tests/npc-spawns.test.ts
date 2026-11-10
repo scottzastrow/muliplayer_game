@@ -45,12 +45,19 @@ function setup(seed: number, mode: "fixed" | "simple-generated", count = 40, ext
 const npcs = (simulation: ReturnType<typeof setup>) =>
   simulation.world.entities().filter(entity => entity.state.kind === "npc");
 const zone = (point: Point2) => `${Math.floor(point.x / 512)},${Math.floor(point.y / 512)}`;
+const band = (point: Point2, bounds: { width: number; height: number }) => {
+  const ratio = Math.min(point.x, point.y, bounds.width - point.x, bounds.height - point.y) /
+    Math.min(bounds.width, bounds.height);
+  return ratio < 0.1 ? "outer" : ratio < 0.25 ? "middle" : "interior";
+};
+const quadrant = (point: Point2, bounds: { width: number; height: number }) =>
+  `${point.x >= bounds.width / 2 ? 1 : 0},${point.y >= bounds.height / 2 ? 1 : 0}`;
 
 describe("scattered NPC wave placement", () => {
   it("keeps the obstacle browser encounter reproducible without a fixed NPC spawn", () => {
     const simulation = setup(4315, "fixed", 1);
     try {
-      expect(npcs(simulation)[0]!.position).toEqual({ x: 464, y: 656 });
+      expect(npcs(simulation)[0]!.position).toEqual({ x: 880, y: 368 });
     } finally { simulation.module.dispose(); }
   });
 
@@ -67,10 +74,16 @@ describe("scattered NPC wave placement", () => {
         expect(npcs(first).map(entity => entity.state.health)).toEqual(Array(40).fill(50));
         expect(positions).toEqual(npcs(repeat).map(entity => entity.position));
         expect(positions).not.toEqual(npcs(other).map(entity => entity.position));
+        const bandCounts = new Map<string, number>();
+        for (const position of positions) {
+          const value = band(position, first.map.definition.bounds);
+          bandCounts.set(value, (bandCounts.get(value) ?? 0) + 1);
+        }
+        expect(Object.fromEntries(bandCounts)).toEqual({ outer: 8, middle: 16, interior: 16 });
         const counts = new Map<string, number>();
         for (const position of positions) counts.set(zone(position), (counts.get(zone(position)) ?? 0) + 1);
         expect(counts.size).toBe(16);
-        expect(Math.max(...counts.values()) - Math.min(...counts.values())).toBeLessThanOrEqual(1);
+        expect(Math.max(...counts.values()) - Math.min(...counts.values())).toBeLessThanOrEqual(4);
         for (const simulation of [first, repeat]) {
           for (const npc of npcs(simulation)) simulation.world.removeEntity(npc.id);
           simulation.context.entities.update("player:alice", entity => ({
@@ -95,6 +108,51 @@ describe("scattered NPC wave placement", () => {
       }
     }
   );
+
+  it("places a ten-NPC Fixed wave in the requested edge bands and across quadrants", () => {
+    const simulation = setup(42, "fixed", 10);
+    try {
+      const positions = npcs(simulation).map(entity => entity.position);
+      const bandCounts = new Map<string, number>();
+      const quadrantCounts = new Map<string, number>();
+      for (const position of positions) {
+        const bandName = band(position, simulation.map.definition.bounds);
+        const quadrantName = quadrant(position, simulation.map.definition.bounds);
+        bandCounts.set(bandName, (bandCounts.get(bandName) ?? 0) + 1);
+        quadrantCounts.set(quadrantName, (quadrantCounts.get(quadrantName) ?? 0) + 1);
+      }
+      expect(Object.fromEntries(bandCounts)).toEqual({ outer: 2, middle: 4, interior: 4 });
+      expect(quadrantCounts.size).toBe(4);
+      expect(Math.max(...quadrantCounts.values()) - Math.min(...quadrantCounts.values()))
+        .toBeLessThanOrEqual(1);
+    } finally { simulation.module.dispose(); }
+  });
+
+  it("redistributes missing interior-band capacity without truncating the wave", () => {
+    const simulation = setup(42, "fixed", 10);
+    try {
+      const bounds = simulation.map.definition.bounds;
+      const blocked = new WorldGeometry(bounds, [
+        ...simulation.map.obstacles, { x: 512, y: 512, width: 1_024, height: 1_024 }
+      ]);
+      const context = { ...simulation.context, geometry: {
+        isWalkable: (x: number, y: number, radius = 0) =>
+          blocked.isCircleWalkable({ x, y }, radius),
+        intersectsObstacle: (x: number, y: number, radius: number) =>
+          blocked.intersectsObstacle({ x, y }, radius),
+        moveCircle: (position: Point2, delta: Point2, radius: number) =>
+          blocked.moveCircle(position, delta, radius)
+      } };
+      const positions = selectNpcSpawns(
+        context, simulation.map, [{ x: 272, y: 272 }], 42, 2, 10
+      );
+      expect(positions).toHaveLength(10);
+      expect(positions.every(position =>
+        band(position, simulation.map.definition.bounds) !== "interior")).toBe(true);
+      expect(simulation.metrics.increment)
+        .toHaveBeenCalledWith("default.npc_spawn.zone_fallback");
+    } finally { simulation.module.dispose(); }
+  });
 
   it.each(["fixed", "simple-generated"] as const)(
     "keeps every spawn clear and navigable by a player across several seeds on %s", mode => {

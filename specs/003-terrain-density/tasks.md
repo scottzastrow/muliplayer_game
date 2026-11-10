@@ -137,6 +137,37 @@ painted samples. The browser saw at most two NPCs in range, so no four-in-range
 browser claim is made. Full conditions and limits are in `docs/verification.md`.
 No live-release result is claimed. Changes stay local; T010, T013 and original
 T042 remain open.
+
+## NPC perimeter-spread follow-up (2026-11-09)
+
+- [x] T015 Spread ordinary Fixed NPC waves across edge-distance bands and
+  quadrants, bias full-range Explore goals inward for edge-near NPCs, preserve
+  safe spawns and existing navigation/pursuit limits, and verify with tests plus
+  a 30-second ordinary browser match and spawn/track map. Keep T010, T013 and
+  original T042 open; ranged combat remains separate.
+
+T015 evidence: `npm run check` passed. Focused tests passed individually:
+`default-entities` (27), `npc-engagement` (10) and `npc-spawns` (12). A fresh
+Chrome 157 Fixed seed-42 match used ordinary 10-NPC spawning, default tuning,
+no entity staging and an idle player. Across 456 snapshots (ticks 2-912) over
+30.692 seconds, the first wave had 2 outer, 4 middle and 4 interior spawns;
+4 spawned interior and 1 of the 2 outer-band NPCs entered the interior. All
+8 NPCs that never pursued traveled 1020.41-1023.61 world units, displaced
+722.50-992.27 units from their starting positions and had longest sampled
+stationary intervals of 0-0.067 seconds. The browser run saw at most two NPCs
+in range; two NPCs pursued during portions of the trace. The idle player stayed
+at `(272,272)`, had no input-driven movement or deaths, and ended at 30 health
+after contact damage. `docs/verification.md` records visible-body details,
+limits and the generated map. T010, T013 and original T042 remain open. No
+deployment or push was performed; changes remain local.
+
+An interim focused run had 46 passing and 3 failing tests: two Explore region/
+retry assertions and one engagement-test timeout. The inward preference had
+overweighted candidate scoring and changed random-angle behavior. The final
+adjustment limits inward preference to full-range goals and preserves the prior
+random stream when it is inactive; the separate focused reruns above passed.
+The interim failures are not counted as passing.
+
 ## Evidence
 
 Checklist: 16 checked, 0 unchecked (PASS). The prerequisite helper resolved this
