@@ -146,12 +146,12 @@ contains the next level and committed geometry. Late spectators/reconnects
 receive current geometry without relying on an earlier map-change event.
 No client map mutation or separate geometry transport is introduced.
 
-Dots and Squares schema v4 adds optional `waveRemainingSeconds` (finite, 0-300)
-at the snapshot root. Player and selected-target spectator views retain the same
-authoritative wave time, independent of player death countdowns. It is omitted
-during intermission/successful completion and reaches zero on timeout. Clients
-display it without sending timer authority back to the server. Older v4 snapshots
-and renderers remain compatible because this field is additive/optional.
+Dots and Squares schema v4 no longer emits the legacy optional
+`waveRemainingSeconds` field. Its no-kill deadline is private server state, never
+displayed in player or spectator HUDs. Legacy v4 time fields remain accepted but
+are not rendered. Player death and intermission countdowns remain independent.
+Saved result payloads add optional `completionReason` (1-128 characters);
+`wave-timeout` selects "Wave ended: no kills for a while." on the results screen.
 
 On module-requested match completion (including wave timeout) or authorized host end, Core commits final standings and terminal state,
 releases the runner, then sends `server.lifecycle` with

@@ -43,6 +43,7 @@ export const GameSettingsSchema = z
     npcMovementSpeed: z.number().finite().min(0).max(180).default(67.5),
     npcDetectionRange: z.number().finite().min(0).max(700).default(512),
     respawnDelaySeconds: z.number().finite().min(0).max(60),
+    noKillTimeoutSeconds: z.number().finite().positive().max(3600).default(60),
     maxLevels: z.number().int().min(1).max(100),
     mapMode: z.enum(["fixed", "simple-generated"]).optional(),
     terrainDensity: TerrainDensityScheduleSchema.optional(),
@@ -69,6 +70,7 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = Object.freeze({
   npcMovementSpeed: 67.5,
   npcDetectionRange: 512,
   respawnDelaySeconds: 5,
+  noKillTimeoutSeconds: 60,
   maxLevels: 5,
   themeRevision: "default@1.0.0"
 });

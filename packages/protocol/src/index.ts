@@ -114,6 +114,7 @@ export const MatchResultSchema = z.object({
   matchId: z.string().uuid(),
   status: z.enum(["finished", "abandoned", "interrupted", "failed"]),
   finalLevel: z.number().int().positive(),
+  completionReason: z.string().min(1).max(128).optional(),
   standings: z.array(z.object({
     accountId: z.string().uuid(),
     username: UsernameSchema,

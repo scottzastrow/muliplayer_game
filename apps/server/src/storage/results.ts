@@ -15,6 +15,7 @@ export interface MatchResultInput {
   readonly status: MatchResultStatus;
   readonly finalLevel: number;
   readonly standings?: readonly SubmittedStanding[];
+  readonly completionReason?: string;
 }
 
 export interface MatchStanding extends SubmittedStanding {
@@ -30,6 +31,7 @@ export interface StoredMatchResult {
   readonly settings: unknown;
   readonly themeDigest: string;
   readonly finalizedAt: string;
+  readonly completionReason?: string;
 }
 
 interface ParticipantRow {
@@ -103,8 +105,8 @@ export function finalizeMatchResult(
     const inserted = database
       .prepare(
         `INSERT INTO match_results
-         (match_id, status, final_level, standings_json, settings_summary_json, theme_digest, finalized_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+         (match_id, status, final_level, standings_json, settings_summary_json, theme_digest, finalized_at, completion_reason)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         input.matchId,
@@ -113,7 +115,8 @@ export function finalizeMatchResult(
         JSON.stringify(standings),
         match.settings_json,
         match.theme_digest,
-        finalizedAt
+        finalizedAt,
+        input.completionReason ?? null
       );
     if (inserted.changes !== 1) {
       throw new Error("Match result was not inserted exactly once.");
@@ -174,7 +177,7 @@ export function getMatchResult(
   const row = database
     .prepare(
       `SELECT match_id, status, final_level, standings_json, settings_summary_json,
-              theme_digest, finalized_at
+              theme_digest, finalized_at, completion_reason
        FROM match_results WHERE match_id = ?`
     )
     .get(matchId) as
@@ -186,6 +189,7 @@ export function getMatchResult(
         settings_summary_json: string;
         theme_digest: string;
         finalized_at: string;
+        completion_reason: string | null;
       }
     | undefined;
   if (!row) {
@@ -198,7 +202,8 @@ export function getMatchResult(
     standings: Object.freeze(JSON.parse(row.standings_json) as MatchStanding[]),
     settings: JSON.parse(row.settings_summary_json) as unknown,
     themeDigest: row.theme_digest,
-    finalizedAt: row.finalized_at
+    finalizedAt: row.finalized_at,
+    ...(row.completion_reason === null ? {} : { completionReason: row.completion_reason })
   });
 }
 
@@ -283,5 +288,10 @@ function validateFinalization(input: MatchResultInput, finalizedAt: string): voi
   }
   if (input.status === "finished" && !Array.isArray(input.standings)) {
     throw new TypeError("Finished matches require complete final standings.");
+  }
+  if (input.completionReason !== undefined &&
+    (typeof input.completionReason !== "string" ||
+      input.completionReason.length < 1 || input.completionReason.length > 128)) {
+    throw new TypeError("Match completion reason must contain 1-128 characters.");
   }
 }

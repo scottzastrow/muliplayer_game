@@ -130,3 +130,16 @@ real local browser, plus first-step waves, four-NPC admission, stability,
 death/range replacement, denied contact, and overlapping two-player eligibility.
 Distinguish browser observations from deterministic simulation checks; do not
 infer the code revision or runtime behavior of an uninspected live deployment.
+
+### Hidden no-kill timer follow-up
+
+Dots and Squares uses a server-authoritative no-kill timeout, configurable via
+`noKillTimeoutSeconds` (positive finite seconds, at most 3600; default 60).
+Start fresh at every wave boundary and reset only on a confirmed enemy kill by
+any player, never movement, misses or nonlethal damage. Do not expose its
+remaining time in player/spectator snapshots or HUDs. Expiry uses the existing
+`wave-timeout` match finalization with saved standings and the message
+"Wave ended: no kills for a while." Preserve the successful-wave intermission
+countdown, compact layout, Score/Health and both roles' standings. Keep the
+public SDK fixed-deadline Countdown available for other themes; do not change
+NPC behavior, close the deployed roaming report or mark T042 complete.

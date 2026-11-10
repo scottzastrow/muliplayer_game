@@ -66,13 +66,13 @@ describe("wave timeout finalization", () => {
       lobby.reconnect.attach(id, account.id);
       lifecycle.setPlayerPresence(id, account.id, "connected");
 
-      now = 125_960;
+      now = 59_960;
       vi.advanceTimersByTime(34);
       expect(getMatchResult(database, id)).toBeUndefined();
-      now = 126_000;
+      now = 60_000;
       vi.advanceTimersByTime(34);
       expect(getMatchResult(database, id)).toMatchObject({
-        status: "finished", finalLevel: 1,
+        status: "finished", finalLevel: 1, completionReason: "wave-timeout",
         standings: [{ accountId: account.id, points: 275, kills: 3, deaths: 2, rank: 1 }]
       });
       expect(requests).toHaveBeenCalledExactlyOnceWith({ kind: "match", reason: "wave-timeout" });
@@ -108,6 +108,30 @@ describe("wave timeout finalization", () => {
       expect((await app.inject({
         url: `/api/v1/matches/${id}/results`, headers: { cookie: `mp_session=${token}` }
       })).json()).toEqual(response.json());
+      const headers = { cookie: `mp_session=${token}`, origin: "https://game.example.test" };
+      for (const noKillTimeoutSeconds of [0, -1, 3601, null, "60"]) {
+        const rejected = await app.inject({
+          method: "POST", url: "/api/v1/sessions", headers,
+          payload: { settings: { ...settings, noKillTimeoutSeconds } }
+        });
+        expect(rejected.statusCode).toBe(422);
+        expect(rejected.json().error.code).toBe("INVALID_SETTINGS");
+      }
+      const created = await app.inject({
+        method: "POST", url: "/api/v1/sessions", headers,
+        payload: { settings: { ...settings, noKillTimeoutSeconds: 12.5 } }
+      });
+      expect(created.statusCode).toBe(201);
+      const configuredId = created.json().session.id as string;
+      expect((await app.inject({ url: `/api/v1/sessions/${configuredId}`, headers }))
+        .json().settings.noKillTimeoutSeconds).toBe(12.5);
+      const edited = await app.inject({
+        method: "PATCH", url: `/api/v1/sessions/${configuredId}/settings`, headers,
+        payload: { settings: { ...settings, noKillTimeoutSeconds: 45 }, expectedRevision: 0 }
+      });
+      expect(edited.statusCode).toBe(200);
+      expect((await app.inject({ url: `/api/v1/sessions/${configuredId}`, headers }))
+        .json().settings.noKillTimeoutSeconds).toBe(45);
     } finally {
       lifecycle.close();
       if (app) await app.close();

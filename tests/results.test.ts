@@ -39,7 +39,8 @@ describe("persistent match progression and results", () => {
 
   it("normalizes legacy saved-result NPC settings without rewriting them", () => {
     const matchId = createRunningMatch(1, 1);
-    const { npcMovementSpeed: _speed, npcDetectionRange: _range, ...legacySettings } = {
+    const { npcMovementSpeed: _speed, npcDetectionRange: _range,
+      noKillTimeoutSeconds: _timeout, ...legacySettings } = {
       ...DEFAULT_GAME_SETTINGS, maxLevels: 1, baseNpcHealth: 100
     };
     database!.prepare("UPDATE matches SET settings_json = ? WHERE id = ?")
@@ -53,6 +54,9 @@ describe("persistent match progression and results", () => {
       .toBe(67.5);
     expect(MatchResultSchema.shape.settings.parse(getMatchResult(database!, matchId)?.settings).npcDetectionRange)
       .toBe(512);
+    expect(MatchResultSchema.shape.settings.parse(getMatchResult(database!, matchId)?.settings).noKillTimeoutSeconds)
+      .toBe(60);
+    expect(getMatchResult(database!, matchId)).not.toHaveProperty("completionReason");
     const legacyJson = JSON.stringify(legacySettings);
     database!.prepare("UPDATE match_results SET settings_summary_json = ? WHERE match_id = ?")
       .run(legacyJson, matchId);

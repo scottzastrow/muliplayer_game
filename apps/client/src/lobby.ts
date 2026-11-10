@@ -48,6 +48,8 @@ const NUMBER_FIELDS: ReadonlyArray<{
   { key: "npcDetectionRange", label: "NPC detection range", min: 0, max: 700, step: "any",
     help: "0-700 world units; default 512. Zero disables automatic pursuit." },
   { key: "respawnDelaySeconds", label: "Respawn delay (seconds)", min: 0, max: 60, step: 1 },
+  { key: "noKillTimeoutSeconds", label: "No-kill timeout (seconds)", min: 0.001, max: 3600, step: "any",
+    help: "Dots and Squares: hidden server timer, reset by any player's enemy kill. Default 60 seconds." },
   { key: "maxLevels", label: "Maximum levels", min: 1, max: 100, step: 1 }
 ];
 
@@ -440,6 +442,9 @@ function readSettings(fieldset: HTMLFieldSetElement): GameSettings {
   if (value("npcDetectionRange").trim() === "") {
     throw new Error("NPC detection range is required.");
   }
+  if (value("noKillTimeoutSeconds").trim() === "") {
+    throw new Error("No-kill timeout is required.");
+  }
   const mapMode = value("mapMode");
   const savedDensity: unknown = JSON.parse(fieldset.dataset.terrainDensity ?? "null");
   const terrainDensity = mapMode === "simple-generated"
@@ -461,6 +466,7 @@ function readSettings(fieldset: HTMLFieldSetElement): GameSettings {
     npcMovementSpeed: Number(value("npcMovementSpeed")),
     npcDetectionRange: Number(value("npcDetectionRange")),
     respawnDelaySeconds: Number(value("respawnDelaySeconds")),
+    noKillTimeoutSeconds: Number(value("noKillTimeoutSeconds")),
     maxLevels: Number(value("maxLevels")),
     themeRevision: value("themeRevision"),
     ...(mapMode === "legacy" ? {} : { mapMode }),

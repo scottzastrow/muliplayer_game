@@ -30,7 +30,6 @@ export interface DefaultProgressionState {
   readonly level: number;
   readonly phase: DefaultLevelPhase;
   readonly intermissionEndsAtTick?: number;
-  readonly waveRemainingSeconds?: number;
   readonly startingNpcCount: number;
 }
 
@@ -58,9 +57,6 @@ export class DefaultProgression {
       level: this.#level,
       phase: this.#phase,
       startingNpcCount: this.#startingNpcCount,
-      ...(this.#waveCountdown === undefined
-        ? {}
-        : { waveRemainingSeconds: this.#waveCountdown.remainingSeconds }),
       ...(this.#intermissionEndsAtTick === undefined
         ? {}
         : { intermissionEndsAtTick: this.#intermissionEndsAtTick })
@@ -127,6 +123,12 @@ export class DefaultProgression {
     }
   }
 
+  recordEnemyKill(): void {
+    if (this.#phase === "active") {
+      this.#waveCountdown = new Countdown(this.context.clock, this.settings.noKillTimeoutSeconds);
+    }
+  }
+
   #beginLevel(level: number): void {
     const difficulty = calculateLevelDifficulty(this.settings, this.rosterSize, level);
     this.startLevel(level, difficulty);
@@ -135,7 +137,7 @@ export class DefaultProgression {
     this.#phase = "active";
     this.#intermissionEndsAtTick = undefined;
     this.#waveCountdown = new Countdown(
-      this.context.clock, calculateWaveDurationSeconds(difficulty.npcCount)
+      this.context.clock, this.settings.noKillTimeoutSeconds
     );
   }
 }

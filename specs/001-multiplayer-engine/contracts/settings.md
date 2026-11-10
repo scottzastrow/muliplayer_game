@@ -16,6 +16,7 @@ explicitly confirmed 10:1, five-second delay and five-session cap.
 | npcMovementSpeed | 67.5 | Finite number 0–180 world units/second, fractions allowed; 0 keeps NPCs stationary |
 | npcDetectionRange | 512 | Finite number 0–700 world units; 0 disables automatic pursuit |
 | respawnDelaySeconds | 5 | Number 0–60 seconds |
+| noKillTimeoutSeconds | 60 | Positive finite seconds, at most 3600; Dots and Squares hidden timer resets on confirmed enemy kills only; absent legacy values resolve to 60 |
 | maxLevels | 5 | Integer 1–100 |
 | themeRevision | default@1.0.0 | Installed/enabled exact immutable revision |
 | mapMode | Absent = legacy source-selected mode | Optional `fixed` / `simple-generated`; host selection freezes at start |

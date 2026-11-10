@@ -110,6 +110,10 @@ describe("host NPC settings", () => {
     const elements = () => createdElements[0]!.descendants();
     const createSpeed = elements().find(element => element.name === "setting-npcMovementSpeed")!;
     const createRange = elements().find(element => element.name === "setting-npcDetectionRange")!;
+    const createTimeout = elements().find(element => element.name === "setting-noKillTimeoutSeconds")!;
+    expect(createTimeout.value).toBe("60");
+    expect([createTimeout.min, createTimeout.max, createTimeout.step]).toEqual(["0.001", "3600", "any"]);
+    createTimeout.value = "45.5";
     const createMode = elements().find(element => element.name === "setting-mapMode")!;
     const densityMode = elements().find(element => element.name === "setting-densityMode")!;
     expect(createMode.value).toBe("fixed");
@@ -142,7 +146,7 @@ describe("host NPC settings", () => {
     const create = fetch.mock.calls.find(([url, init]) => url === "/api/v1/sessions" &&
       init?.method === "POST")!;
     expect(JSON.parse(String(create[1]!.body)).settings).toMatchObject({
-      npcMovementSpeed: 33.75, npcDetectionRange: 300, baseNpcHealth: 50,
+      npcMovementSpeed: 33.75, npcDetectionRange: 300, baseNpcHealth: 50, noKillTimeoutSeconds: 45.5,
       mapMode: "simple-generated",
       terrainDensity: { mode: "incremental", startingDensity: 3, increasePerLevel: 0 }
     });

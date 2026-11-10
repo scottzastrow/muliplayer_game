@@ -123,3 +123,25 @@ No dependency/manifests, theme digest or installed legacy records were migrated.
 No browser/capacity/deployment run is claimed. No commit, push or deployment was
 performed; original T042 stays unchecked. Feature selection is now the new
 checkout-local specs/003-terrain-density pointer.
+
+## Evidence
+
+- [x] T011 Implement and verify the hidden configurable 60-second no-kill timer,
+  confirmed shared kill resets, fresh wave starts, timeout standings/message,
+  preserved fixed-deadline SDK option, compact Score/Health and intermission.
+  Authorized independently of blocked T010; keep NPC behavior and T042 unchanged.
+
+T011 evidence: `docs/verification.md` records 19 focused files / 121 passing
+tests, workspace check, engine/client builds, browser-script syntax and whitespace
+checks. Real Chrome compact-match verification passed for both roles at three
+desktop sizes (36.375-pixel Score/Health bar, no timer, intermission standings
+and next-wave countdown). The actual 8-second idle browser timeout showed
+identical saved final standings/message for player and spectator, including
+reload. Deterministic authority checks cover default 60-second expiry,
+another player's confirmed kills at 59/118/177/236 seconds extending beyond the
+old 168-second deadline, non-kill activity not resetting, and a fresh next-wave
+timer. Public-theme checks passed 4 tests with the immutable external-consumer
+drift gate explicitly skipped until a reviewed public-contract revision exists.
+Failure/correction history is retained. SDK fixed Countdown remains available;
+NPC code is unchanged, T010/live roaming and original T042 remain open.
+No hooks file exists; no push or deployment was performed.

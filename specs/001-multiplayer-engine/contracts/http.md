@@ -68,7 +68,7 @@ action envelope.
 
 `GET /matches/:id/results` requires a valid login but does not create membership.
 It returns `{result:{matchId,status,finalLevel,standings,settings,themeDigest,
-finalizedAt}}` from the immutable saved result, or 404 if the identifier is invalid,
+finalizedAt,completionReason?}}` from the immutable saved result, or 404 if the identifier is invalid,
 unknown, or the match has no saved result yet. Each finished standing contains
 `accountId`, `username`, `rank`, `points`, `kills` and `deaths`. Ranks are persisted
 in points-descending, kills-descending, deaths-ascending, normalized-username order;
@@ -82,6 +82,14 @@ completion or the host explicitly ends it, for example Dots and Squares wave tim
 actually reached, not a claim that the remaining waves were cleared. It must
 remain within the configured maximum; finished standings are still complete,
 ranked and persisted through the same finalization path.
+
+`completionReason` is an optional 1-128 character module completion code.
+Dots and Squares uses `wave-timeout` for its hidden no-kill expiry; saved results
+display "Wave ended: no kills for a while." Existing results without the field
+remain compatible. Host-ended results do not acquire a timeout reason.
+`noKillTimeoutSeconds` is an additive host/API setting, positive finite seconds
+up to 3600, default 60 when absent. It is frozen on start; invalid values use
+the existing 422 `INVALID_SETTINGS` path.
 
 `POST /sessions/:id/end` requires authenticated same-origin JSON with an empty
 body. Authorization compares the stored creator account ID, not a supplied role

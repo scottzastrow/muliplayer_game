@@ -364,7 +364,7 @@ export class SessionLifecycle {
       if (request.kind === "level") {
         this.#advanceLevel(active);
       } else {
-        this.#finishMatch(active, tick);
+        this.#finishMatch(active, tick, request.reason);
       }
     }
   }
@@ -382,7 +382,7 @@ export class SessionLifecycle {
     active.nextLevel = active.currentLevel + 1;
   }
 
-  #finishMatch(active: ActiveSession, tick: number): void {
+  #finishMatch(active: ActiveSession, tick: number, reason: string): void {
     const state = active.module.state;
     const results = active.module.results();
     if (
@@ -398,11 +398,12 @@ export class SessionLifecycle {
       this.#publish(active, tick);
     }
     const standings = parseStandings(results.standings);
-    this.#finalize(active, tick, standings);
+    this.#finalize(active, tick, standings, reason);
   }
 
-  #finalize(active: ActiveSession, tick: number, standings: ReturnType<typeof parseStandings>): void {
-    if (!this.lobby.finalizeFinishedMatch(active.id, active.currentLevel, standings)) {
+  #finalize(active: ActiveSession, tick: number, standings: ReturnType<typeof parseStandings>,
+    completionReason?: string): void {
+    if (!this.lobby.finalizeFinishedMatch(active.id, active.currentLevel, standings, completionReason)) {
       throw new Error("Finished match result was already finalized or the match is no longer active.");
     }
     this.#release(active);

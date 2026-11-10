@@ -64,8 +64,6 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     const life = document.createElement("div");
     life.className = "default-life";
     life.setAttribute("role", "status");
-    const waveTime = document.createElement("div");
-    waveTime.className = "default-wave-time";
     const enemyCount = document.createElement("div");
     enemyCount.className = "default-enemy-count";
     const terrainCoverage = document.createElement("div");
@@ -93,7 +91,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     standings.append(standingsCaption, standingsHead, standingsBody);
     levelSummary.append(levelTitle, levelPoints, nextLevel, standings);
     levelSummary.hidden = true;
-    hud.append(points, health, waveTime, enemyCount, terrainCoverage, life, levelSummary);
+    hud.append(points, health, enemyCount, terrainCoverage, life, levelSummary);
     const help = document.createElement("p");
     help.textContent = controlMode === "keyboard-only"
       ? "Click the game to focus. WASD: move and face. Left/Right arrows: turn in place. Space: fire."
@@ -453,8 +451,6 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
           ));
           nextLevel.textContent = `Level ${current.level + 1} starts in ${seconds}\u2026`;
         }
-        waveTime.textContent = current.phase === "active" && current.waveRemainingSeconds !== undefined
-          ? `Wave time remaining: ${Math.ceil(current.waveRemainingSeconds)}s` : "";
         const remaining = observed ? Math.ceil(observed.death.remainingSeconds)
           : Math.max(0, Math.ceil(((player.respawnAtTick ?? current.tick) - current.tick) / 30));
         life.textContent = current.phase === "complete" ? "Match complete."
@@ -487,7 +483,6 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
         canvas.remove();
         points.remove();
         health.remove();
-        waveTime.remove();
         life.remove();
         enemyCount.remove();
         terrainCoverage.remove();

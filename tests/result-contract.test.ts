@@ -17,8 +17,12 @@ describe("saved-result public contract", () => {
     expect(MatchResultSchema.safeParse({ ...result, passwordHash: "not-public" }).success).toBe(false);
   });
   it("accepts module-ended matches with standings before the configured maximum level", () => {
-    const timedOut = { ...result, settings: { ...result.settings, maxLevels: 5 } };
+    const timedOut = { ...result, completionReason: "wave-timeout",
+      settings: { ...result.settings, maxLevels: 5 } };
     expect(MatchResultSchema.parse(timedOut)).toEqual(timedOut);
+    for (const completionReason of ["", "x".repeat(129), null, 123]) {
+      expect(MatchResultSchema.safeParse({ ...timedOut, completionReason }).success).toBe(false);
+    }
   });
   it("rejects missing scores, duplicate accounts, unordered ranks and invalid completion", () => {
     expect(MatchResultSchema.safeParse({ ...result, standings: [] }).success).toBe(false);

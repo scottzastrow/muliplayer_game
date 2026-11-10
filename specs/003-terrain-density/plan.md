@@ -68,3 +68,12 @@ collision-checked adjacent directions before the asynchronous navigation legs,
 retaining speed, pauses, path budgets and speed-zero semantics. No protocol/SDK
 or engine geometry changes; browser evidence must separate actual world draws
 from radar-rim visibility and local simulation from the uninspected deployment.
+
+T011 replaces only the default module's wave deadline with a private Countdown
+recreated on wave start and the combat kill-award callback. Keep SDK Countdown
+and fixed-budget helpers unchanged for other consumers. Add validated host/API
+seconds configuration, omit time from default snapshots, remove its HUD node,
+and carry an optional completion reason through existing finalization/storage
+to saved results (additive nullable SQLite column, legacy results unchanged).
+Exercise authority, resets, boundaries, non-kill activity, both standings views
+and compact layout without altering entity AI.

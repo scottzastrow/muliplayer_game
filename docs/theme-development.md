@@ -294,13 +294,23 @@ For timed phases, import `Countdown` from the public SDK and create
 `new Countdown(context.clock, durationSeconds)` when the phase starts. Read
 `remainingSeconds` for snapshots and check `expired` from the module's `step`;
 the helper does not schedule callbacks or decide gameplay outcomes. The default
-progression uses provisional `min(360, 120 + 6 * starting NPC count)` wave budgets,
-continues timing through respawns, and requests match completion once on expiry.
-Other modules may choose a different expiry policy. Core still validates the
+progression uses a hidden no-kill timer: `noKillTimeoutSeconds` is positive,
+finite, at most 3600 seconds, and defaults to 60 in host/API settings (including
+legacy settings that omit it). Start fresh on each wave and reset only after
+a confirmed enemy kill by any player. Movement, misses, nonlethal damage,
+death/respawn and reconnect do not reset it. No countdown runs in intermission;
+its separate five-second next-level countdown remains visible.
+Other modules can retain a fixed wave deadline by creating Countdown once at
+wave start and not replacing it on kills. The public Countdown API and exported
+`calculateWaveDurationSeconds` fixed-budget helper remain available unchanged.
+Core still validates the
 complete phase/current level and saves full standings atomically, including
-module-ended matches below the configured maximum. The default schema-v4 HUD
-uses the additive optional `waveRemainingSeconds` field for both player and
-spectator views; existing v4 consumers may ignore it.
+module-ended matches below the configured maximum. Default snapshots omit
+`waveRemainingSeconds`; the skin tolerates legacy optional fields without
+displaying them. Expiry requests the existing `wave-timeout` completion once,
+before further combat/respawn. Saved results retain optional `completionReason`
+and show "Wave ended: no kills for a while." alongside final standings for both
+roles and on reload. Existing results without a reason retain their old display.
 
 Dots and Squares reads `npcMovementSpeed` from the public session settings:
 finite 0-180 world units/second, including fractions, default 67.5. This is a

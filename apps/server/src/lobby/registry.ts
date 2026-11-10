@@ -388,11 +388,13 @@ export class LobbyRegistry {
   finalizeFinishedMatch(
     sessionId: string,
     finalLevel: number,
-    standings: readonly SubmittedStanding[]
+    standings: readonly SubmittedStanding[],
+    completionReason?: string
   ): boolean {
     const finalized = finalizeMatchResult(
       this.database,
-      { matchId: sessionId, status: "finished", finalLevel, standings },
+      { matchId: sessionId, status: "finished", finalLevel, standings,
+        ...(completionReason === undefined ? {} : { completionReason }) },
       new Date(this.clock()).toISOString()
     );
     if (finalized) {

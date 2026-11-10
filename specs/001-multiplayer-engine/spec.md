@@ -160,9 +160,10 @@ players, enemies, and spectators; produce a reproducible measured report.
 
 - **FR-019**: The engine repository MUST own shared contracts, the SDK and default reference theme. The companion themes repository MUST consume a pinned compatible revision without engine/server write access. Developer instructions MUST describe extensions, validation, local preview, package handoff and compatibility-change requests.
 - **FR-020**: Local startup MUST load an ignored `.env` copied from committed `.env.example` without requiring Windows system variables. Production MUST load a separate operator-managed environment file; no secrets may enter client bundles or theme packages.
-- **FR-021**: Dots and Squares MUST start a server-authoritative countdown for each
-  wave, keep it running during deaths/respawns, and show remaining time in player
-  and spectator HUDs. Clearing before expiry advances through the existing level
+- **FR-021**: Dots and Squares MUST start a hidden server-authoritative no-kill
+  countdown for each wave (configurable 60-second default), reset only on a
+  confirmed enemy kill by any player and keep running during deaths/respawns.
+  Neither HUD shows it. Clearing before expiry advances through the existing level
   path; expiry ends the match, persists standings and releases the room through
   existing finalization. Countdown mechanics MUST be reusable; the module chooses
   expiry policy.
@@ -244,12 +245,14 @@ explicit conversation decisions are user-confirmed.
   authoritative; no early respawn due to a level transition.
 - Control mode is an account preference. Legacy accounts are migrated without a
   selection and must complete the first-sign-in prompt before entering the lobby.
-- Provisional wave duration is `min(360, 120 + 6 * starting NPC count)` seconds,
-  recalculated at each wave start from that wave's full roster-based NPC count.
+- Dots and Squares no-kill duration is `noKillTimeoutSeconds`, default 60 seconds,
+  started fresh each wave and reset only on a confirmed enemy kill by any player.
   A monotonic server deadline continues through death, blocked respawn and reconnect.
   No wave countdown runs during intermission. Expiry wins a clear at the exact
   deadline and saves a finished result at the current level, which may be below
-  the configured maximum. These countdown values are editable tuning defaults,
+  the configured maximum, with "Wave ended: no kills for a while."
+  The public Countdown API retains fixed-deadline support for other themes.
+  These countdown values are editable tuning defaults,
   not changes to NPC growth, health or capacity limits.
 - Ended sessions leave the active list, retain results, and release capacity immediately.
   No in-progress match persistence across process restarts in this POC.

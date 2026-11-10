@@ -16,6 +16,9 @@ export function createDefaultResultsSkin(
       heading.textContent = result.status === "finished" ? "Final standings" : "Match ended";
       const summary = document.createElement("p");
       summary.textContent = `Status: ${result.status}. Final level: ${result.finalLevel}.`;
+      if (result.completionReason === "wave-timeout") {
+        summary.textContent += " Wave ended: no kills for a while.";
+      }
       world.append(heading, summary);
       const table = document.createElement("table");
       table.setAttribute("aria-label", "Final standings");

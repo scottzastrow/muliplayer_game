@@ -196,20 +196,20 @@ without the new fields for installed themes/preview compatibility, using the
 legacy count label when no starting total is available; supplied counts must be
 paired and valid. No immutable package revision is repinned by this change.
 
-Dots and Squares starts a new countdown after spawning each wave, provisionally
-`min(360, 120 + 6 * starting NPC count)` seconds. The monotonic deadline keeps running
-through death, blocked respawn and disconnection, without depending on accumulated
-simulation ticks or resetting as NPCs die. Clearing before expiry cancels the
+Dots and Squares starts a private no-kill countdown after spawning each wave,
+using `noKillTimeoutSeconds` (default 60, positive finite seconds up to 3600).
+Only confirmed enemy kills, by any player, replace its monotonic deadline.
+Movement, misses, nonlethal damage, death, blocked respawn and disconnection do
+not reset it; it does not depend on accumulated simulation ticks. Clearing cancels the
 countdown during the existing five-second intermission. At or after expiry, the
 module enters `complete` and requests `{kind:"match", reason:"wave-timeout"}` once,
 before any further combat or respawn work. This produces saved standings at the
 current level, not an abandoned result or an artificial maximum-level clear.
-The additive optional schema-v4 `waveRemainingSeconds` snapshot/state field is
-present during active waves (and zero after timeout), absent during intermission
-or successful completion. Both default HUD modes display its rounded-up seconds,
-including while the selected player is dead. Existing schema-v4 renderers may
-ignore the field; updated renderers accept older v4 snapshots without it. No
-protocol envelope, required SDK method or manifest schema changes are needed.
+Default state/snapshots omit `waveRemainingSeconds`; both HUD roles omit its
+display, including legacy optional time fields. Schema v4 remains compatible.
+The public SDK Countdown still supports fixed deadlines for other themes.
+Saved results add optional `completionReason`; `wave-timeout` displays
+"Wave ended: no kills for a while." without changing standings/finalization.
 
 Realtime input uses a shared versioned envelope with an opaque module-defined JSON
 `action`; the protocol does not require movement, aim, fire, or any other gameplay

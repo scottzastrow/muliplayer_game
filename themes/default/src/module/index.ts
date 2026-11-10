@@ -33,7 +33,6 @@ export interface DefaultModuleState extends Record<string, JsonValue> {
   readonly livingNpcCount: number;
   readonly levelStandings: JsonValue[];
   readonly intermissionEndsAtTick?: number;
-  readonly waveRemainingSeconds?: number;
 }
 
 export interface DefaultModuleSnapshot extends Record<string, JsonValue> {
@@ -51,7 +50,6 @@ export interface DefaultModuleSnapshot extends Record<string, JsonValue> {
   readonly livingNpcCount: number;
   readonly levelStandings: JsonValue[];
   readonly intermissionEndsAtTick?: number;
-  readonly waveRemainingSeconds?: number;
 }
 
 export interface DefaultModuleResults extends Record<string, JsonValue> {
@@ -149,7 +147,10 @@ export const defaultModuleFactory: GameModuleFactory<
         combat.resetPlayerInput(accountId);
       }
     );
-    const combat = new DefaultCombatSimulator(_context, (accountId) => respawn.awardKill(accountId));
+    const combat = new DefaultCombatSimulator(_context, (accountId) => {
+      respawn.awardKill(accountId);
+      progression.recordEnemyKill();
+    });
     const progression = new DefaultProgression(
       _context,
       gameSettings,
@@ -179,9 +180,6 @@ export const defaultModuleFactory: GameModuleFactory<
           level: progressionState.level,
           phase: progressionState.phase,
           ...waveSummary(),
-          ...(progressionState.waveRemainingSeconds === undefined
-            ? {}
-            : { waveRemainingSeconds: progressionState.waveRemainingSeconds }),
           ...(progressionState.intermissionEndsAtTick === undefined
             ? {}
             : { intermissionEndsAtTick: progressionState.intermissionEndsAtTick })
@@ -251,9 +249,6 @@ export const defaultModuleFactory: GameModuleFactory<
           level: progressionState.level,
           phase: progressionState.phase,
           ...waveSummary(),
-          ...(progressionState.waveRemainingSeconds === undefined
-            ? {}
-            : { waveRemainingSeconds: progressionState.waveRemainingSeconds }),
           ...(progressionState.intermissionEndsAtTick === undefined
             ? {}
             : { intermissionEndsAtTick: progressionState.intermissionEndsAtTick })

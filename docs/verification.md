@@ -1,5 +1,90 @@
 # Local verification
 
+## Hidden Dots and Squares no-kill timer (2026-11-09)
+
+**Implemented locally; no push or deployment.** The compact bar keeps Score,
+Health and Back to lobby without any wave-time node. The server privately starts
+`noKillTimeoutSeconds` (default 60, positive finite seconds up to 3600) at every
+wave start and resets only from the confirmed combat kill-award callback for any
+player. No movement, miss, nonlethal hit, respawn or disconnect resets it.
+Successful clears keep the existing five-second intermission/standings countdown.
+Expiry still requests `wave-timeout` before further combat/respawn, saves full
+standings and releases once. An additive nullable SQLite result column and
+optional public `completionReason` preserve the exact message
+"Wave ended: no kills for a while." on both results views and reload.
+Legacy results without a reason retain their display. SDK Countdown and the
+exported fixed-wave-budget helper are unchanged for themes choosing fixed deadlines.
+
+Actual final checks on Windows, Node 24.11.0 / npm 11.6.1:
+
+| Check | Result |
+| --- | --- |
+| `npm run check` | Passed all workspace/tool type checks/build prerequisites |
+| `npm run build --workspace @multiplayer-game/engine` | Passed before runtime regressions |
+| `npm run build --workspace @multiplayer-game/client` | Passed; dependency Zod pure-annotation warnings only |
+| Focused Vitest selection below | 19 files / 121 tests passed; one immutable conformance case excluded pending pin update |
+| `tests/contract/themes.test.ts` excluding immutable external consumer | 4 passed, 1 explicitly skipped |
+| `node --check` on compact-match.mjs and wave-timeout.mjs; `git diff --check` | Passed |
+
+```powershell
+npm test -- tests\wave-countdown.test.ts tests\integration\wave-timeout.test.ts tests\default-skin.test.ts tests\lobby-settings.test.ts tests\results.test.ts tests\result-contract.test.ts tests\default-combat.test.ts tests\default-respawn.test.ts tests\spectator-view.test.ts tests\integration\session-lifecycle.test.ts tests\integration\gameplay.test.ts tests\npc-engagement.test.ts tests\integration\terrain-settings.test.ts tests\integration\end-session.test.ts tests\fixture-theme.test.ts tests\protocol.test.ts tests\default-theme.test.ts tests\integration\generated-map-runtime.test.ts
+npm test -- tests\contract\themes.test.ts -t '^(?!.*builds and loads an isolated external consumer).*'
+```
+
+Deterministic authoritative tests verify idle default expiry at exactly 60,000 ms,
+configured expiry at 12,500 ms, another player's real projectile kills resetting
+at 59/118/177/236 seconds, continued play beyond the former 168-second deadline,
+then expiry at 296 seconds. They also verify actual movement/missed firing and
+nonlethal damage do not extend 60 seconds; fresh wave 2 starts at 150 seconds,
+remains active at 209.999 seconds and expires at 210 seconds. Expiry wins a
+same-deadline clear and prevents a coincident respawn. Both role snapshots omit
+time. Real lifecycle/SQLite/HTTP coverage checks single finalization with
+duplicate requests, saved reason/reload, invalid settings rejection, fractional
+duration round-trip and waiting-room edit; legacy omitted duration resolves to 60
+without rewriting saved data. No NPC simulator code changed.
+
+Actual headless Chrome **157.0.8103.40**, normal desktop window bounds (no device
+metrics override), loopback-only staged-wave server **18113**, Vite **15203**,
+CDP **19252** and disposable `var\no-kill-playtest.sqlite`:
+
+- `node tests\browser\default-game.mjs --compact-match` passed all six role/size
+  combinations at 1366x768, 1440x900 and 1920x1080. Both active bars measured
+  **36.375 px**, with Score/Health, no timer, full remaining-height arena,
+  no page scrolling, retained radar and reachable filters. Both roles showed
+  wave-1 intermission standings (1000 points, 10 kills), a next-level countdown,
+  and wave 2 with 12 NPCs. Roster/re-follow and lobby restoration passed.
+- `node tests\browser\default-game.mjs --wave-timeout` passed with a configured
+  **8-second** idle timer (not a claimed real-time 60-second run). No player
+  gameplay input or kills; both roles had Score/Health with no timer. Both
+  navigated to identical saved level-1 standings, the exact no-kill message and
+  stable result URL. Reload preserved standings/message. Result
+  `85944b53-3613-440e-a5e6-bd171861a662` saved 0 points, 0 kills, 0 deaths and
+  `completionReason: "wave-timeout"`.
+
+Screenshots persist outside Git at
+`C:\Users\Owner\.copilot\session-state\251a8fb9-7049-49b0-b1e3-e7a8d237a94f\files\no-kill-layout`
+(six active and two intermission images). The fixture stages one NPC in a clear
+lane for real combat; these checks are not natural-navigation/live-roaming proof.
+
+Failure history: initial pre-implementation timer selection had 11 expected
+failures (new setting rejected, old timeout still active). The first implementation
+run passed 47/48 checks; its two-player standings assertion incorrectly expected
+one row and was corrected to require both. The old timeout browser helper used
+the superseded "Start session" label; it now uses the current row-scoped
+"Start Session". Intermediate attempts lost signup readiness during a concurrent
+workspace rebuild, sampled HUD before its first render, and then hit the
+fixture's authentication rate limit. The helper now waits for rendered Score;
+the final browser run passed with builds idle after restarting only the owned
+fixture server (no rate-limit production changes).
+
+At the time these focused checks ran, public protocol changes were uncommitted
+and the immutable external-consumer pin was unchanged; its drift gate was
+explicitly skipped, not reported passing.
+No extension hooks file exists. Existing edits were retained; the deployed
+`1e94ff3` roaming report/T010 remains open pending its live trace, and original
+T042 remains unchecked. No AI behavior, server deployment or capacity result
+is claimed.
+
 ## NPC roaming and sticky attacker caps (2026-11-09)
 
 Scoped local follow-up; no production server, deployment or capacity run.
