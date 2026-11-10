@@ -1,10 +1,16 @@
 import {
+  MovementController,
   ThemeDefinitionSchema,
   validateThemeRevision,
   type Capability,
   type GameModuleFactory,
+  type MovementControllerOptions,
   type SkinFactory
 } from "@multiplayer-game/theme-sdk";
+
+const movementOptions: MovementControllerOptions = { facingMovementBlend: 0.4 };
+export const movementController = new MovementController(movementOptions);
+export const defaultMovementController = new MovementController();
 
 type UnlockAction = { readonly type: "unlock"; readonly targetId: string };
 type State = { tick: number; unlocked: string[] };

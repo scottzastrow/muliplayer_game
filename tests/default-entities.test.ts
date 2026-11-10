@@ -40,7 +40,7 @@ const roster: readonly RosterMember[] = [
 
 describe("default entity movement and pursuit", () => {
   it("exports the Dots and Squares facing-movement blend within its documented range", () => {
-    expect(PLAYER_FACING_MOVEMENT_BLEND).toBe(0.30);
+    expect(PLAYER_FACING_MOVEMENT_BLEND).toBe(0.40);
     expect(PLAYER_FACING_MOVEMENT_BLEND).toBeGreaterThanOrEqual(0);
     expect(PLAYER_FACING_MOVEMENT_BLEND).toBeLessThanOrEqual(1);
   });
@@ -306,10 +306,10 @@ describe("default entity movement and pursuit", () => {
   });
 
   it.each((["first-person", "keyboard-only", "keyboard-mouse"] as const).flatMap(controlMode => [
-    { inputDegrees: 0, facingDegrees: -90, magnitude: 1, expectedDegrees: -27 },
-    { inputDegrees: 0, facingDegrees: 90, magnitude: 0.4, expectedDegrees: 27 },
-    { inputDegrees: 170, facingDegrees: -170, magnitude: 1, expectedDegrees: 176 },
-    { inputDegrees: -170, facingDegrees: 170, magnitude: 1, expectedDegrees: -176 }
+    { inputDegrees: 0, facingDegrees: -90, magnitude: 1, expectedDegrees: -36 },
+    { inputDegrees: 0, facingDegrees: 90, magnitude: 0.4, expectedDegrees: 36 },
+    { inputDegrees: 170, facingDegrees: -170, magnitude: 1, expectedDegrees: 178 },
+    { inputDegrees: -170, facingDegrees: 170, magnitude: 1, expectedDegrees: -178 }
   ].map(scenario => ({ ...scenario, controlMode }))))(
     "blends held input $inputDegrees toward facing $facingDegrees in $controlMode without drift or speed changes",
     ({ controlMode, inputDegrees, facingDegrees, magnitude, expectedDegrees }) => {
@@ -341,7 +341,7 @@ describe("default entity movement and pursuit", () => {
   );
 
   it.each(["first-person", "keyboard-only", "keyboard-mouse"] as const)(
-    "steers travel 27 degrees upward in %s while firing at the upward aim, not along travel", controlMode => {
+    "steers travel 36 degrees upward in %s while firing at the upward aim, not along travel", controlMode => {
     const { context, module } = createSimulation([], { npcMovementSpeed: 0 });
     const player = context.entities.get("player:player-a")!;
     const aim = { x: player.position.x, y: player.position.y - 100 };
@@ -354,7 +354,7 @@ describe("default entity movement and pursuit", () => {
       const moved = context.entities.get(player.id)!;
       expect(moved.state.facing).toEqual({ x: 0, y: -1 });
       expect(Math.atan2(moved.position.y - player.position.y,
-        moved.position.x - player.position.x) * 180 / Math.PI).toBeCloseTo(-27, 8);
+        moved.position.x - player.position.x) * 180 / Math.PI).toBeCloseTo(-36, 8);
       const projectile = context.entities.values().find(entity => entity.state.kind === "projectile");
       if (projectile?.state.kind !== "projectile") throw new TypeError("Expected player projectile.");
       const aimDistance = Math.hypot(aim.x - moved.position.x, aim.y - moved.position.y);

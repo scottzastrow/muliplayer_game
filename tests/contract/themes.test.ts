@@ -137,6 +137,12 @@ describe("public theme conformance", () => {
         `
           import assert from "node:assert/strict";
           const theme = await import("./dist/index.js");
+          const movement = { x: 0.4, y: 0 };
+          const facing = { x: 0, y: -1 };
+          const travel = theme.movementController.resolveMovement(movement, facing);
+          assert.ok(Math.abs(Math.atan2(travel.y, travel.x) + Math.PI / 5) < 1e-10);
+          assert.ok(Math.abs(Math.hypot(travel.x, travel.y) - 0.4) < 1e-10);
+          assert.deepEqual(theme.defaultMovementController.resolveMovement(movement, facing), movement);
           const context = {
             clock: { nowMs: () => 0 }, random: { next: () => 0.5 },
             entities: {

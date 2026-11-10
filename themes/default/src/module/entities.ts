@@ -4,7 +4,7 @@ import type {
   Point2,
   RosterMember
 } from "@multiplayer-game/theme-sdk";
-import { MAP_CELL_SIZE } from "@multiplayer-game/theme-sdk";
+import { MAP_CELL_SIZE, MovementController } from "@multiplayer-game/theme-sdk";
 import {
   DEFAULT_RUNTIME_LIMITS,
   GameSettingsSchema,
@@ -94,6 +94,9 @@ const EMPTY_MOVEMENT = Object.freeze({ x: 0, y: 0 });
 const DEFAULT_FACING: DefaultFacing = Object.freeze({ x: 1, y: 0 });
 
 export class DefaultEntitySimulator {
+  readonly #movementController = new MovementController({
+    facingMovementBlend: PLAYER_FACING_MOVEMENT_BLEND
+  });
   readonly #movementByAccount = new Map<string, Point2>();
   readonly #steeredAccounts = new Set<string>();
   readonly #npcNavigation = new Map<string, NpcNavigationState>();
@@ -338,15 +341,10 @@ export class DefaultEntitySimulator {
         continue;
       }
       let movement = this.#movementByAccount.get(accountId) ?? EMPTY_MOVEMENT;
-      const magnitude = Math.hypot(movement.x, movement.y);
-      if (magnitude > 0 && this.#steeredAccounts.has(accountId)) {
-        const facing = entity.state.facing;
-        const difference = Math.atan2(
-          movement.x * facing.y - movement.y * facing.x,
-          movement.x * facing.x + movement.y * facing.y
+      if (this.#steeredAccounts.has(accountId)) {
+        movement = this.#movementController.resolveMovement(
+          movement, entity.state.facing
         );
-        const angle = Math.atan2(movement.y, movement.x) + difference * PLAYER_FACING_MOVEMENT_BLEND;
-        movement = { x: Math.cos(angle) * magnitude, y: Math.sin(angle) * magnitude };
       }
       const moved = this.context.geometry.moveCircle(
         entity.position,

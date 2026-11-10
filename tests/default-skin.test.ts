@@ -628,7 +628,7 @@ describe("Dots and Squares presentation", () => {
         simulator.step(1 / 30, 1);
         const after = world.getEntity(player.id)!.position;
         expect(Math.atan2(after.y - before.y, after.x - before.x) * 180 / Math.PI)
-          .toBeCloseTo(-27, 8);
+          .toBeCloseTo(-36, 8);
         expect(Math.hypot(after.x - before.x, after.y - before.y)).toBeCloseTo(PLAYER_SPEED / 30, 8);
         key("keyup", right);
         if (mode === "keyboard-mouse") {

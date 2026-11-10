@@ -7,6 +7,7 @@ import {
 import type { MapDefinition } from "./maps.js";
 export { PlayerMaxHealthSchema } from "@multiplayer-game/protocol";
 export { Countdown } from "./countdown.js";
+export { MovementController, type MovementControllerOptions } from "./movement-controller.js";
 export {
   RadarMarkerSchema,
   RadarViewSchema,

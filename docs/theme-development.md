@@ -74,6 +74,26 @@ database/profile/env after the check; never use this fixture on Lightsail.
 
 ## Default-theme held movement controls
 
+The public SDK exports `MovementController` and `MovementControllerOptions`:
+
+```typescript
+import { MovementController } from "@multiplayer-game/theme-sdk";
+
+const controller = new MovementController({ facingMovementBlend: 0.40 });
+const travel = controller.resolveMovement(heldMovement, facing);
+```
+
+`facingMovementBlend` must be a finite number from 0 to 1 inclusive; invalid
+values throw a `RangeError` naming the option. Omission defaults to **0**, so
+other games do not acquire steering implicitly. `resolveMovement` returns a new
+vector rotated by that fraction of the shortest signed angle toward facing.
+It preserves movement magnitude (including partial analog input) and never
+mutates either input or accumulates rotation between calls. Zero movement stays
+stationary; zero facing leaves movement unchanged. Vector components and
+magnitudes must be finite or the call throws. Callers retain input normalization,
+speed, collision, bindings, facing updates and firing policy; this controller
+only resolves a travel vector. The API is additive under engine API v1.
+
 A fresh movement-key press sets facing to the current screen-direction movement
 vector. Holding the key, including browser auto-repeat, maintains movement without
 reasserting facing. In Keyboard + Mouse mode, hold Down Arrow, move the pointer
@@ -85,7 +105,8 @@ bindings. All three modes apply the same facing-steered movement, including
 mouse aim while a movement key is held.
 
 Dots and Squares exports the theme tuning setting `PLAYER_FACING_MOVEMENT_BLEND`
-from `themes/default/src/module/tuning.ts`, set to `0.30`. Its range is 0 to 1:
+from `themes/default/src/module/tuning.ts`, set to `0.40`, and explicitly passes
+it to the SDK controller's `facingMovementBlend` option. Its range is 0 to 1:
 0 follows movement input exactly; 1 follows facing whenever movement is held.
 Combat intent includes `controlMode: "first-person"`, `"keyboard-only"` or
 `"keyboard-mouse"`; all three apply this blend. Legacy actions without a mode
@@ -93,7 +114,7 @@ still follow the input exactly. Each authoritative update starts
 from the normalized held input and rotates it
 by that fraction of the shortest signed angle toward current facing, preserving
 input magnitude and speed. Rightward input with upward facing therefore travels
-27 degrees upward from right. Rotation never accumulates into the stored input;
+36 degrees upward from right. Rotation never accumulates into the stored input;
 zero input permits spinning without translation. Firing still targets aim and
 NPC movement is unchanged. This is a theme source setting, not a host lobby option.
 

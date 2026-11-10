@@ -2,7 +2,7 @@ import { DEFAULT_GAME_SETTINGS } from "@multiplayer-game/protocol";
 
 export const PLAYER_SPEED = 180;
 /** All control modes' fraction [0, 1] of the shortest input-to-facing angle. */
-export const PLAYER_FACING_MOVEMENT_BLEND = 0.30;
+export const PLAYER_FACING_MOVEMENT_BLEND = 0.40;
 export const PLAYER_HEALTH = DEFAULT_GAME_SETTINGS.playerMaxHealth;
 export const PLAYER_RADIUS = 14;
 export const MAX_PLAYER_HEALTH = DEFAULT_GAME_SETTINGS.playerMaxHealth;

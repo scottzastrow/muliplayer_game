@@ -45,6 +45,21 @@ action. Modules create it per timed phase and check it from their authoritative
 step; each module decides what expiry means. Durations must be positive/finite and
 clock/deadline values finite.
 
+The additive public `MovementController` accepts `MovementControllerOptions`
+with optional `facingMovementBlend`: finite number 0-1 inclusive, default 0.
+Invalid values throw `RangeError` naming `facingMovementBlend`.
+`resolveMovement(movement: Point2, facing: Point2): Point2` returns a fresh
+movement vector rotated by that fraction of the shortest signed angle toward
+facing, preserving movement magnitude, including partial analog input. It never
+mutates input/facing or accumulates rotation. Zero movement stays stationary;
+zero facing leaves movement unchanged. Nonfinite components/magnitudes throw.
+Normalization, speed, collision, bindings, facing and firing remain caller-owned.
+Dots and Squares explicitly configures 0.40 for all three explicit modes and
+retains unsteered mode-less actions; other consumers default to 0.
+This optional utility retains API v1 and requires no installed-theme migration.
+The immutable external-consumer pin cannot be advanced for uncommitted changes;
+its drift gate remains intact pending a reviewed public-contract revision.
+
 T029 adds the optional TypeScript `setPlayerPresence` hook; the running-session
 host requires it and fails explicitly if a pinned module lacks reconnect support.
 Only the engine calls it after authenticated admission, matching-generation detach,
@@ -142,8 +157,8 @@ The host sets `controls.dataset.controlMode` to the authenticated account prefer
 Keyboard Only maps WASD to screen-direction movement and facing, left/right arrows
 to turning in place, and Space to firing. Keyboard + Mouse maps all arrows to
 screen-direction movement and facing, mouse movement to aim and left click to firing.
-First-Person uses Keyboard Only bindings and is the only mode that rotates held
-movement 30% of the shortest signed angle toward facing each authoritative update.
+First-Person uses Keyboard Only bindings. All three Dots and Squares modes rotate
+held movement 40% of the shortest signed angle toward facing each authoritative update.
 The skin includes `controlMode` (`keyboard-only`, `keyboard-mouse`, `first-person`)
 in its default-theme combat intent; missing mode preserves unsteered legacy input.
 Existing account preferences and nullable legacy choices survive migration.
