@@ -1,5 +1,20 @@
 # Feature Specification: Per-Level Terrain Density
 
+## Player maximum health follow-up (2026-11-10)
+
+Expose validated `playerMaxHealth` through theme settings and the public SDK.
+The effective Dots and Squares baseline is 100; use ceil(100 * 1.5) = 150
+when omitted, preserving explicit overrides. Initial spawn, death respawn,
+health-pickup cap and player/spectator HUD must use the configured maximum.
+Keep ordinary NPC shot damage (10), cooldown (30 ticks) and population unchanged.
+Verify actual projectile hits at 100 and 150 HP, distinguishing survived hits
+from the lethal hit. Keep changes local/uncommitted; no push or deployment.
+
+Subsequent review authorization permits committing only this health slice,
+then separately pinning the external consumer to that exact health commit.
+Run the full suite with its drift gate enabled; keep both commits local,
+preserve unrelated edits and leave original T042 open.
+
 ## All-mode directional pull follow-up (2026-11-10)
 
 The owner now requires the existing 30% shortest-angle pull in all three Dots

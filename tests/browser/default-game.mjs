@@ -377,7 +377,7 @@ function centered(view) {
     `own dot centered vertically (${dot.y} versus ${view.height / 2})`);
   assert.equal(view.pointsFont, view.healthFont, "stats share a compact type size");
   assert.equal(view.points, `Score: ${own(view).points}`);
-  assert.equal(view.health, `Health: ${own(view).health}`);
+  assert.equal(view.health, `Health: ${own(view).health} / ${view.snapshot.playerMaxHealth ?? 100}`);
   const facing = player.facing ?? { x: 1, y: 0 };
   const expectedFacingDot = { x: dot.x + facing.x * 16, y: dot.y + facing.y * 16 };
   assert.ok(view.arcs.some(item => item.color === playerColor && item.r === 3 &&
@@ -1294,9 +1294,9 @@ try {
     const health = root.querySelector('.default-health').textContent;
     snapshot.tick++;
     snapshot.spectatorView.death = {alive:true,remainingSeconds:0};
-    snapshot.spectatorView.hud.health = 100;
+    snapshot.spectatorView.hud.health = snapshot.playerMaxHealth ?? 100;
     snapshot.spectatorView.cameraAnchor = {x:800,y:600};
-    target.alive = true; target.health = 100; target.position = {x:800,y:600};
+    target.alive = true; target.health = snapshot.playerMaxHealth ?? 100; target.position = {x:800,y:600};
     if (!playerEntity || !target.color || !target.facing) throw new Error('Respawn fixture lacks player presentation data.');
     snapshot.entities.push({...playerEntity, position: target.position});
     mounted.handleSnapshot(snapshot,4);
@@ -1314,8 +1314,8 @@ try {
     mounted.dispose(); root.remove();
     return {countdown,health,returned,camera,inputs,sharedRespawnColor: Boolean(body && facing)};
   })()`);
-  assert.deepEqual(spectatorFixture, {countdown:"Respawning in 5s",health:"Health: 0",
-    returned:"Health: 100",camera:{x:800,y:600},inputs:0,sharedRespawnColor:true});
+  assert.deepEqual(spectatorFixture, {countdown:"Respawning in 5s",health:"Health: 0 / 150",
+    returned:"Health: 150 / 150",camera:{x:800,y:600},inputs:0,sharedRespawnColor:true});
 
   assert.deepEqual(own(startB).facing, { x: 1, y: 0 }, "Bob starts facing screen-right");
   await move(bob, "KeyW", 1400);

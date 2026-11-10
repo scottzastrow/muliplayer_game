@@ -94,7 +94,7 @@ describe("host NPC settings", () => {
       playerCount: 1, maxPlayers: 4, settingsRevision: 2, canJoin: false, canSpectate: false
     };
     const savedSettings = { ...DEFAULT_GAME_SETTINGS, initialNpcsPerPlayer: 8,
-      npcMovementSpeed: 90, baseNpcHealth: 100 };
+      npcMovementSpeed: 90, baseNpcHealth: 100, playerMaxHealth: 275 };
     const fetch = vi.fn(async (url: string, init?: RequestInit) => ({
       ok: true, status: 200,
       json: async () => url === "/api/v1/sessions" && !init?.method
@@ -114,6 +114,10 @@ describe("host NPC settings", () => {
     const createRange = elements().find(element => element.name === "setting-npcDetectionRange")!;
     const createNpcCount = elements().find(element => element.name === "setting-initialNpcsPerPlayer")!;
     const createTimeout = elements().find(element => element.name === "setting-noKillTimeoutSeconds")!;
+    const createPlayerHealth = elements().find(element => element.name === "setting-playerMaxHealth")!;
+    expect(createPlayerHealth.value).toBe("150");
+    expect([createPlayerHealth.min, createPlayerHealth.max, createPlayerHealth.step]).toEqual(["1", "100000", "1"]);
+    createPlayerHealth.value = "37";
     expect(createNpcCount.value).toBe("5");
     expect(createTimeout.value).toBe("60");
     expect([createTimeout.min, createTimeout.max, createTimeout.step]).toEqual(["0.001", "3600", "any"]);
@@ -152,7 +156,7 @@ describe("host NPC settings", () => {
       init?.method === "POST")!;
     expect(JSON.parse(String(create[1]!.body)).settings).toMatchObject({
       initialNpcsPerPlayer: 7, npcMovementSpeed: 33.75, npcDetectionRange: 300,
-      baseNpcHealth: 50, noKillTimeoutSeconds: 45.5,
+      baseNpcHealth: 50, noKillTimeoutSeconds: 45.5, playerMaxHealth: 37,
       mapMode: "simple-generated",
       terrainDensity: { mode: "incremental", startingDensity: 3, increasePerLevel: 0 }
     });
@@ -180,6 +184,7 @@ describe("host NPC settings", () => {
     const editRange = controls.querySelector('[name="setting-npcDetectionRange"]')!;
     const editHealth = controls.querySelector('[name="setting-baseNpcHealth"]')!;
     const editNpcCount = controls.querySelector('[name="setting-initialNpcsPerPlayer"]')!;
+    expect(controls.querySelector('[name="setting-playerMaxHealth"]')!.value).toBe("275");
     expect(editHealth.value).toBe("100");
     expect(editSpeed.value).toBe("90");
     expect(editRange.value).toBe("512");
@@ -195,7 +200,7 @@ describe("host NPC settings", () => {
     expect(JSON.parse(String(update[1]!.body))).toEqual({
       settings: {
         ...DEFAULT_GAME_SETTINGS, initialNpcsPerPlayer: 8,
-        npcMovementSpeed: 0, npcDetectionRange: 0, baseNpcHealth: 75
+        npcMovementSpeed: 0, npcDetectionRange: 0, baseNpcHealth: 75, playerMaxHealth: 275
       }, expectedRevision: 2
     });
     const requestCount = fetch.mock.calls.filter(([url]) =>

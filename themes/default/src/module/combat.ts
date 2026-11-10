@@ -1,6 +1,7 @@
 import type { ModuleContext, Point2 } from "@multiplayer-game/theme-sdk";
 import {
   MAX_PROJECTILES_PER_SESSION,
+  MAX_PLAYER_HEALTH,
   MAX_ATTRACTION_QUERY_CELLS,
   PLAYER_BULLET_DAMAGE,
   PLAYER_FIRE_RATE_PER_SECOND,
@@ -35,9 +36,10 @@ export class DefaultCombatSimulator {
 
   constructor(
     readonly context: ModuleContext<DefaultEntity>,
-    readonly awardKill?: (accountId: string) => void
+    readonly awardKill?: (accountId: string) => void,
+    playerMaxHealth = MAX_PLAYER_HEALTH
   ) {
-    this.#pickups = new DefaultPickupSimulator(context);
+    this.#pickups = new DefaultPickupSimulator(context, playerMaxHealth);
   }
 
   step(tick: number): void {

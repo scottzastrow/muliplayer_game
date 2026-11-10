@@ -5,10 +5,12 @@ import type { DefaultEntity } from "@multiplayer-game/default-theme";
 import { DefaultEntitySimulator } from "../themes/default/src/module/entities.js";
 import { DefaultCombatSimulator } from "../themes/default/src/module/combat.js";
 import { generateMap } from "../themes/default/src/module/maps.js";
+import { DEFAULT_GAME_SETTINGS } from "@multiplayer-game/protocol";
+import { NPC_FIRE_COOLDOWN_TICKS, NPC_SHOT_DAMAGE } from "../themes/default/src/module/tuning.js";
 
 function fixture(speed = 67.5, detection = 512, walls: {
   x: number; y: number; width: number; height: number;
-}[] = []) {
+}[] = [], playerMaxHealth = DEFAULT_GAME_SETTINGS.playerMaxHealth) {
   const world = new SessionWorld<DefaultEntity>("ranged", { width: 2048, height: 2048 }, walls);
   const context: ModuleContext<DefaultEntity> = {
     clock: { nowMs: () => 0 }, random: new SeededRandom(42),
@@ -31,7 +33,7 @@ function fixture(speed = 67.5, detection = 512, walls: {
     emit: () => {}, requestCompletion: () => {},
     metrics: { increment: vi.fn(), gauge: vi.fn() }
   };
-  const simulator = new DefaultEntitySimulator(context, speed, detection, 42);
+  const simulator = new DefaultEntitySimulator(context, speed, detection, 42, playerMaxHealth);
   simulator.initialize(generateMap(42, "fixed").map,
     [{ accountId: "p", username: "Player", joinedOrder: 0 }], 1, 50);
   const npc = world.entities().find(entity => entity.state.kind === "npc")!;
@@ -44,6 +46,43 @@ function fixture(speed = 67.5, detection = 512, walls: {
 }
 
 describe("NPC ranged playtest", () => {
+  it.each([
+    { maximum: 100, survived: 9, lethal: 10 },
+    { maximum: 150, survived: 14, lethal: 15 },
+    { maximum: 37, survived: 3, lethal: 4 }
+  ])("measures ordinary enemy hits at $maximum HP", ({ maximum, survived, lethal }) => {
+    const s = fixture(0, 512, [], maximum);
+    s.place("player:p", { x: 762, y: 512 });
+    expect(s.world.getEntity("player:p")!.state.health).toBe(maximum);
+    expect(NPC_SHOT_DAMAGE).toBe(10);
+    expect(NPC_FIRE_COOLDOWN_TICKS).toBe(30);
+    expect(DEFAULT_GAME_SETTINGS.playerMaxHealth).toBe(Math.ceil(100 * 1.5));
+    expect(DEFAULT_GAME_SETTINGS.initialNpcsPerPlayer).toBe(5);
+    const trace = [maximum];
+    const shotTicks: number[] = [];
+    for (let tick = 1; tick <= lethal * 30; tick++) {
+      s.simulator.step(1 / 30, tick);
+      s.combat.step(tick);
+      const newShots = s.world.entities().filter(e => e.typeId === "projectile.npc" &&
+        e.state.expiresAtTick === tick + 60);
+      if (newShots.length) {
+        expect(newShots).toHaveLength(1);
+        expect(newShots[0]!.state.damage).toBe(10);
+        shotTicks.push(tick);
+      }
+      const health = s.world.getEntity("player:p")!.state.health;
+      if (typeof health !== "number") throw new Error("Missing player health.");
+      if (health !== trace.at(-1)) trace.push(health);
+      if (health === 0) break;
+    }
+    expect(trace).toEqual(Array.from({ length: lethal + 1 },
+      (_, hit) => Math.max(0, maximum - hit * 10)));
+    expect(trace.slice(1).filter(health => health > 0)).toHaveLength(survived);
+    expect(shotTicks).toHaveLength(lethal);
+    expect(shotTicks.slice(1).every((tick, index) => tick - shotTicks[index]! === 30)).toBe(true);
+    console.info(JSON.stringify({ maximum, trace, survived, lethal, shotTicks }));
+  });
+
   it("measures the restored default Explore pace over one clear-route second", () => {
     const s = fixture(67.5, 0);
     let travel = 0;
@@ -110,7 +149,7 @@ describe("NPC ranged playtest", () => {
       s.combat.step(tick);
     }
     expect(s.world.entities().filter(e => e.typeId === "projectile.npc")).toHaveLength(0);
-    expect(s.world.getEntity("player:p")!.state.health).toBe(90);
+    expect(s.world.getEntity("player:p")!.state.health).toBe(140);
     s.simulator.step(1 / 30, 35);
     s.combat.step(35);
     expect(s.world.entities().filter(e => e.typeId === "projectile.npc")).toHaveLength(1);
@@ -127,7 +166,7 @@ describe("NPC ranged playtest", () => {
       s.simulator.step(1 / 30, tick);
       s.combat.step(tick);
     }
-    expect(s.world.getEntity("player:p")!.state.health).toBe(100);
+    expect(s.world.getEntity("player:p")!.state.health).toBe(150);
     const position = s.world.getEntity(s.npc.id)!.position;
     expect(position.x).toBe(speed === 0 ? 512 : 478.25);
     expect(position.y).toBe(512);
@@ -156,7 +195,7 @@ describe("NPC ranged playtest", () => {
     expect(s.world.getEntity(s.npc.id)!.position).not.toEqual(
       s.world.getEntity("coincident")!.position
     );
-    expect(s.world.getEntity("player:p")!.state.health).toBe(100);
+    expect(s.world.getEntity("player:p")!.state.health).toBe(150);
   });
 
   it("repositions around a close target behind terrain instead of retreating forever", () => {
@@ -180,7 +219,7 @@ describe("NPC ranged playtest", () => {
     s.place("player:p", { x: 620, y: 512 });
     for (let tick = 1; tick <= 10; tick++) s.combat.step(tick);
     expect(s.world.getEntity("test-shot")).toBeUndefined();
-    expect(s.world.getEntity("player:p")!.state).toMatchObject({ health: 100, points: 0, kills: 0 });
+    expect(s.world.getEntity("player:p")!.state).toMatchObject({ health: 150, points: 0, kills: 0 });
     expect(s.world.getEntity(s.npc.id)!.state.health).toBe(50);
   });
 
@@ -196,7 +235,7 @@ describe("NPC ranged playtest", () => {
     });
     for (let tick = 1; tick <= 10; tick++) s.combat.step(tick);
     expect(s.world.getEntity("bystander")!.state.health).toBe(50);
-    expect(s.world.getEntity("player:p")!.state).toMatchObject({ health: 90, points: 0, kills: 0 });
+    expect(s.world.getEntity("player:p")!.state).toMatchObject({ health: 140, points: 0, kills: 0 });
   });
 
   it("shares the session projectile ceiling and reports a rejected NPC shot", () => {

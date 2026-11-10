@@ -9,6 +9,33 @@ import {
 import { createSpectatorView } from "../apps/server/src/transport/spectator-view.js";
 
 describe("default player respawn", () => {
+  it.each([undefined, 37, 100, 275])("uses maximum %s for spawn, HUD snapshots and death respawn", maximum => {
+    const expected = maximum ?? 150;
+    const { module, world } = createSimulation(maximum === undefined ? {} : { playerMaxHealth: maximum });
+    try {
+      expect(world.getEntity("player:alice")!.state.health).toBe(expected);
+      expect(world.entities().filter(entity => entity.state.kind === "npc")).toHaveLength(5);
+      for (const role of ["player", "spectator"] as const) {
+        expect(module.snapshot({ accountId: "alice", role })).toMatchObject({
+          playerMaxHealth: expected, players: [{ health: expected }]
+        });
+      }
+      defeat(world, 300, 3);
+      module.step(0, 1);
+      module.step(0, 151);
+      expect(world.getEntity("player:alice")!.state).toMatchObject({
+        health: expected, points: 300, deaths: 1
+      });
+      const player = world.getEntity("player:alice")!;
+      world.addEntity({ ...player, state: { ...player.state, health: 12 } });
+      module.setPlayerPresence?.("alice", "disconnected");
+      module.setPlayerPresence?.("alice", "connected");
+      expect(world.getEntity("player:alice")!.state.health).toBe(12);
+      expect(createSpectatorView("alice", module.snapshot({ accountId: "alice", role: "player" })))
+        .toMatchObject({ playerMaxHealth: expected, spectatorView: { hud: { health: 12 } } });
+    } finally { module.dispose(); }
+  });
+
   it("resumes score and pending death without changing the frozen NPC budget or duplicating an avatar", () => {
     const { module, world } = createSimulation();
     try {
@@ -49,7 +76,7 @@ describe("default player respawn", () => {
       module.step(0, 200);
       expect(world.getEntity("player:alice")).toBeUndefined();
       module.setPlayerPresence?.("alice", "connected");
-      expect(world.getEntity("player:alice")?.state).toMatchObject({ points: 300, health: 100, deaths: 1 });
+      expect(world.getEntity("player:alice")?.state).toMatchObject({ points: 300, health: 150, deaths: 1 });
       module.setPlayerPresence?.("alice", "expired");
       module.step(0, 300);
       expect(world.getEntity("player:alice")).toBeUndefined();
@@ -99,7 +126,7 @@ describe("default player respawn", () => {
       const returned = world.getEntity("player:alice")!;
       expect(returned.position).not.toEqual(originalPosition);
       expect(view()).toMatchObject({
-        spectatorView: { cameraAnchor: returned.position, hud: { points: 275, health: 100 },
+        spectatorView: { cameraAnchor: returned.position, hud: { points: 275, health: 150 },
           death: { alive: true, remainingSeconds: 0 } }
       });
     } finally {
@@ -125,7 +152,7 @@ describe("default player respawn", () => {
     expect(world.entities().some((entity) => entity.state.kind === "projectile")).toBe(false);
     module.step(0, 160);
     expect(world.getEntity("player:alice")?.state).toMatchObject({
-      health: 100, points: 275, kills: 3, deaths: 1
+      health: 150, points: 275, kills: 3, deaths: 1
     });
     expect(module.results().standings).toMatchObject([
       { accountId: "alice", points: 275, kills: 3, deaths: 1 }
@@ -190,7 +217,7 @@ describe("default player respawn", () => {
     expect(simulation.metrics.get("default.respawn.blocked")).toBe(1);
     simulation.setBlocked(false);
     simulation.module.step(0, 152);
-    expect(simulation.world.getEntity("player:alice")?.state).toMatchObject({ health: 100 });
+    expect(simulation.world.getEntity("player:alice")?.state).toMatchObject({ health: 150 });
     simulation.module.dispose();
   });
 
@@ -209,7 +236,7 @@ describe("default player respawn", () => {
       }
     });
     module.step(0, 152);
-    expect(world.getEntity("player:alice")?.state).toMatchObject({ health: 100, deaths: 1 });
+    expect(world.getEntity("player:alice")?.state).toMatchObject({ health: 150, deaths: 1 });
     world.addEntity({
       id: "npc-shot", typeId: "projectile.npc", radius: 6 / Math.SQRT2,
       position: player.position,
@@ -217,7 +244,7 @@ describe("default player respawn", () => {
         damage: 10, velocity: { x: 300, y: 0 }, expiresAtTick: 180 }
     });
     module.step(0, 153);
-    expect(world.getEntity("player:alice")?.state).toMatchObject({ health: 90, deaths: 1 });
+    expect(world.getEntity("player:alice")?.state).toMatchObject({ health: 140, deaths: 1 });
     module.dispose();
   });
 
@@ -235,7 +262,7 @@ describe("default player respawn", () => {
     module.step(0, 319);
     expect(world.getEntity("player:alice")).toBeUndefined();
     module.step(0, 320);
-    expect(world.getEntity("player:alice")?.state).toMatchObject({ points: 400, health: 100 });
+    expect(world.getEntity("player:alice")?.state).toMatchObject({ points: 400, health: 150 });
     module.dispose();
   });
 
@@ -249,7 +276,7 @@ describe("default player respawn", () => {
         expect(world.getEntity("player:alice")).toBeUndefined();
         module.step(0, 12);
       }
-      expect(world.getEntity("player:alice")?.state).toMatchObject({ health: 100, deaths: 1 });
+      expect(world.getEntity("player:alice")?.state).toMatchObject({ health: 150, deaths: 1 });
       module.dispose();
     }
   });

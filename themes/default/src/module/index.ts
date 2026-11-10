@@ -1,4 +1,5 @@
 import {
+  PlayerMaxHealthSchema,
   type GameModuleFactory,
   type GameModuleInstance,
   type ModuleContext,
@@ -19,10 +20,12 @@ import {
   type DefaultLevelPhase
 } from "./progression.js";
 
-const DefaultSettingsSchema = z.record(z.string(), JsonValueSchema);
+const DefaultSettingsSchema = z.record(z.string(), JsonValueSchema)
+  .and(z.object({ playerMaxHealth: PlayerMaxHealthSchema.optional() }));
 
 export interface DefaultModuleState extends Record<string, JsonValue> {
   readonly acceptedInputs: number;
+  readonly playerMaxHealth: number;
   readonly entities: JsonValue[];
   readonly players: JsonValue[];
   readonly map: JsonValue;
@@ -37,6 +40,7 @@ export interface DefaultModuleState extends Record<string, JsonValue> {
 
 export interface DefaultModuleSnapshot extends Record<string, JsonValue> {
   readonly acceptedInputs: number;
+  readonly playerMaxHealth: number;
   readonly entities: JsonValue[];
   readonly players: JsonValue[];
   readonly radar: ReturnType<typeof serializeRadar>;
@@ -97,7 +101,7 @@ export const defaultModuleFactory: GameModuleFactory<
     DefaultModuleResults
   > {
     if (!this.validateSettings(settings)) {
-      throw new TypeError("Default theme settings must be a JSON object.");
+      throw new TypeError("Default theme settings must be a JSON object with valid playerMaxHealth (integer 1-100000).");
     }
     if (!Number.isSafeInteger(seed)) {
       throw new RangeError("Default theme seed must be a safe integer.");
@@ -116,7 +120,8 @@ export const defaultModuleFactory: GameModuleFactory<
       _context,
       gameSettings.npcMovementSpeed,
       gameSettings.npcDetectionRange,
-      seed
+      seed,
+      gameSettings.playerMaxHealth
     );
     const usesDensity = gameSettings.mapMode === "simple-generated";
     if (usesDensity && !_context.maps) {
@@ -145,12 +150,13 @@ export const defaultModuleFactory: GameModuleFactory<
       (accountId) => {
         simulator.resetPlayerInput(accountId);
         combat.resetPlayerInput(accountId);
-      }
+      },
+      gameSettings.playerMaxHealth
     );
     const combat = new DefaultCombatSimulator(_context, (accountId) => {
       respawn.awardKill(accountId);
       progression.recordEnemyKill();
-    });
+    }, gameSettings.playerMaxHealth);
     const progression = new DefaultProgression(
       _context,
       gameSettings,
@@ -173,6 +179,7 @@ export const defaultModuleFactory: GameModuleFactory<
         const progressionState = progression.state;
         return Object.freeze({
           acceptedInputs,
+          playerMaxHealth: gameSettings.playerMaxHealth,
           entities: serializeEntities(_context.entities.values()),
           players: respawn.snapshot(),
           map: presentationMap(),
@@ -239,6 +246,7 @@ export const defaultModuleFactory: GameModuleFactory<
         const progressionState = progression.state;
         return {
           acceptedInputs,
+          playerMaxHealth: gameSettings.playerMaxHealth,
           entities: serializeEntities(_context.entities.values()),
           players: respawn.snapshot(),
           radar: serializeRadar(_context.entities.values(), viewer.accountId, map.obstacles),

@@ -180,11 +180,11 @@ describe("integrated default gameplay", () => {
             .toBeGreaterThan(player.radius + entity.radius + 64);
         }
       }
-      expect(player.state).toMatchObject({ health: 100, points: 400, kills: 4, deaths: 1 });
+      expect(player.state).toMatchObject({ health: 150, points: 400, kills: 4, deaths: 1 });
       expect(player.state).not.toHaveProperty("immune");
       session.update("npc:npc-northwest", (entity) => ({ ...entity, position: player.position }));
       session.step(172, 0);
-      expect(session.world.getEntity(player.id)?.state.health).toBe(100);
+      expect(session.world.getEntity(player.id)?.state.health).toBe(150);
       session.world.addEntity({
         id: "npc-shot", typeId: "projectile.npc", radius: 6 / Math.SQRT2,
         position: player.position,
@@ -192,7 +192,7 @@ describe("integrated default gameplay", () => {
           damage: 10, velocity: { x: 300, y: 0 }, expiresAtTick: 180 }
       });
       session.step(173, 0);
-      expect(session.world.getEntity(player.id)?.state.health).toBe(90);
+      expect(session.world.getEntity(player.id)?.state.health).toBe(140);
     } finally {
       session.module.dispose();
     }

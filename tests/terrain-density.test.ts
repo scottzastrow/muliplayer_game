@@ -208,7 +208,7 @@ describe("reusable authoritative map transition", () => {
       expect(world.getEntity("player:bob")).toBeUndefined();
       module.step(0, 301);
       const bob = world.getEntity("player:bob")!;
-      expect(bob.state).toMatchObject({ health: 100, points: 200, deaths: 1 });
+      expect(bob.state).toMatchObject({ health: 150, points: 200, deaths: 1 });
       expect(world.geometry.isCircleWalkable(bob.position, bob.radius + SAFE_SPAWN_MARGIN)).toBe(true);
     } finally {
       module.dispose();

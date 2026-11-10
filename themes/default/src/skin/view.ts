@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_MAP_COLLISIONS, RadarViewSchema } from "@multiplayer-game/theme-sdk";
+import { MAX_MAP_COLLISIONS, PlayerMaxHealthSchema, RadarViewSchema } from "@multiplayer-game/theme-sdk";
 
 const point = z.object({ x: z.number().finite(), y: z.number().finite() });
 const counter = z.number().int().nonnegative().safe();
@@ -20,6 +20,7 @@ const entity = z.object({
 });
 
 export const DefaultViewSchema = z.object({
+  playerMaxHealth: PlayerMaxHealthSchema.optional(),
   viewerAccountId: z.string().min(1),
   viewerRole: z.enum(["player", "spectator"]),
   spectatorView: z.object({

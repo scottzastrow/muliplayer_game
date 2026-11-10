@@ -457,7 +457,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
           );
         }
         points.textContent = `Score: ${observed?.hud.points ?? player.points}`;
-        health.textContent = `Health: ${observed?.hud.health ?? player.health}`;
+        health.textContent = `Health: ${observed?.hud.health ?? player.health} / ${current.playerMaxHealth ?? 100}`;
         const terrain = current.map.terrain;
         terrainCoverage.textContent = terrain
           ? `Terrain density ${terrain.density}: ${terrain.actualCoveragePercent.toFixed(2)}% coverage ` +

@@ -1,5 +1,23 @@
 # Game Theme Development
 
+## Player maximum health
+
+`playerMaxHealth` is a host/theme setting: integer 1-100000, default 150
+(ceil of the former effective 100 HP times 1.5). The public SDK exports
+`PlayerMaxHealthSchema` for developer validation. Declare the same field in
+`settingsSchema` and `settingsDefaults`, as the default theme does.
+Explicit settings, including 100, remain authoritative; omitted legacy values
+resolve to 150 without rewriting saved room/result JSON.
+
+Dots and Squares uses the resolved maximum for initial spawn, death respawn,
+health-pickup limits and the player/selected-target spectator `Health: current /
+maximum` HUD. Live reconnect retains current health rather than refilling it.
+Snapshots add `playerMaxHealth`; older v4 snapshots without it display their
+historical maximum of 100. The additions retain engine API v1 and state v4.
+Ordinary enemies still deal 10 damage per shot on a 30-tick cooldown. Without
+healing a 100-HP player survives nine landed shots and dies on the tenth;
+150 HP survives fourteen and dies on the fifteenth. NPC counts are unchanged.
+
 ## Default-theme wave status and transitions
 
 The module emits `startingNpcCount`, `livingNpcCount` and ranked `levelStandings`

@@ -6,6 +6,12 @@ Require same-origin mutations, JSON Content-Type, and request body limits. Publi
 health endpoints disclose no details. Cookies are HttpOnly, SameSite=Lax, Secure on
 HTTPS; local HTTP development is the only Secure-cookie exception.
 
+Session settings accept additive `playerMaxHealth` (integer 1-100000, default
+150 when omitted). Create/edit/read/storage preserve explicit overrides;
+invalid values return the existing 422 `INVALID_SETTINGS` response without
+changing saved settings. Reading legacy records resolves the default without
+rewriting their stored JSON.
+
 | Method/path | Request | Success | Access |
 | --- | --- | --- | --- |
 | POST /auth/register | username, password, controlMode | 201 public account; login still required | Public, throttled |

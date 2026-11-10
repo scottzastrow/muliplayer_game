@@ -122,7 +122,7 @@ describe("wave countdown", () => {
       simulation.now = 15_000;
       simulation.module.step(0, 160);
       expect(snapshot()).toMatchObject({
-        players: [{ alive: true, points: 200, health: 100 }]
+        players: [{ alive: true, points: 200, health: 150 }]
       });
       simulation.now = 20_000;
       simulation.module.setPlayerPresence?.("alice", "disconnected");

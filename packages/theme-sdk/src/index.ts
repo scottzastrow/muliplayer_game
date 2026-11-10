@@ -5,6 +5,7 @@ import {
   type JsonValue
 } from "@multiplayer-game/protocol";
 import type { MapDefinition } from "./maps.js";
+export { PlayerMaxHealthSchema } from "@multiplayer-game/protocol";
 export { Countdown } from "./countdown.js";
 export {
   RadarMarkerSchema,

@@ -12,6 +12,7 @@ explicitly confirmed 5:1, five-second delay and five-session cap.
 | initialNpcsPerPlayer | 5 | Integer 1–100 |
 | npcPopulationGrowthPercent | 20 | Number 0–100 percent per level |
 | baseNpcHealth | 50 | Integer 1–100000 |
+| playerMaxHealth | 150 | Integer 1-100000; omitted values resolve to 150; explicit overrides preserved |
 | npcHealthGrowthPercent | 10 | Number 0–100 percent per level |
 | npcMovementSpeed | 67.5 | Finite number 0–180 world units/second, fractions allowed; 0 keeps NPCs stationary |
 | npcDetectionRange | 512 | Finite number 0–700 world units; 0 disables automatic pursuit |
@@ -26,6 +27,13 @@ New Dots and Squares settings default to five initial NPCs per player. Existing
 rooms and saved results keep any explicitly saved `initialNpcsPerPlayer` value;
 changing the default does not rewrite stored settings. The creator can continue
 to change the setting before starting a match.
+
+`playerMaxHealth` is additive in v1, validated by the SDK-exported
+`PlayerMaxHealthSchema`. Dots and Squares previously used an effective 100 HP;
+its default is now ceil(100 * 1.5) = 150. It controls spawn, death respawn,
+health-pickup cap and both roles' current/maximum HUD, not live-rejoin refill.
+No stored room/result settings are rewritten. Enemy shot damage remains 10 and
+cooldown 30 ticks: survive 9 hits / lethal hit 10 before, 14 / 15 after.
 
 ## Per-level terrain (additive v1)
 

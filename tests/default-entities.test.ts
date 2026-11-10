@@ -475,7 +475,7 @@ describe("default entity movement and pursuit", () => {
         simulation.module.step(1 / 30, tick);
       }
       expect(simulation.context.entities.get(npcId)!.position).not.toEqual({ x: 700, y: 700 });
-      expect(simulation.context.entities.get("player:player-a")!.state).toMatchObject({ health: 100 });
+      expect(simulation.context.entities.get("player:player-a")!.state).toMatchObject({ health: 150 });
       expect(simulation.navigation.requestsSubmitted).toBeGreaterThan(0);
     } finally { simulation.module.dispose(); }
   });
@@ -754,7 +754,7 @@ describe("default entity movement and pursuit", () => {
       }));
       simulation.module.step(1 / 30, 1);
       expect(simulation.context.entities.get(npcId)!.position).toEqual({ x: 700, y: 700 });
-      expect(simulation.context.entities.get("player:player-a")!.state).toMatchObject({ health: 100 });
+      expect(simulation.context.entities.get("player:player-a")!.state).toMatchObject({ health: 150 });
       expect(simulation.navigation.requestsSubmitted).toBe(0);
     } finally { simulation.module.dispose(); }
   });
@@ -849,17 +849,17 @@ describe("default entity movement and pursuit", () => {
     simulation.module.step(1 / 30, 2);
     expect(simulation.context.entities.get(playerId)?.state).toMatchObject({
       kind: "player",
-      health: 100
+      health: 150
     });
     simulation.module.step(0, 20);
     expect(simulation.context.entities.get(playerId)?.state).toMatchObject({
       kind: "player",
-      health: 100
+      health: 150
     });
     simulation.module.step(0, 2 + NPC_CONTACT_COOLDOWN_TICKS);
     expect(simulation.context.entities.get(playerId)?.state).toMatchObject({
       kind: "player",
-      health: 100
+      health: 150
     });
     simulation.module.dispose();
   });

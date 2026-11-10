@@ -108,10 +108,12 @@ export class DefaultEntitySimulator {
     readonly context: ModuleContext<DefaultEntity>,
     readonly npcMovementSpeed = NPC_SPEED,
     readonly npcDetectionRange = NPC_ATTRACTION_RADIUS,
-    readonly seed = 0
+    readonly seed = 0,
+    readonly playerMaxHealth = PLAYER_HEALTH
   ) {
     GameSettingsSchema.shape.npcMovementSpeed.parse(npcMovementSpeed);
     GameSettingsSchema.shape.npcDetectionRange.parse(npcDetectionRange);
+    GameSettingsSchema.shape.playerMaxHealth.parse(playerMaxHealth);
     if (!Number.isSafeInteger(seed)) {
       throw new RangeError("NPC placement seed must be a safe integer.");
     }
@@ -141,7 +143,7 @@ export class DefaultEntitySimulator {
       const state: DefaultPlayerState = {
         kind: "player",
         accountId: member.accountId,
-        health: PLAYER_HEALTH,
+        health: this.playerMaxHealth,
         points: 0,
         kills: 0,
         deaths: 0,

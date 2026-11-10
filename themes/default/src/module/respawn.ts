@@ -1,4 +1,4 @@
-import { MAP_CELL_SIZE, type ModuleContext, type Point2, type RosterMember } from "@multiplayer-game/theme-sdk";
+import { MAP_CELL_SIZE, PlayerMaxHealthSchema, type ModuleContext, type Point2, type RosterMember } from "@multiplayer-game/theme-sdk";
 import type { JsonValue } from "@multiplayer-game/protocol";
 import type { LoadedMap } from "./maps.js";
 import type { DefaultEntity, DefaultPlayerState } from "./types.js";
@@ -26,12 +26,14 @@ export class DefaultRespawnSimulator {
     public map: LoadedMap,
     readonly roster: readonly RosterMember[],
     delaySeconds: number,
-    readonly resetInput: (accountId: string) => void
+    readonly resetInput: (accountId: string) => void,
+    readonly playerMaxHealth = PLAYER_HEALTH
   ) {
     if (!Number.isFinite(delaySeconds) || delaySeconds < 0 || delaySeconds > 60) {
       throw new RangeError("Respawn delay must be between zero and sixty seconds.");
     }
     this.#delayTicks = Math.ceil(delaySeconds * 30);
+    PlayerMaxHealthSchema.parse(playerMaxHealth);
   }
 
   initialize(): void {
@@ -100,7 +102,7 @@ export class DefaultRespawnSimulator {
       const returned: PlayerEntity = {
         ...player,
         position,
-        state: { ...player.state, health: pending ? PLAYER_HEALTH : player.state.health }
+        state: { ...player.state, health: pending ? this.playerMaxHealth : player.state.health }
       };
       this.resetInput(accountId);
       this.context.entities.add(returned);

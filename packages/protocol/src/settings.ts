@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const PlayerMaxHealthSchema = z.number().int().min(1).max(100_000);
+
 export const TerrainDensitySchema = z.number().int().min(0).max(10);
 export const TerrainDensityScheduleSchema = z.discriminatedUnion("mode", [
   z.object({
@@ -40,6 +42,7 @@ export const GameSettingsSchema = z
     npcPopulationGrowthPercent: z.number().finite().min(0).max(100),
     baseNpcHealth: z.number().int().min(1).max(100_000),
     npcHealthGrowthPercent: z.number().finite().min(0).max(100),
+    playerMaxHealth: PlayerMaxHealthSchema.default(150),
     npcMovementSpeed: z.number().finite().min(0).max(180).default(67.5),
     npcDetectionRange: z.number().finite().min(0).max(700).default(512),
     respawnDelaySeconds: z.number().finite().min(0).max(60),
@@ -67,6 +70,7 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = Object.freeze({
   npcPopulationGrowthPercent: 20,
   baseNpcHealth: 50,
   npcHealthGrowthPercent: 10,
+  playerMaxHealth: 150,
   npcMovementSpeed: 67.5,
   npcDetectionRange: 512,
   respawnDelaySeconds: 5,

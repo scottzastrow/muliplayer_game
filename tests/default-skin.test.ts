@@ -212,7 +212,7 @@ describe("Dots and Squares presentation", () => {
       audio: async () => { throw new Error("No audio used."); }
     });
     const snapshot = {
-      ...view(100), viewerRole: role, startingNpcCount: 10, livingNpcCount: 7,
+      ...view(100), viewerRole: role, playerMaxHealth: 275, startingNpcCount: 10, livingNpcCount: 7,
       waveRemainingSeconds: 42.2,
       map: { ...view(100).map, terrain: { level: 1, density: 10, targetCoveragePercent: 80,
         actualCoveragePercent: 60, budgetExhausted: true } },
@@ -235,7 +235,7 @@ describe("Dots and Squares presentation", () => {
       expect(elements.some(element => element.className === "default-enemy-count")).toBe(false);
       expect(canvas.drawnText).toContain("Enemies remaining: 7");
       expect(elements.find(element => element.className === "default-points")!.textContent).toBe("Score: 200");
-      expect(elements.find(element => element.className === "default-health")!.textContent).toBe("Health: 90");
+      expect(elements.find(element => element.className === "default-health")!.textContent).toBe("Health: 90 / 275");
       expect(elements.some(element => element.className === "default-wave-time")).toBe(false);
       expect(life.hidden).toBe(true);
       expect(elements.find(element => element.className === "default-terrain-coverage")!.textContent)
@@ -276,6 +276,10 @@ describe("Dots and Squares presentation", () => {
       skin.render(200, next);
       expect(summary.hidden).toBe(true);
       expectOnlyIdleInput(host.dispatchInput as ReturnType<typeof vi.fn>);
+      const legacy = { ...snapshot, tick: 200, playerMaxHealth: undefined };
+      skin.handleSnapshot(legacy);
+      skin.render(240, legacy);
+      expect(elements.find(element => element.className === "default-health")!.textContent).toBe("Health: 90 / 100");
     } finally {
       skin.dispose();
     }

@@ -1,5 +1,67 @@
 # Local verification
 
+## Configurable player maximum health (2026-11-10, T023)
+
+The pre-change effective Dots and Squares health was **100**, from both
+`PLAYER_HEALTH` and `MAX_PLAYER_HEALTH` in the default-theme tuning. The new
+`playerMaxHealth` setting defaults to **150 = ceil(100 * 1.5)**. Protocol,
+public SDK validator, theme manifest and host editor agree on integer 1-100000.
+Spawn, death respawn, healing and both HUD roles use the session's resolved
+maximum. Explicit 37/100/275 overrides remain intact; live reconnect retains
+remaining health. Legacy stored JSON is not rewritten. Preview snapshots carry
+the default maximum; old v4 snapshots still display a 100 maximum.
+
+Actual deterministic enemy-projectile traces in a clear lane, using the real
+NPC simulator and combat collision/damage code (stationary NPC/player, no healing):
+
+| Maximum HP | Observed HP after consecutive hits | Hits survived alive | Lethal hit |
+| --- | --- | --- | --- |
+| 100 (old effective value) | 100, 90, 80, ..., 10, 0 | 9 | 10 |
+| 150 (new default) | 150, 140, 130, ..., 10, 0 | 14 | 15 |
+| 37 (explicit override) | 37, 27, 17, 7, 0 | 3 | 4 |
+
+Every shot asserts damage 10, and consecutive shot creation ticks differ by
+exactly 30 (one shot/second at 30 Hz). NPC count stays five per player at the
+default first wave; population growth, enemy health, fire rate and damage
+implementation are unchanged. This measures hits, not a browser survival-time
+or two-attacker encounter claim.
+
+Executed locally on the existing Windows/npm workspace:
+
+```powershell
+npm run build
+npm run check
+npm test
+npm test -- tests\player-max-health.test.ts tests\npc-ranged.test.ts tests\default-respawn.test.ts tests\default-combat.test.ts tests\default-skin.test.ts tests\lobby-settings.test.ts tests\integration\terrain-settings.test.ts tests\theme-preview.test.ts
+node --check tests\browser\default-game.mjs
+node --check tests\browser\compact-match.mjs
+git diff --check
+```
+
+Build and workspace checks passed. The unfiltered suite passed **384 tests**
+and failed **one**: the external-consumer immutable revision drift gate detects
+the intentional uncommitted protocol/SDK change against `0f2be90`. The pin and
+gate were not changed or bypassed; packed external-consumer conformance remains
+blocked until a reviewed public-contract commit can be pinned. After final
+preview/storage assertions, the focused selection passed **8 files / 88 tests**
+in **14.78 seconds**. Browser-script syntax and whitespace checks passed.
+
+Initial iteration caught an undefined render variable, stale 100-HP assertions
+and a legacy HUD test snapshot older than the last accepted tick. These were
+corrected; no enemy tuning or assertions were weakened. A preceding broad run
+excluding the known drift-gated file exposed the stale expectations; the
+unfiltered result above includes the gate and supersedes that run.
+No real browser, Linux, load/capacity or deployment execution is claimed.
+Existing unrelated edits are preserved. No commits or pushes; original T042,
+T010 and T013 remain open. No extension hooks file exists.
+
+Subsequent scoped commit review found no blocking health defects. The owner
+authorizes only the health implementation/tests/docs in the first commit and
+an exact immutable external-consumer pin in the second. Unrelated feature,
+browser-playtest and account-test edits remain unstaged. The full suite will
+be rerun with the original drift gate enabled after pinning. Keep both commits
+local; no push/deployment or original T042 completion is authorized.
+
 ## All-mode directional pull (2026-11-10, T021)
 
 Supersedes the First-Person-only behavior recorded below. All three explicit

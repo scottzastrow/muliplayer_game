@@ -144,7 +144,7 @@ describe("default simulator movement near the map obstacle", () => {
       const spawned = world.getEntity("player:alice")!;
       expect(spawned.position).toEqual({ x: 912, y: 976 });
       expect(spawned.radius).toBe(PLAYER_RADIUS);
-      expect(spawned.state).toMatchObject({ health: 100, deaths: 1 });
+      expect(spawned.state).toMatchObject({ health: 150, deaths: 1 });
       expect(world.geometry.isCircleWalkable(spawned.position, PLAYER_RADIUS)).toBe(true);
       expect(world.geometry.isCircleWalkable(spawned.position, PLAYER_RADIUS + SAFE_SPAWN_MARGIN)).toBe(true);
       expect(snapshotPosition(module)).toEqual(spawned.position);

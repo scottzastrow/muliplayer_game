@@ -1,4 +1,4 @@
-import type { ModuleContext, Point2 } from "@multiplayer-game/theme-sdk";
+import { PlayerMaxHealthSchema, type ModuleContext, type Point2 } from "@multiplayer-game/theme-sdk";
 import {
   HEALTH_PICKUP_AMOUNT,
   MAX_PICKUPS_PER_SESSION,
@@ -8,7 +8,12 @@ import {
 import type { DefaultEntity, DefaultPickupState, DefaultPlayerState } from "./types.js";
 
 export class DefaultPickupSimulator {
-  constructor(readonly context: ModuleContext<DefaultEntity>) {}
+  constructor(
+    readonly context: ModuleContext<DefaultEntity>,
+    readonly playerMaxHealth = MAX_PLAYER_HEALTH
+  ) {
+    PlayerMaxHealthSchema.parse(playerMaxHealth);
+  }
 
   expireEffects(tick: number): void {
     for (const player of this.context.entities.values()) {
@@ -66,7 +71,7 @@ export class DefaultPickupSimulator {
         ) {
           continue;
         }
-        const updatedState = applyPickup(currentPlayer.state, currentPickup.state, tick);
+        const updatedState = applyPickup(currentPlayer.state, currentPickup.state, tick, this.playerMaxHealth);
         if (!updatedState) {
           continue;
         }
@@ -85,10 +90,11 @@ export class DefaultPickupSimulator {
 function applyPickup(
   state: DefaultPlayerState,
   pickup: DefaultPickupState,
-  tick: number
+  tick: number,
+  playerMaxHealth: number
 ): DefaultPlayerState | undefined {
   if (pickup.pickupType === "health") {
-    const health = Math.min(MAX_PLAYER_HEALTH, state.health + HEALTH_PICKUP_AMOUNT);
+    const health = Math.min(playerMaxHealth, state.health + HEALTH_PICKUP_AMOUNT);
     return health === state.health ? undefined : { ...state, health };
   }
   const effects = {

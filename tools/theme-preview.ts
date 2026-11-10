@@ -96,6 +96,7 @@ export function createPreviewSnapshot(scenario: SnapshotScenario): JsonValue {
     alive: true
   };
   const snapshot: Record<string, JsonValue> = {
+    playerMaxHealth: DEFAULT_GAME_SETTINGS.playerMaxHealth,
     tick: 300,
     viewerAccountId: targetAccountId,
     viewerRole: isSpectator ? "spectator" : "player",

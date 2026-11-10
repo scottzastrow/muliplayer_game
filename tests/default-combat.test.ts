@@ -27,6 +27,25 @@ const roster: readonly RosterMember[] = [
 ];
 
 describe("default combat", () => {
+  it.each([150, 37, 275])("caps healing at configured %s HP and leaves full-health pickups unclaimed", maximum => {
+    const { context, module } = createSimulation(undefined, { playerMaxHealth: maximum });
+    try {
+      removeNpcs(context);
+      addIdleNpc(context);
+      const position = { x: 272, y: 272 };
+      moveEntity(context, "player:player-a", position);
+      moveEntity(context, "player:player-b", { x: 1700, y: 272 });
+      moveEntity(context, "pickup:pickup-health", position);
+      setHealth(context, "player:player-a", maximum);
+      module.step(0, 1);
+      expect(context.entities.get("pickup:pickup-health")).toBeDefined();
+      setHealth(context, "player:player-a", maximum - 10);
+      module.step(0, 2);
+      expect(context.entities.get("player:player-a")!.state.health).toBe(maximum);
+      expect(context.entities.get("pickup:pickup-health")).toBeUndefined();
+    } finally { module.dispose(); }
+  });
+
   it.each([
     { label: "default", settings: {}, healthTrace: [50, 25, 0] },
     { label: "host 100 HP", settings: { baseNpcHealth: 100 }, healthTrace: [100, 75, 50, 25, 0] },
@@ -109,7 +128,7 @@ describe("default combat", () => {
     expect(context.entities.get("projectile:1")).toBeDefined();
     expect(context.entities.get("player:player-b")?.state).toMatchObject({
       kind: "player",
-      health: 100
+      health: 150
     });
     expect(context.entities.get("npc:target")?.state).toMatchObject({
       kind: "npc",

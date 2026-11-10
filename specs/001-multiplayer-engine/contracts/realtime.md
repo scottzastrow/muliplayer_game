@@ -59,6 +59,11 @@ camera anchor and life/HUD state. Viewport dimensions may differ; no screenshot
 streaming. On death provide countdown and last/death camera anchor until respawn.
 On target disconnect/leave return to player list, and on game end show standings.
 
+Dots and Squares adds `playerMaxHealth` (integer 1-100000) to its v4 snapshots.
+Both roles render authoritative current health against this maximum; the
+spectator projection preserves it alongside the selected player's HUD.
+Legacy v4 payloads without it retain their historical display maximum of 100.
+
 T026 implements the admission/authorization portion only: an HTTP-admitted
 spectator can upgrade, receives `server.hello` with role `spectator`, and sends
 `client.spectate.target`. The server checks current spectator membership and a

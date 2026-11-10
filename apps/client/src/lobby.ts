@@ -42,6 +42,8 @@ const NUMBER_FIELDS: ReadonlyArray<{
   { key: "initialNpcsPerPlayer", label: "Initial NPCs per player", min: 1, max: 100, step: 1 },
   { key: "npcPopulationGrowthPercent", label: "NPC growth percent", min: 0, max: 100, step: 1 },
   { key: "baseNpcHealth", label: "Base NPC health", min: 1, max: 100_000, step: 1 },
+  { key: "playerMaxHealth", label: "Player maximum health", min: 1, max: 100_000, step: 1,
+    help: "Initial and respawn health, and healing limit. Default 150." },
   { key: "npcHealthGrowthPercent", label: "NPC health growth percent", min: 0, max: 100, step: 1 },
   { key: "npcMovementSpeed", label: "NPC movement speed", min: 0, max: 180, step: "any",
     help: "0-180 world units/second; default 67.5. Zero keeps NPCs stationary. One navigation cell is 32 units." },
@@ -445,6 +447,9 @@ function readSettings(fieldset: HTMLFieldSetElement): GameSettings {
   if (value("noKillTimeoutSeconds").trim() === "") {
     throw new Error("No-kill timeout is required.");
   }
+  if (value("playerMaxHealth").trim() === "") {
+    throw new Error("Player maximum health is required.");
+  }
   const mapMode = value("mapMode");
   const savedDensity: unknown = JSON.parse(fieldset.dataset.terrainDensity ?? "null");
   const terrainDensity = mapMode === "simple-generated"
@@ -462,6 +467,7 @@ function readSettings(fieldset: HTMLFieldSetElement): GameSettings {
     initialNpcsPerPlayer: Number(value("initialNpcsPerPlayer")),
     npcPopulationGrowthPercent: Number(value("npcPopulationGrowthPercent")),
     baseNpcHealth: Number(value("baseNpcHealth")),
+    playerMaxHealth: Number(value("playerMaxHealth")),
     npcHealthGrowthPercent: Number(value("npcHealthGrowthPercent")),
     npcMovementSpeed: Number(value("npcMovementSpeed")),
     npcDetectionRange: Number(value("npcDetectionRange")),

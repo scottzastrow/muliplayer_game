@@ -1,5 +1,22 @@
 # Implementation Plan: Per-Level Terrain Density
 
+## Player maximum health follow-up (2026-11-10)
+
+Add a bounded positive integer `playerMaxHealth` to the protocol settings schema,
+re-export its validator through the SDK and declare the setting/default in the
+reference theme. Follow existing host/API persistence and default resolution.
+Pass the resolved maximum into entity, respawn and combat/pickup simulators;
+publish it in additive v4 snapshots for both HUD roles. Old v4 snapshots without
+the field retain their historical 100-HP display maximum. Preserve live rejoin
+health. Cover invalid inputs, explicit overrides, lifecycle, healing, HUD and
+ordinary enemy hit traces. Keep the immutable consumer pin/gate intact until
+a reviewed public-contract commit exists; record that local drift explicitly.
+
+The subsequent scoped review authorizes a health-only commit and a separate
+immutable-pin commit referencing it exactly. Stage only health hunks in mixed
+files; keep unrelated work unstaged. Run unfiltered tests with the drift gate
+unchanged and record the outcome. Both commits remain local; T042 stays open.
+
 ## All-mode directional pull follow-up (2026-11-10)
 
 T021 supersedes the First-Person-only steering gate below. Keep the existing

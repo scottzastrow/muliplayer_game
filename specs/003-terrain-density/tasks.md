@@ -2,6 +2,30 @@
 
 Scoped sequential feature; retains original engine and Theme Credits context.
 
+## Player maximum health follow-up (2026-11-10)
+
+- [x] T023 Expose validated theme/SDK `playerMaxHealth`, default 150 from the
+  effective 100 baseline, preserve overrides, and wire initial spawn, respawn,
+  healing and both HUD roles. Verify ordinary 10-damage projectile hit survival
+  before/after and unchanged enemy cadence/population. Record scoped evidence;
+  leave changes local/uncommitted and original T042/live gates open.
+
+T023 evidence: `docs/verification.md` records the effective 100-HP baseline,
+150-HP default, explicit override/lifecycle/healing/storage/HUD coverage and
+actual ordinary projectile traces: 9 survived hits then lethal hit 10 before;
+14 then 15 after, at unchanged damage 10 and 30-tick cadence. Build and workspace
+checks passed. The unfiltered suite passed 384 tests with one intentional
+public-contract drift-gate failure; immutable pin/gate remain unchanged pending
+a reviewed commit, so packed consumer conformance is explicitly blocked.
+Final scoped checks passed 8 files / 88 tests in 14.78 seconds; browser-script
+syntax and whitespace checks passed. No real browser or capacity claim, commit,
+push or deployment; original T042/T010/T013 stay open. No hooks file exists.
+
+Subsequent scoped review authorization permits the health-only commit followed
+by a separate external-consumer pin commit to that exact revision. Review found
+no blocking health defects. Preserve unrelated edits, retain the drift gate and
+run the full suite; both commits stay local and original T042 stays open.
+
 ## All-mode directional pull follow-up (2026-11-10)
 
 - [x] T021 Extend the existing 30% shortest-angle pull to Keyboard Only and
