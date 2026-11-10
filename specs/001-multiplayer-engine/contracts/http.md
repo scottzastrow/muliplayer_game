@@ -94,7 +94,7 @@ Dots and Squares uses `wave-timeout` for its hidden no-kill expiry; saved result
 display "Wave ended: no kills for a while." Existing results without the field
 remain compatible. Host-ended results do not acquire a timeout reason.
 `noKillTimeoutSeconds` is an additive host/API setting, positive finite seconds
-up to 3600, default 60 when absent. It is frozen on start; invalid values use
+up to 3600, default 360 when absent. It is frozen on start; invalid values use
 the existing 422 `INVALID_SETTINGS` path.
 
 `POST /sessions/:id/end` requires authenticated same-origin JSON with an empty

@@ -66,10 +66,14 @@ describe("wave timeout finalization", () => {
       lobby.reconnect.attach(id, account.id);
       lifecycle.setPlayerPresence(id, account.id, "connected");
 
-      now = 59_960;
+      now = 180_001;
       vi.advanceTimersByTime(34);
       expect(getMatchResult(database, id)).toBeUndefined();
-      now = 60_000;
+      expect(lobby.getSummary(id, account.id)?.status).toBe("running");
+      now = 359_960;
+      vi.advanceTimersByTime(34);
+      expect(getMatchResult(database, id)).toBeUndefined();
+      now = 360_000;
       vi.advanceTimersByTime(34);
       expect(getMatchResult(database, id)).toMatchObject({
         status: "finished", finalLevel: 1, completionReason: "wave-timeout",
@@ -82,7 +86,7 @@ describe("wave timeout finalization", () => {
       expect(publishResult.mock.calls[0]?.[0]).toBe(id);
       expect(publishSnapshot).toHaveBeenCalled();
       const saved = getMatchResult(database, id);
-      now = 133_000;
+      now = 433_000;
       vi.advanceTimersByTime(1000);
       expect(getMatchResult(database, id)).toEqual(saved);
       expect(database.prepare("SELECT COUNT(*) AS count FROM match_results WHERE match_id = ?").get(id))

@@ -253,7 +253,7 @@ explicit conversation decisions are user-confirmed.
   authoritative; no early respawn due to a level transition.
 - Control mode is an account preference. Legacy accounts are migrated without a
   selection and must complete the first-sign-in prompt before entering the lobby.
-- Dots and Squares no-kill duration is `noKillTimeoutSeconds`, default 60 seconds,
+- Dots and Squares no-kill duration is `noKillTimeoutSeconds`, default 360 seconds,
   started fresh each wave and reset only on a confirmed enemy kill by any player.
   A monotonic server deadline continues through death, blocked respawn and reconnect.
   No wave countdown runs during intermission. Expiry wins a clear at the exact

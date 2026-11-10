@@ -191,7 +191,7 @@ any AI change; no push or deployment is authorized.
 ### Hidden no-kill timer follow-up
 
 Dots and Squares uses a server-authoritative no-kill timeout, configurable via
-`noKillTimeoutSeconds` (positive finite seconds, at most 3600; default 60).
+`noKillTimeoutSeconds` (positive finite seconds, at most 3600; default 360).
 Start fresh at every wave boundary and reset only on a confirmed enemy kill by
 any player, never movement, misses or nonlethal damage. Do not expose its
 remaining time in player/spectator snapshots or HUDs. Expiry uses the existing

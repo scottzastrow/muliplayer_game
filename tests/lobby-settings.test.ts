@@ -119,7 +119,7 @@ describe("host NPC settings", () => {
     expect([createPlayerHealth.min, createPlayerHealth.max, createPlayerHealth.step]).toEqual(["1", "100000", "1"]);
     createPlayerHealth.value = "37";
     expect(createNpcCount.value).toBe("5");
-    expect(createTimeout.value).toBe("60");
+    expect(createTimeout.value).toBe("360");
     expect([createTimeout.min, createTimeout.max, createTimeout.step]).toEqual(["0.001", "3600", "any"]);
     createTimeout.value = "45.5";
     const createMode = elements().find(element => element.name === "setting-mapMode")!;

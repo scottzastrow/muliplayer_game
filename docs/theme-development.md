@@ -342,7 +342,7 @@ For timed phases, import `Countdown` from the public SDK and create
 `remainingSeconds` for snapshots and check `expired` from the module's `step`;
 the helper does not schedule callbacks or decide gameplay outcomes. The default
 progression uses a hidden no-kill timer: `noKillTimeoutSeconds` is positive,
-finite, at most 3600 seconds, and defaults to 60 in host/API settings (including
+finite, at most 3600 seconds, and defaults to 360 in host/API settings (including
 legacy settings that omit it). Start fresh on each wave and reset only after
 a confirmed enemy kill by any player. Movement, misses, nonlethal damage,
 death/respawn and reconnect do not reset it. No countdown runs in intermission;

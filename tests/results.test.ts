@@ -55,7 +55,7 @@ describe("persistent match progression and results", () => {
     expect(MatchResultSchema.shape.settings.parse(getMatchResult(database!, matchId)?.settings).npcDetectionRange)
       .toBe(512);
     expect(MatchResultSchema.shape.settings.parse(getMatchResult(database!, matchId)?.settings).noKillTimeoutSeconds)
-      .toBe(60);
+      .toBe(360);
     expect(getMatchResult(database!, matchId)).not.toHaveProperty("completionReason");
     const legacyJson = JSON.stringify(legacySettings);
     database!.prepare("UPDATE match_results SET settings_summary_json = ? WHERE match_id = ?")

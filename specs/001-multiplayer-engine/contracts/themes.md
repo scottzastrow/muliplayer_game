@@ -209,7 +209,7 @@ legacy count label when no starting total is available; supplied counts must be
 paired and valid. No immutable package revision is repinned by this change.
 
 Dots and Squares starts a private no-kill countdown after spawning each wave,
-using `noKillTimeoutSeconds` (default 60, positive finite seconds up to 3600).
+using `noKillTimeoutSeconds` (default 360, positive finite seconds up to 3600).
 Only confirmed enemy kills, by any player, replace its monotonic deadline.
 Movement, misses, nonlethal damage, death, blocked respawn and disconnection do
 not reset it; it does not depend on accumulated simulation ticks. Clearing cancels the

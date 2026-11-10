@@ -35,7 +35,8 @@ describe("wave countdown", () => {
 
   it("defaults omitted no-kill settings and rejects invalid configured durations", () => {
     const { noKillTimeoutSeconds: _omitted, ...legacy } = DEFAULT_GAME_SETTINGS;
-    expect(GameSettingsSchema.parse(legacy).noKillTimeoutSeconds).toBe(60);
+    expect(GameSettingsSchema.parse(legacy).noKillTimeoutSeconds).toBe(360);
+    expect(DEFAULT_GAME_SETTINGS.noKillTimeoutSeconds).toBe(360);
     for (const seconds of [0, -1, Infinity, NaN, 3601, null, "60"]) {
       expect(GameSettingsSchema.safeParse({
         ...legacy, noKillTimeoutSeconds: seconds
@@ -59,7 +60,7 @@ describe("wave countdown", () => {
   });
 
   it("advances once on a clear and starts a fresh no-kill timer on the next wave", () => {
-    const simulation = createSimulation();
+    const simulation = createSimulation(1, 60);
     try {
       expect(simulation.module.state).toMatchObject({ level: 1, phase: "active" });
       simulation.now = 59_999;
@@ -104,7 +105,7 @@ describe("wave countdown", () => {
   });
 
   it("keeps the timer hidden and running through death, respawn and disconnect", () => {
-    const simulation = createSimulation();
+    const simulation = createSimulation(1, 60);
     try {
       simulation.world.addEntity({
         ...simulation.world.getEntity("player:alice")!,
@@ -135,7 +136,7 @@ describe("wave countdown", () => {
   });
 
   it("times out once at the exact deadline, even if the last NPC is cleared then", () => {
-    const simulation = createSimulation();
+    const simulation = createSimulation(1, 60);
     try {
       simulation.now = 59_999;
       simulation.module.step(0, 1);
@@ -155,7 +156,7 @@ describe("wave countdown", () => {
   });
 
   it("does not respawn a dead player when their return coincides with expiry", () => {
-    const simulation = createSimulation();
+    const simulation = createSimulation(1, 60);
     try {
       const player = simulation.world.getEntity("player:alice")!;
       simulation.world.addEntity({ ...player, state: { ...player.state, health: 0 } });
@@ -197,7 +198,7 @@ describe("wave countdown", () => {
   });
 
   it("does not reset for movement, misses or damage without a kill", () => {
-    const simulation = createSimulation(2);
+    const simulation = createSimulation(2, 60);
     try {
       simulation.now = 59_000;
       simulation.module.applyInput("alice", {
@@ -227,9 +228,34 @@ describe("wave countdown", () => {
       expect(simulation.requests).toEqual([{ kind: "match", reason: "wave-timeout" }]);
     } finally { simulation.module.dispose(); }
   });
+
+  it("keeps a default match active past three minutes and times out at six minutes", () => {
+    const simulation = createSimulation();
+    try {
+      expect(DEFAULT_GAME_SETTINGS.noKillTimeoutSeconds).toBe(360);
+      simulation.now = 180_001;
+      simulation.module.step(0, 1);
+      expect(simulation.requests).toEqual([]);
+      expect(simulation.module.state.phase).toBe("active");
+
+      simulation.now = 359_999;
+      simulation.module.step(0, 2);
+      expect(simulation.requests).toEqual([]);
+      simulation.now = 360_000;
+      simulation.module.step(0, 3);
+      expect(simulation.requests).toEqual([{ kind: "match", reason: "wave-timeout" }]);
+      expect(simulation.module.results()).toMatchObject({
+        status: "finished", finalLevel: 1, standings: [{ kills: 0 }]
+      });
+    } finally { simulation.module.dispose(); }
+  });
 });
 
-function createSimulation(initialNpcsPerPlayer = 1, noKillTimeoutSeconds = 60, multiplayer = false) {
+function createSimulation(
+  initialNpcsPerPlayer = 1,
+  noKillTimeoutSeconds = DEFAULT_GAME_SETTINGS.noKillTimeoutSeconds,
+  multiplayer = false
+) {
   let now = 0;
   const map = generateMap(42).map;
   const world = new SessionWorld<DefaultEntity>("wave-test", map.definition.bounds, map.obstacles);

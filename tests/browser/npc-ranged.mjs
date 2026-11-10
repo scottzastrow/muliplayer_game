@@ -54,7 +54,7 @@ export async function verifyNpcRanged({
   assert.equal(settings.npcDetectionRange, 512);
   assert.equal(settings.initialNpcsPerPlayer, 5);
   assert.equal(settings.baseNpcHealth, 50);
-  assert.equal(settings.noKillTimeoutSeconds, 60);
+  assert.equal(settings.noKillTimeoutSeconds, 360);
   await clickSessionButton(playerPage, creator, "Start Session");
   await cdp("Page.bringToFront", {}, playerPage.session);
   await waitFor(playerPage, "window.__probe.firstActiveSnapshot && document.querySelector('canvas')");

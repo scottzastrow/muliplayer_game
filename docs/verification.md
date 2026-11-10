@@ -818,6 +818,32 @@ No extension hooks file exists. Existing edits were retained; the deployed
 T042 remains unchecked. No AI behavior, server deployment or capacity result
 is claimed.
 
+## Hidden no-kill timeout default extension (2026-11-10)
+
+Changed only the existing `noKillTimeoutSeconds` default from 60 to 360 seconds.
+The host/API setting remains configurable and validated; explicit values remain
+unchanged. The no-kill deadline remains private to the authoritative module,
+starts fresh per wave and resets only for confirmed enemy kills.
+
+Verification:
+
+- `npm test -- tests\wave-countdown.test.ts tests\integration\wave-timeout.test.ts tests\results.test.ts tests\lobby-settings.test.ts tests\protocol.test.ts`
+  passed 5 files / 41 tests. The first run exposed one stale lobby-default
+  assertion (expected 60); updating it to 360 made the final selection pass.
+- `npm run check` passed. Browser harness syntax checks and `git diff --check`
+  passed.
+- The default module simulation remained active at 180.001 seconds and 359.999
+  seconds, then requested `wave-timeout` at exactly 360 seconds with zero kills
+  and retained final standings.
+- The default server lifecycle match remained running past three minutes and
+  persisted its timeout result at six minutes.
+- Existing focused coverage continues to verify explicit duration overrides,
+  shared confirmed-kill resets, non-kill activity, hidden player/spectator
+  snapshots and legacy settings with the omitted field.
+
+No radar investigation or browser run was included. Changes remain local; original
+T042 remains unchecked. No deployment or capacity result is claimed.
+
 ## Compact match view and separate roaming trace (2026-11-09)
 
 **Compact layout verified locally; deployed roaming report remains open.**
