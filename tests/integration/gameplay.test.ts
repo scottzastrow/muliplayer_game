@@ -49,7 +49,7 @@ describe("integrated default gameplay", () => {
     } finally {
       for (const session of sessions) session.module.dispose();
     }
-  });
+  }, 10_000);
 
   it("repeats bounded obstacle navigation deterministically and stops for clear ranged shots", () => {
     const wall: Rect = { x: 600, y: 800, width: 32, height: 400 };

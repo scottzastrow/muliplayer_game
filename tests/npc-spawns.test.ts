@@ -106,7 +106,7 @@ describe("scattered NPC wave placement", () => {
       } finally {
         first.module.dispose(); repeat.module.dispose(); other.module.dispose();
       }
-    }
+    }, 10_000
   );
 
   it("places a ten-NPC Fixed wave in the requested edge bands and across quadrants", () => {
@@ -189,7 +189,7 @@ describe("scattered NPC wave placement", () => {
           }
         } finally { simulation.module.dispose(); }
       }
-    }, 20_000
+    }, 40_000
   );
 
   it("excludes disconnected clear space and redistributes across remaining zones with bounded work", () => {

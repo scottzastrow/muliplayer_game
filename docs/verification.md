@@ -44,12 +44,19 @@ full run, including packaged external-consumer conformance, passes all 334 tests
 Before that final run, execute the NPC-spawn/gameplay selection separately
 (16 tests passing, 23.51 seconds). Representative per-test durations:
 
-| Case | Existing timeout | Separate two-file run | Final full suite |
-| --- | --- | --- | --- |
-| Fixed repeat-seed / two-wave spawn test | 5 s | 3.303 s | 3.943 s |
-| Fixed multi-seed clearance/navigation test | 20 s | 13.374 s | 14.314 s |
-| Fixed 2000-NPC ceiling | 5 s | 1.313 s | 1.491 s |
-| Five simultaneous isolated worlds | 5 s | 3.587 s | 3.760 s |
+| Case | Prior timeout | Separate two-file run | Final full suite | Current per-test timeout |
+| --- | --- | --- | --- | --- |
+| Fixed repeat-seed / two-wave spawn test | 5 s | 3.303 s | 3.943 s | 10 s (provisional) |
+| Fixed multi-seed clearance/navigation test | 20 s | 13.374 s | 14.314 s | 40 s (provisional) |
+| Fixed 2000-NPC ceiling | 5 s | 1.313 s | 1.491 s | unchanged |
+| Five simultaneous isolated worlds | 5 s | 3.587 s | **3.760 s (PASS)** | 10 s |
+
+On Lightsail, the five simultaneous isolated worlds completed in **5.591 seconds
+(PASS)** under a one-off **30-second diagnostic limit**, exceeding the original
+**5-second** limit. This diagnostic limit did not change the standard test
+timeouts. The two NPC-spawn limits above are provisional margins based on the
+Linux measurements, not cross-host guarantees. The 2000-NPC case is a synthetic
+placement-test ceiling, not a supported gameplay or capacity limit.
 
 Commands inside the Linux copy (no timeout or concurrency overrides):
 
