@@ -3,14 +3,15 @@ import {
   BoundedNavigation, SeededRandom, SessionWorld
 } from "@multiplayer-game/engine";
 import {
-  defaultModuleFactory, generateMap, type DefaultEntity
+  defaultModuleFactory, generateMap, MAX_NPC_PATH_REQUESTS_PER_TICK,
+  NPC_EXPLORE_PAUSE_TICKS, NPC_EXPLORE_SPEED_FACTOR, type DefaultEntity
 } from "@multiplayer-game/default-theme";
 import type {
   ModuleContext, NavigationPathResult, Point2
 } from "@multiplayer-game/theme-sdk";
 
-function simulation(players = 1, npcMovementSpeed = 67.5, fixed = false) {
-  const map = generateMap(42, "fixed").map;
+function simulation(players = 1, npcMovementSpeed = 67.5, fixed = false, seed = 42) {
+  const map = generateMap(seed, "fixed").map;
   const world = new SessionWorld<DefaultEntity>(
     "engagement", map.definition.bounds, fixed ? map.obstacles : []
   );
@@ -18,7 +19,7 @@ function simulation(players = 1, npcMovementSpeed = 67.5, fixed = false) {
   const results = new Map<string, NavigationPathResult>();
   const context: ModuleContext<DefaultEntity> = {
     clock: { nowMs: () => 0 },
-    random: new SeededRandom(42),
+    random: new SeededRandom(seed),
     entities: {
       get: id => world.getEntity(id),
       add: entity => world.addEntity(entity),
@@ -59,7 +60,7 @@ function simulation(players = 1, npcMovementSpeed = 67.5, fixed = false) {
   }));
   const module = defaultModuleFactory.create(context, {
     mapMode: "fixed", npcMovementSpeed
-  }, roster, 42);
+  }, roster, seed);
   module.initialize();
   const npcs = () => world.entities().filter(entity => entity.state.kind === "npc");
   const place = (id: string, position: Point2) =>
@@ -90,6 +91,120 @@ function simulation(players = 1, npcMovementSpeed = 67.5, fixed = false) {
 }
 
 describe("NPC wave-start roaming and per-player engagement", () => {
+  it.each([
+    { seed: 42, speed: 67.5 }, { seed: 12, speed: 67.5 }, { seed: 12, speed: 0 }
+  ])("sustains Fixed roaming for 15 seconds at seed $seed / speed $speed", ({ seed, speed }) => {
+    const s = simulation(1, speed, true, seed);
+    const playerPosition = s.world.getEntity("player:p0")!.position;
+    const travel = new Map(s.npcs().map(npc => [npc.id, [0, 0, 0]]));
+    const outsideThroughout = new Set(travel.keys());
+    const requestsByNpc = new Map<string, number>();
+    const requestPath = s.context.navigation.requestPath;
+    const requests = vi.spyOn(s.context.navigation, "requestPath").mockImplementation((from, to) => {
+      const npc = s.npcs().find(npc =>
+        npc.position.x === from.x && npc.position.y === from.y);
+      if (!npc) throw new Error("Navigation request must originate at a current NPC position.");
+      const requestId = requestPath(from, to);
+      if (requestId) requestsByNpc.set(npc.id, (requestsByNpc.get(npc.id) ?? 0) + 1);
+      return requestId;
+    });
+    try {
+      for (let tick = 1; tick <= 450; tick++) {
+        const amounts = s.step(tick);
+        expect(s.module.state.players).toContainEqual(expect.objectContaining({
+          accountId: "p0", position: playerPosition
+        }));
+        for (const npc of s.npcs()) {
+          if (Math.hypot(npc.position.x - playerPosition.x,
+            npc.position.y - playerPosition.y) <= 512) outsideThroughout.delete(npc.id);
+          travel.get(npc.id)![Math.floor((tick - 1) / 150)]! += amounts.get(npc.id)!;
+          expect(s.world.geometry.isCircleWalkable(npc.position, npc.radius)).toBe(true);
+        }
+      }
+      expect(outsideThroughout.size).toBeGreaterThanOrEqual(6);
+      for (const id of outsideThroughout) {
+        for (const amount of travel.get(id)!) {
+          if (speed === 0) expect(amount).toBe(0);
+          else expect(amount, `${id} must move in each five-second window`).toBeGreaterThan(10);
+        }
+        if (speed > 0) expect(requestsByNpc.get(id)).toBeGreaterThanOrEqual(1);
+      }
+      if (speed === 0) expect(requests).not.toHaveBeenCalled();
+    } finally { s.module.dispose(); }
+  });
+
+  it("explores every non-pursuing NPC for 30 seconds with four in range of an idle player", () => {
+    const s = simulation(1, 67.5, true);
+    const fullStep = 67.5 / 30;
+    const playerId = "player:p0";
+    const center = s.world.getEntity(playerId)!.position;
+    const staged = s.npcs().map(npc => npc.id).sort().slice(0, 4);
+    const stagedAt = new Map<string, Point2>();
+    for (const [index, id] of staged.entries()) {
+      const reach = 120 + index * 80;
+      for (let turn = 0; turn < 64 && !stagedAt.has(id); turn += 1) {
+        const angle = index * Math.PI / 2 + turn * Math.PI / 32;
+        const point = { x: center.x + Math.cos(angle) * reach, y: center.y + Math.sin(angle) * reach };
+        if (s.world.geometry.isCircleWalkable(point, 8)) stagedAt.set(id, point);
+      }
+      s.place(id, stagedAt.get(id)!);
+    }
+    const closestTwo = [...staged].sort((a, b) =>
+      Math.hypot(stagedAt.get(a)!.x - center.x, stagedAt.get(a)!.y - center.y) -
+      Math.hypot(stagedAt.get(b)!.x - center.x, stagedAt.get(b)!.y - center.y)).slice(0, 2);
+    const starts = new Map(s.npcs().map(npc => [npc.id, npc.position]));
+    const report = new Map(s.npcs().map(npc => [npc.id, {
+      inRangeAtStart: staged.includes(npc.id), pursuedTicks: 0, distance: 0,
+      windows: [0, 0, 0, 0, 0, 0], stationary: 0, longestStationaryTicks: 0, farthest: 0
+    }]));
+    try {
+      for (let tick = 1; tick <= 900; tick += 1) {
+        // Hold the idle player alive so both pursuit slots stay occupied for the whole run.
+        s.context.entities.update(playerId, player => player.state.kind === "player"
+          ? { ...player, state: { ...player.state, health: 100 } } : player);
+        const travel = s.step(tick);
+        expect(s.world.getEntity(playerId)!.position).toEqual(center);
+        for (const npc of s.npcs()) {
+          const row = report.get(npc.id)!;
+          const amount = travel.get(npc.id)!;
+          const atPlayer = Math.hypot(npc.position.x - center.x, npc.position.y - center.y) <= 22;
+          if (Math.abs(amount - fullStep) < 1e-6 || (amount === 0 && atPlayer)) {
+            row.pursuedTicks += 1;
+            continue;
+          }
+          row.distance += amount;
+          row.windows[Math.floor((tick - 1) / 150)]! += amount;
+          row.stationary = amount > 0 ? 0 : row.stationary + 1;
+          row.longestStationaryTicks = Math.max(row.longestStationaryTicks, row.stationary);
+          const start = starts.get(npc.id)!;
+          row.farthest = Math.max(row.farthest,
+            Math.hypot(npc.position.x - start.x, npc.position.y - start.y));
+          expect(s.world.geometry.isCircleWalkable(npc.position, npc.radius)).toBe(true);
+        }
+      }
+      console.table([...report].map(([id, row]) => ({
+        id, inRangeAtStart: row.inRangeAtStart, pursuedTicks: row.pursuedTicks,
+        distance: Number(row.distance.toFixed(2)),
+        longestStationarySeconds: Number((row.longestStationaryTicks / 30).toFixed(3)),
+        farthestFromStart: Number(row.farthest.toFixed(2))
+      })));
+      for (const [id, row] of report) {
+        if (closestTwo.includes(id)) {
+          // One partial closing step reaches contact range; every other tick is pursuit.
+          expect(row.pursuedTicks, `${id} holds a pursuit slot`).toBeGreaterThanOrEqual(899);
+          continue;
+        }
+        expect(row.pursuedTicks, `${id} has no pursuit slot`).toBe(0);
+        expect(row.distance).toBeGreaterThan(0.75 * 900 * fullStep * NPC_EXPLORE_SPEED_FACTOR);
+        expect(row.longestStationaryTicks).toBeLessThanOrEqual(2 * NPC_EXPLORE_PAUSE_TICKS);
+        expect(row.farthest, `${id} explores away from its start`).toBeGreaterThan(256);
+        for (const window of row.windows) {
+          expect(window, `${id} moves in every five-second window`).toBeGreaterThan(100);
+        }
+      }
+    } finally { s.module.dispose(); }
+  });
+
   it.each([67.5, 0])("starts both Fixed waves outside detection at speed %s", speed => {
     const s = simulation(1, speed, true);
     try {
@@ -109,9 +224,11 @@ describe("NPC wave-start roaming and per-player engagement", () => {
         const travel = s.step(start);
         expect(travel.size).toBe(wave === 1 ? 10 : 12);
         for (const amount of travel.values()) {
-          expect(amount).toBeCloseTo(speed * 0.25 / 30, 8);
+          expect(amount).toBeCloseTo(speed * NPC_EXPLORE_SPEED_FACTOR / 30, 8);
         }
-        expect(s.navigation.outstandingRequests).toBe(0);
+        // Explore requests a path toward each new goal, within the shared per-tick budget.
+        expect(s.navigation.outstandingRequests)
+          .toBeLessThanOrEqual(speed === 0 ? 0 : MAX_NPC_PATH_REQUESTS_PER_TICK);
         for (const npc of s.npcs()) {
           expect(s.world.geometry.isCircleWalkable(npc.position, npc.radius)).toBe(true);
         }

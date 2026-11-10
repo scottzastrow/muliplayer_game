@@ -24,10 +24,13 @@ import {
   MAX_NPC_PATH_REQUESTS_PER_TICK,
   MAX_PENDING_NPC_PATHS,
   MAX_ATTRACTION_QUERY_CELLS,
-  NPC_WANDER_SPEED_FACTOR,
-  NPC_WANDER_RADIUS,
-  NPC_WANDER_PAUSE_TICKS,
-  MAX_NPC_WANDER_CANDIDATES
+  NPC_EXPLORE_SPEED_FACTOR,
+  NPC_EXPLORE_MIN_DISTANCE,
+  NPC_EXPLORE_MAX_DISTANCE,
+  NPC_EXPLORE_REGION_SIZE,
+  NPC_EXPLORE_PAUSE_TICKS,
+  NPC_EXPLORE_STUCK_TICKS,
+  MAX_NPC_EXPLORE_CANDIDATES
 } from "./tuning.js";
 import type { DefaultPlayerAction } from "./actions.js";
 import type {
@@ -61,6 +64,19 @@ interface NpcNavigationState {
   path?: readonly Point2[];
   nextPathPoint: number;
   lastRequestTick: number;
+  /** Explore is the default state whenever no pursuit slot is assigned. */
+  readonly home: Point2;
+  readonly visitedAt: Map<number, number>;
+  exploreGoal?: Point2;
+  bestGoalDistance: number;
+  progressTick: number;
+}
+
+function newNavigation(home: Point2): NpcNavigationState {
+  return {
+    nextPathPoint: 0, lastRequestTick: -Infinity, goalVersion: 0,
+    home, visitedAt: new Map(), bestGoalDistance: Infinity, progressTick: 0
+  };
 }
 
 const EMPTY_MOVEMENT = Object.freeze({ x: 0, y: 0 });
@@ -294,7 +310,7 @@ export class DefaultEntitySimulator {
         radius: 8,
         state
       });
-      this.#npcNavigation.set(id, { nextPathPoint: 0, lastRequestTick: -Infinity, goalVersion: 0 });
+      this.#npcNavigation.set(id, newNavigation(position));
     }
   }
 
@@ -330,7 +346,7 @@ export class DefaultEntitySimulator {
     for (const npc of npcs) {
       let navigation = this.#npcNavigation.get(npc.id);
       if (!navigation) {
-        navigation = { nextPathPoint: 0, lastRequestTick: -Infinity, goalVersion: 0 };
+        navigation = newNavigation(npc.position);
         this.#npcNavigation.set(npc.id, navigation);
       }
       const target = targets.get(npc.id);
@@ -339,6 +355,7 @@ export class DefaultEntitySimulator {
         navigation.goalVersion += 1;
         delete navigation.path;
         delete navigation.pauseUntilTick;
+        delete navigation.exploreGoal;
         navigation.nextPathPoint = 0;
         navigation.lastRequestTick = -Infinity;
         if (target) navigation.targetId = target.id;
@@ -346,7 +363,7 @@ export class DefaultEntitySimulator {
       }
       if (this.#pollPath(navigation, tick)) pendingPaths -= 1;
       if (!target || target.state.kind !== "player") {
-        if (this.#wander(npc, navigation, dtSeconds, tick, pathRequests, pendingPaths)) {
+        if (this.#explore(npc, navigation, dtSeconds, tick, pathRequests, pendingPaths)) {
           pathRequests += 1;
           pendingPaths += 1;
         }
@@ -430,7 +447,7 @@ export class DefaultEntitySimulator {
     return targets;
   }
 
-  #wander(
+  #explore(
     npc: DefaultEntity,
     navigation: NpcNavigationState,
     dtSeconds: number,
@@ -438,76 +455,156 @@ export class DefaultEntitySimulator {
     pathRequests: number,
     pendingPaths: number
   ): boolean {
-    if (this.npcMovementSpeed === 0 || dtSeconds === 0 ||
-      tick < (navigation.pauseUntilTick ?? 0)) return false;
+    if (this.npcMovementSpeed === 0 || dtSeconds === 0) return false;
+    this.#markVisited(navigation, npc.position, tick);
+    if (tick < (navigation.pauseUntilTick ?? 0)) return false;
 
-    if (!navigation.path && !navigation.requestId && navigation.lastRequestTick === -Infinity) {
-      // Start with a collision-checked adjacent leg, without waiting for the path queue.
-      const directions = [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 0, y: -1 }];
-      const first = Math.floor(this.context.random.next() * directions.length);
-      for (let index = 0; index < directions.length; index += 1) {
-        const direction = directions[(first + index) % directions.length]!;
-        const destination = {
-          x: (Math.floor(npc.position.x / MAP_CELL_SIZE) + 0.5 + direction.x) * MAP_CELL_SIZE,
-          y: (Math.floor(npc.position.y / MAP_CELL_SIZE) + 0.5 + direction.y) * MAP_CELL_SIZE
-        };
-        if (!isWalkable(this.context, destination, npc.radius)) continue;
-        const moved = this.context.geometry.moveCircle(npc.position, {
-          x: destination.x - npc.position.x, y: destination.y - npc.position.y
-        }, npc.radius);
-        if (distance(moved, destination) > 1e-6) continue;
-        navigation.path = [npc.position, destination];
-        navigation.nextPathPoint = 1;
-        navigation.lastRequestTick = tick;
-        break;
-      }
-    }
-
-    const pathPoint = navigation.path?.[navigation.nextPathPoint];
-    if (pathPoint) {
-      const delta = normalizedDelta(
-        npc.position, pathPoint, this.npcMovementSpeed * NPC_WANDER_SPEED_FACTOR * dtSeconds
-      );
-      const moved = this.context.geometry.moveCircle(npc.position, delta, npc.radius);
-      this.context.entities.update(npc.id, current => ({ ...current, position: moved }));
-      if (distance(moved, pathPoint) < 1e-6) {
-        navigation.nextPathPoint += 1;
-        if (navigation.nextPathPoint === navigation.path!.length) {
-          delete navigation.path;
-          navigation.pauseUntilTick = tick + NPC_WANDER_PAUSE_TICKS +
-            Math.floor(this.context.random.next() * (NPC_WANDER_PAUSE_TICKS + 1));
-        }
-      }
-      return false;
-    }
-    if (navigation.requestId || pathRequests >= MAX_NPC_PATH_REQUESTS_PER_TICK ||
-      pendingPaths >= MAX_PENDING_NPC_PATHS ||
-      tick - navigation.lastRequestTick < NPC_REPATH_INTERVAL_TICKS) return false;
-
-    for (let attempt = 0; attempt < MAX_NPC_WANDER_CANDIDATES; attempt += 1) {
-      const destination = {
-        x: (Math.floor(npc.position.x / MAP_CELL_SIZE) +
-          Math.floor(this.context.random.next() * 7) - 3 + 0.5) * MAP_CELL_SIZE,
-        y: (Math.floor(npc.position.y / MAP_CELL_SIZE) +
-          Math.floor(this.context.random.next() * 7) - 3 + 0.5) * MAP_CELL_SIZE
-      };
-      const separation = distance(npc.position, destination);
-      if (separation < MAP_CELL_SIZE || separation > NPC_WANDER_RADIUS ||
-        !isWalkable(this.context, destination, npc.radius)) continue;
-      const requestId = this.context.navigation.requestPath(npc.position, destination);
-      navigation.lastRequestTick = tick;
-      if (!requestId) {
-        this.context.metrics.increment("default.npc_wander.request_rejected");
+    if (!navigation.exploreGoal) {
+      const goal = this.#chooseExploreGoal(npc, navigation, tick);
+      if (!goal) {
+        this.context.metrics.increment("default.npc_explore.no_destination");
+        navigation.pauseUntilTick = tick + NPC_EXPLORE_PAUSE_TICKS;
         return false;
       }
-      navigation.requestId = requestId;
+      navigation.exploreGoal = goal;
       navigation.goalVersion += 1;
-      navigation.requestVersion = navigation.goalVersion;
-      return true;
+      delete navigation.path;
+      navigation.nextPathPoint = 0;
+      navigation.bestGoalDistance = distance(npc.position, goal);
+      navigation.progressTick = tick;
     }
-    this.context.metrics.increment("default.npc_wander.no_destination");
-    navigation.pauseUntilTick = tick + NPC_WANDER_PAUSE_TICKS;
-    return false;
+    const goal = navigation.exploreGoal;
+
+    let requested = false;
+    if (!navigation.path && !navigation.requestId &&
+      pathRequests < MAX_NPC_PATH_REQUESTS_PER_TICK && pendingPaths < MAX_PENDING_NPC_PATHS &&
+      tick - navigation.lastRequestTick >= NPC_REPATH_INTERVAL_TICKS) {
+      const requestId = this.context.navigation.requestPath(npc.position, goal);
+      navigation.lastRequestTick = tick;
+      if (requestId) {
+        navigation.requestId = requestId;
+        navigation.requestVersion = navigation.goalVersion;
+        requested = true;
+      } else {
+        this.context.metrics.increment("default.npc_explore.request_rejected");
+      }
+    }
+
+    const step = this.npcMovementSpeed * NPC_EXPLORE_SPEED_FACTOR * dtSeconds;
+    let position = npc.position;
+    let arrived = false;
+    let progressed = false;
+    if (navigation.path) {
+      // Carry leftover distance through waypoints so explore speed stays constant.
+      let remaining = step;
+      for (let legs = 0; legs < 4 && remaining > 1e-9; legs += 1) {
+        const point = navigation.path[navigation.nextPathPoint];
+        if (!point) break;
+        const moved = this.context.geometry.moveCircle(
+          position, normalizedDelta(position, point, remaining), npc.radius
+        );
+        remaining -= distance(position, moved);
+        position = moved;
+        if (distance(moved, point) >= 1e-6) break;
+        navigation.nextPathPoint += 1;
+      }
+      arrived = navigation.nextPathPoint >= navigation.path.length;
+      progressed = distance(npc.position, position) >= step * 0.25;
+    } else {
+      // Steer toward the goal until its path arrives so movement starts immediately.
+      position = this.#steer(npc.position, goal, step, npc.radius);
+      arrived = distance(position, goal) < 1e-6;
+      const remaining = distance(position, goal);
+      progressed = remaining < navigation.bestGoalDistance - 1e-3;
+      if (progressed) navigation.bestGoalDistance = remaining;
+    }
+    if (position !== npc.position) {
+      this.context.entities.update(npc.id, current => ({ ...current, position }));
+    }
+    if (progressed) navigation.progressTick = tick;
+
+    if (arrived) {
+      this.#clearExploreGoal(navigation);
+      navigation.pauseUntilTick = tick + NPC_EXPLORE_PAUSE_TICKS +
+        Math.floor(this.context.random.next() * (NPC_EXPLORE_PAUSE_TICKS + 1));
+    } else if (tick - navigation.progressTick > NPC_EXPLORE_STUCK_TICKS) {
+      this.context.metrics.increment("default.npc_explore.stuck");
+      this.#clearExploreGoal(navigation);
+    }
+    return requested;
+  }
+
+  #clearExploreGoal(navigation: NpcNavigationState): void {
+    delete navigation.exploreGoal;
+    delete navigation.path;
+    navigation.nextPathPoint = 0;
+    // Any in-flight request for the abandoned goal is drained but never followed.
+    navigation.goalVersion += 1;
+  }
+
+  #steer(from: Point2, goal: Point2, step: number, radius: number): Point2 {
+    const wanted = Math.min(step, distance(from, goal));
+    const direct = this.context.geometry.moveCircle(
+      from, normalizedDelta(from, goal, step), radius
+    );
+    if (distance(from, direct) >= wanted - 1e-6) return direct;
+    const toward = { x: goal.x - from.x, y: goal.y - from.y };
+    const axes = [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 0, y: -1 }]
+      .sort((a, b) => (b.x * toward.x + b.y * toward.y) - (a.x * toward.x + a.y * toward.y));
+    let best = direct;
+    for (const axis of axes) {
+      const moved = this.context.geometry.moveCircle(
+        from, { x: axis.x * step, y: axis.y * step }, radius
+      );
+      if (distance(from, moved) >= step - 1e-6) return moved;
+      if (distance(from, moved) > distance(from, best)) best = moved;
+    }
+    return best;
+  }
+
+  #chooseExploreGoal(
+    npc: DefaultEntity,
+    navigation: NpcNavigationState,
+    tick: number
+  ): Point2 | undefined {
+    const bounds = this.#map!.definition.bounds;
+    const columns = Math.floor(bounds.width / MAP_CELL_SIZE);
+    const rows = Math.floor(bounds.height / MAP_CELL_SIZE);
+    let best: Point2 | undefined;
+    let bestNovelty = -Infinity;
+    let bestAway = -Infinity;
+    for (let attempt = 0; attempt < MAX_NPC_EXPLORE_CANDIDATES; attempt += 1) {
+      const angle = this.context.random.next() * Math.PI * 2;
+      const reach = NPC_EXPLORE_MIN_DISTANCE +
+        this.context.random.next() * (NPC_EXPLORE_MAX_DISTANCE - NPC_EXPLORE_MIN_DISTANCE);
+      const column = clamp(Math.floor((npc.position.x + Math.cos(angle) * reach) / MAP_CELL_SIZE),
+        0, columns - 1);
+      const row = clamp(Math.floor((npc.position.y + Math.sin(angle) * reach) / MAP_CELL_SIZE),
+        0, rows - 1);
+      const candidate = { x: (column + 0.5) * MAP_CELL_SIZE, y: (row + 0.5) * MAP_CELL_SIZE };
+      if (distance(npc.position, candidate) < NPC_EXPLORE_MIN_DISTANCE / 2 ||
+        !isWalkable(this.context, candidate, npc.radius)) continue;
+      const lastVisit = navigation.visitedAt.get(this.#regionOf(candidate));
+      // Unvisited regions win, then the least recently visited, then distance from spawn.
+      const novelty = lastVisit === undefined ? Infinity : tick - lastVisit;
+      const away = distance(navigation.home, candidate);
+      if (novelty > bestNovelty || (novelty === bestNovelty && away > bestAway)) {
+        best = candidate;
+        bestNovelty = novelty;
+        bestAway = away;
+      }
+    }
+    return best;
+  }
+
+  #markVisited(navigation: NpcNavigationState, position: Point2, tick: number): void {
+    navigation.visitedAt.set(this.#regionOf(position), tick);
+  }
+
+  #regionOf(position: Point2): number {
+    const columns = Math.ceil(this.#map!.definition.bounds.width / NPC_EXPLORE_REGION_SIZE);
+    return Math.floor(position.y / NPC_EXPLORE_REGION_SIZE) * columns +
+      Math.floor(position.x / NPC_EXPLORE_REGION_SIZE);
   }
 
   #pollPath(navigation: NpcNavigationState, tick: number): boolean {
@@ -526,12 +623,14 @@ export class DefaultEntitySimulator {
     if (result.status === "found" && result.path.length > 1) {
       navigation.path = result.path;
       navigation.nextPathPoint = 1;
+      navigation.progressTick = tick;
     } else {
       delete navigation.path;
       navigation.nextPathPoint = 0;
       if (!navigation.targetId) {
-        navigation.pauseUntilTick = tick + NPC_REPATH_INTERVAL_TICKS;
-        this.context.metrics.increment(`default.npc_wander.${result.status}`);
+        // Pick another destination at once; the request interval still bounds retries.
+        this.context.metrics.increment(`default.npc_explore.${result.status}`);
+        this.#clearExploreGoal(navigation);
       }
     }
     return true;
@@ -612,6 +711,10 @@ function isWalkable(
     context.geometry.isWalkable(position.x, position.y, radius) &&
     !context.geometry.intersectsObstacle(position.x, position.y, radius)
   );
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function compareIds(left: string, right: string): number {

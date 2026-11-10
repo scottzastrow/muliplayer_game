@@ -4,6 +4,7 @@ import type { ModuleContext, NavigationPathResult, Point2 } from "@multiplayer-g
 import {
   defaultModuleFactory,
   generateMap,
+  NPC_EXPLORE_SPEED_FACTOR,
   PROJECTILE_RADIUS,
   type DefaultEntity
 } from "@multiplayer-game/default-theme";
@@ -80,7 +81,13 @@ describe("integrated default gameplay", () => {
       const distant = a.world.getEntity("npc:npc-southwest")!.position;
       expect(distant).not.toEqual(distantStart);
       expect(distant).toEqual(b.world.getEntity("npc:npc-southwest")!.position);
-      expect(Math.hypot(distant.x - distantStart.x, distant.y - distantStart.y)).toBeLessThan(135);
+      // Undetected NPCs explore at half speed instead of pursuing: displacement fits that budget
+      // and the NPC remains outside both players' detection range.
+      expect(Math.hypot(distant.x - distantStart.x, distant.y - distantStart.y))
+        .toBeLessThanOrEqual(240 * 67.5 / 30 * NPC_EXPLORE_SPEED_FACTOR + 1e-6);
+      for (const player of [{ x: 700, y: 1000 }, { x: 1776, y: 1776 }]) {
+        expect(Math.hypot(distant.x - player.x, distant.y - player.y)).toBeGreaterThan(512);
+      }
     } finally {
       a.module.dispose();
       b.module.dispose();

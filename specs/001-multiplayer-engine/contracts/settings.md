@@ -105,12 +105,15 @@ Omitted fields in older requests, rooms and saved-result settings resolve to 512
 without a migration; invalid explicit values are rejected. The value freezes on
 start and other themes decide how to interpret it.
 
-Outside that radius, Dots and Squares wanders at 25% of `npcMovementSpeed`,
-choosing seeded clear cell centers within 128 units and following only found
-navigation paths. It pauses 30-60 fixed ticks between moves. All candidates and
-requests remain bounded by existing navigation limits; stale goals are discarded
-when entering pursuit or returning to wandering. Detection range 0 skips player
-acquisition entirely but permits wandering; movement speed 0 disables both modes'
+Dots and Squares NPCs default to Explore at 50% of `npcMovementSpeed` from the
+first wave update, choosing seeded clear cell centers 192-512 units away that
+prefer unvisited 256-unit regions, and pausing 6-12 fixed ticks on arrival.
+Detection makes an NPC eligible; only holders of a player's two pursuit slots
+chase or deal contact damage, and others keep exploring inside the radius.
+All candidates and requests remain bounded by existing navigation limits; failed,
+rejected or stalled destinations are replaced rather than left idle, and stale
+goals are discarded when entering or leaving pursuit. Detection range 0 skips player
+acquisition entirely but permits exploration; movement speed 0 disables both modes'
 travel without changing in-range contact damage. No new lobby setting is added.
 
 Provisional Dots and Squares wave tuning is 120 seconds plus 6 seconds per NPC

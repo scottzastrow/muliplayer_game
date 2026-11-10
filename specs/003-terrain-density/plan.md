@@ -83,3 +83,14 @@ and carry an optional completion reason through existing finalization/storage
 to saved results (additive nullable SQLite column, legacy results unchanged).
 Exercise authority, resets, boundaries, non-kill activity, both standings views
 and compact layout without altering entity AI.
+
+T012 replaces local quarter-speed wandering in `themes/default/src/module/entities.ts`
+with a per-NPC Explore state (tuning in `tuning.ts`): half configured speed,
+seeded 192-512 unit cell-center goals preferring unvisited 256-unit regions,
+direct steering until a path arrives, 6-12 tick arrival pauses and goal
+replacement on no-path/limit or 30 ticks without progress, all within the
+existing request/pending/search budgets. Slot assignment and contact damage stay
+in the unchanged sticky two-per-player pursuit branch. No
+protocol/SDK/engine changes. Verify per-NPC deterministic 30-second traces with
+four NPCs in range, a local browser run; the
+deployed release still needs its own browser verification.

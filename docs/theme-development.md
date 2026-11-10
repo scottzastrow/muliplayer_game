@@ -339,36 +339,37 @@ targets only within this radius and still uses bounded spatial queries. Zero dis
 automatic pursuit. The host exposes it on create/edit; values lock on start, and the
 additive v1 schema supplies 512 for older rooms/results that omit it.
 
-NPCs without an engagement slot wander locally at one quarter of their configured
-speed, including when all players are outside detection range. At each wave's
-first simulation step, a seeded, collision-checked adjacent cell starts their
-first leg immediately (at most four direction checks, no queued path wait).
-The same bootstrap applies when losing a target. Subsequent legs use the
-session's seeded RNG to choose clear cell-center destinations within
-128 units and the navigation service to find a reachable path, with pauses of
-30-60 ticks (1-2 seconds) between legs. Candidate selection is capped at
-8 attempts; wandering and pursuit share the existing 8 requests/tick, 64 pending
-requests and engine search/node budgets. Unreachable/limited paths and rejected
-requests report `default.npc_wander.*` metrics and retry with bounded delay.
+Explore is the default state of every mobile NPC on every wave. NPCs without an
+engagement slot explore at half their configured speed (33.75 world units/second
+at the default), including inside detection range. On each wave's first
+simulation step every NPC picks a destination and starts moving immediately,
+steering directly toward it (with collision-checked axis fallbacks) until its
+navigation path arrives. Destinations use the session's seeded RNG to sample at
+most 8 clear cell centers 192-512 units away, preferring 256-unit regions the NPC
+has never visited, then least recently visited, then farthest from its spawn.
+On arrival it pauses 6-12 ticks (0.2-0.4 seconds) and chooses another. Exploring
+and pursuit share the existing 8 requests/tick, 64 pending requests and engine
+search/node budgets. Rejected requests retry on the 15-tick repath interval while
+the NPC keeps steering; unreachable/limited paths and 30 ticks without progress
+replace the destination. These report `default.npc_explore.*` metrics.
 Each living player has **two sticky pursuit/contact slots**. Existing in-range
 engagements retain their slots, even if another NPC or player becomes closer.
 Unassigned NPC/player pairs are admitted by distance (stable ID tie-breaks), with
 at most one target per NPC and two attackers independently per player. Death,
 removal or loss of detection range frees a slot for the next eligible NPC on the
-next simulation step. Denied NPCs keep wandering and cannot damage that player,
-even on contact. Losing a target discards pursuit waypoints. Pending stale
-results are drained but never followed. Detection range 0 allows wandering but
+next simulation step. Denied NPCs keep exploring and cannot damage that player,
+even on contact. Losing a target discards pursuit waypoints and resumes
+exploration on the same step. Pending stale
+results are drained but never followed. Detection range 0 allows exploration but
 never acquires a player, including at the exact same position. Speed 0 remains
 stationary in either mode and preserves in-range contact damage.
 
-At the default speed, roaming is 16.875 world units/second; distant radar markers
-are clamped to the radar rim, so their small angular changes can look stationary.
-The normal follow-camera also hides offscreen NPC bodies. For a local browser
-check, run `node tests\browser\default-game.mjs --npc-roaming` with the existing
-loopback Chrome setup, a disposable `BROWSER_TEST_DATABASE_PATH`, and
-`BROWSER_TEST_ARTIFACT_DIR`. It selects Fixed seed 42 without changing gameplay
-defaults or staging entities, enlarges the viewport to expose distant NPCs, checks
-snapshot movement and actual world-square draws/pixels, and captures screenshots.
+Distant radar markers are clamped to the radar rim, so their angular changes can
+look small, and the normal follow-camera hides offscreen NPC bodies. For a local browser check, run
+`node tests\browser\default-game.mjs --npc-roaming` with the existing loopback
+Chrome setup, a disposable `BROWSER_TEST_DATABASE_PATH`, and
+`BROWSER_TEST_ARTIFACT_DIR` (optionally `BROWSER_TEST_SEED`). The combined Explore/focus browser evidence is recorded in docs/verification.md;
+the browser reached at most three NPCs in range, not four.
 This is not evidence that a deployed process has rebuilt/reloaded local changes.
 
 Dots and Squares defaults level-1 NPCs to **50 HP**: two standard, unboosted
@@ -546,7 +547,7 @@ does not reduce the frozen wave count. Each NPC has radius 8; player centers are
 at least 38 units away (14 + 8 + 16 margin). One NPC per 32-unit cell center keeps
 NPC centers at least 32 units apart. Radius-14 eligible cells also clear solid
 terrain for the smaller NPC. Reachability is not restricted by detection radius;
-distant NPCs now wander locally until a player approaches.
+distant NPCs explore the arena from the first update until they hold a pursuit slot.
 
 **Bounded fallback:** empty/exhausted zones are skipped and remaining reachable
 clear zones supply the full requested count. `default.npc_spawn.zone_fallback`

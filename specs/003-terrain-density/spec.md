@@ -159,3 +159,26 @@ remaining time in player/spectator snapshots or HUDs. Expiry uses the existing
 countdown, compact layout, Score/Health and both roles' standings. Keep the
 public SDK fixed-deadline Countdown available for other themes; do not change
 NPC behavior, close the deployed roaming report or mark T042 complete.
+
+### Explore follow-up
+
+On live release `4b7371c` one enemy approached while the others appeared
+stationary; treat it as an unresolved playtest failure. Explore is the default
+state of every mobile Dots and Squares NPC on every wave. On spawn each NPC
+receives a reachable destination away from its spawn point and moves on the first
+simulation update, choosing new destinations as it explores and preferring new
+areas over small movements around spawn (confirmed: half configured speed, short
+pauses). Blocked, rejected or unavailable paths retry within the existing
+navigation budget instead of leaving the NPC idle. Explicit speed 0 remains
+stationary.
+
+Detection makes an NPC eligible for pursuit. Only an NPC holding one of the two
+existing pursuit slots may interrupt exploration to chase or deal contact damage
+to that player; others keep exploring inside detection range. Exploration resumes
+immediately when pursuit ends.
+
+Verify per NPC: in a default Fixed match keep the player idle and report, for 30
+seconds, each non-pursuing NPC's distance and longest stationary interval, with
+four NPCs in range and the two without slots still moving. Roaming is resolved
+only after a normal browser match on the deployed release. Keep T042 open and
+report results before pushing or deploying.

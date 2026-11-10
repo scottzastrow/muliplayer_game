@@ -71,6 +71,45 @@ five-second windows (51.69/74.88/74.69 world units), world-painted in 233/233
 samples. This does not close the deployed report. No AI code was changed.
 Original T042 is unchanged; no push or deployment was performed.
 
+## Explore default and match focus follow-up (2026-11-09)
+
+- [ ] T012 Make Explore the default state of every mobile Dots and Squares NPC
+  on every wave (half configured speed, seeded reachable novelty destinations,
+  first-update movement, bounded retries, short pauses; speed 0 stationary).
+  Only holders of the two existing pursuit slots chase or deal contact damage;
+  others keep exploring in range; exploration resumes immediately after pursuit.
+  Focus the game surface once on match entry/rejoin with normal Tab afterward.
+  Verify per-NPC 30-second idle traces with four NPCs in range and no-click
+  keyboard movement locally. The owner now authorizes separate scoped Explore
+  and focus commits and a non-force push; no live-release switch.
+- [ ] T013 Verify Explore roaming in a normal browser match on the deployed
+  release after an authorized deployment; until then the `4b7371c` playtest
+  failure (and T010) stays unresolved. Keep T042 open.
+
+T012 evidence (local only; see docs/verification.md): the deterministic
+30-second default Fixed seed-42 trace with four staged NPCs in range of an idle
+player kept the two closest in pursuit for 899/900 ticks and every other NPC
+exploring 978.24-1002.57 units with a longest stationary interval of
+0.233-0.367 s, including the two in-range NPCs without slots (978.24 and
+991.56 units). The saved local Chrome 157 report (Fixed seed 42), from the combined
+Explore/focus worktree, has a 30-second idle trace that showed all eight non-pursuing NPCs exploring 1001.30-1015.21 units with
+longest stationary intervals of 0.133-0.333 s. The browser saw at most three
+NPCs in range at once, so its four-in-range condition is not browser-verified.
+No deployed-release run was possible from this environment.
+
+Commit-review evidence: build and workspace check passed; the final full suite
+has 298 passing / 2 failing tests (50 passing / 2 failing files). Both failures
+were reproduced from an isolated archive of HEAD
+`4b7371c6a6b4a3f7e3606a9c1328a6be43d0fe35`: the stale migration-list expectation
+and the invalid-movement mock preventing NPC spawn selection. Exact errors and
+the browser's three-in-range limit are recorded in `docs/verification.md`.
+T010, T013 and original T042 stay open. Ranged combat is not authorized until
+the owner confirms sustained exploration after deployment in a normal live
+match; its eventual implementation must remain local for review.
+
+T012 is partially committed: Explore is included; the keyboard-focus slice and
+its browser harness remain for the separate next commit.
+
 ## Evidence
 
 Checklist: 16 checked, 0 unchecked (PASS). The prerequisite helper resolved this

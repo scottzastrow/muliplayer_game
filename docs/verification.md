@@ -1,5 +1,43 @@
 # Local verification
 
+## Explore review and release gate (2026-11-09)
+
+The scoped review found no blocking defect in Explore or match-entry focus.
+`npm run build` and `npm run check` passed. The final full `npm test --
+--reporter=dot` run passed 298 tests in 50 files and failed two tests in two
+files (300 tests / 52 files total):
+
+| Failure | Exact observation | HEAD reproduction |
+| --- | --- | --- |
+| `tests/database.test.ts:46` | Expected migrations stop at `007-account-control-mode.sql`; actual registration also contains `008-match-completion-reason.sql`. | Same assertion at pre-change HEAD `4b7371c6a6b4a3f7e3606a9c1328a6be43d0fe35`. |
+| `tests/movement-collision.test.ts:90` | The deliberately invalid `moveCircle` mock prevents initialization: `Map provides only 0 reachable clear NPC locations for 10 enemies.` | Same error at the same HEAD, before the rejected-update assertion runs. |
+
+Both failures were reproduced with the two original test files in an isolated
+`git archive HEAD` snapshot (no checkout changes or worktree), with all workspace
+package aliases directed to that snapshot's sources and existing dependencies
+linked read-only for execution. The rerun had 6 passing / 2 failing tests.
+The first archive attempt reproduced the collision failure but could not import
+`better-sqlite3`; linking the existing server workspace dependencies allowed the
+database assertion to execute. Neither unrelated baseline failure is fixed here.
+An archive of the exact staged Explore-only tree also passed all 36 tests in
+`default-entities`, `npc-engagement` and `integration/gameplay`, using that tree's
+workspace sources rather than the dirty checkout's built packages.
+
+The saved local Chrome report in `%TEMP%\npc-explore-browser\roaming.json`
+was inspected during review: the center observation has 226 samples, at most
+**three** NPCs in range, and zero samples with four in range. One unassigned NPC
+explored 13.5 units over 12 in-range ticks. Four-in-range coverage belongs only
+to the deterministic staged test, not to the browser or a deployed match.
+The browser evidence below is from the prior executed run, not a new browser run
+during this commit review.
+
+The owner authorizes two scoped commits and a non-force push, superseding the
+earlier local-only restriction for these slices. Preserve unrelated edits.
+T010, T013 and original T042 remain open. No Lightsail staging commands were
+executed, and the live release must not be switched by this task. Ranged combat
+is deferred until the owner deploys and confirms sustained exploration in a
+normal live match; that later change must remain local for review.
+
 ## Hidden Dots and Squares no-kill timer (2026-11-09)
 
 **Implemented locally; no push or deployment.** The compact bar keeps Score,
