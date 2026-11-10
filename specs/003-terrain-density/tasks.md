@@ -23,6 +23,30 @@ the fixture to a valid username resolved its failure without changing production
 Browser syntax and whitespace checks passed; no browser, Lightsail, deployment
 or capacity execution is claimed. No extension hooks file exists.
 
+## Scoped realtime heartbeat follow-up on `cfb1fe4` (2026-11-10)
+
+Authorized test-only follow-up to original engine T015; no terrain/gameplay work
+or original T042 completion. Owner-pasted Lightsail evidence reports 340/341
+passing, with the heartbeat test timing out in `closedWith` at line 503.
+The unchanged focused file passed locally (11 tests). A controlled 300 ms
+event-loop block reproduced the same error at the old 250 ms deadline without
+changing transport code; the exact remote trigger remains unconfirmed.
+
+Completed the scoped fixture repair: public `autoPong: false` at construction,
+early close/ping listeners, 1000 ms deadline, independent joined member for the
+silent socket, explicit socket-error rejection/cleanup, and ordinary/delayed
+cases asserting exactly two unanswered pings followed by close 1013.
+An intermediate run exposed a 403 when reusing the disconnected responsive
+account; the independent member corrects that fixture error.
+Only `npm test -- tests\integration\realtime.test.ts` was run: final 12/12 pass
+plus three consecutive 12/12 repeats. Full evidence/limitations are in
+`docs/verification.md`. No production policy changes, remote rerun or deployment.
+The owner subsequently authorized a separate heartbeat test-fix commit and
+non-force push alongside T020. The combined final focused run passed 12 files /
+155 tests, including all 12 realtime tests. Pre-existing unrelated edits remain
+outside both commits.
+Original T042, T010 and T013 remain open. No extension hooks file exists.
+
 ## Player facing-steered movement follow-up (2026-11-10)
 
 - [x] T019 Add named/documented default-theme facing-movement blend 0.30 (range

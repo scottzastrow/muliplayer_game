@@ -35,6 +35,54 @@ choices, but no browser run is claimed. Original T042 remains open; no Lightsail
 deployment or capacity result is implied. Unrelated edits remain outside the
 authorized commits; the heartbeat repair is committed separately.
 
+## Realtime heartbeat timeout follow-up on `cfb1fe4` (2026-11-10)
+
+Owner-provided Lightsail terminal evidence: **340/341 tests passed**; the sole
+failure was `tests/integration/realtime.test.ts` > realtime transport > sends
+WebSocket heartbeats and closes after two missing pong responses, timing out in
+`closedWith` at line 503. The remote log was not accessed; the precise Lightsail
+scheduling/connection sequence is unconfirmed.
+
+Source inspection confirms the close listener was registered only after awaiting
+connection and `server.hello`, then disabling pongs. The installed `ws` does honor
+the private `_autoPong = false` assignment, so automatic pongs were disabled from
+that point, but not from construction. The server's configured 20 ms heartbeat
+needs three callbacks: send ping 1, record miss 1/send ping 2, record miss 2/close
+1013. Nominally this takes about 60 ms; the test's independent 250 ms wall-clock
+deadline does not allow for a busy worker delaying those callbacks. A missed
+close event was not reproduced.
+
+The unchanged focused file initially passed **11/11 tests** locally. Adding a
+controlled 300 ms event-loop block on the first silent-client ping reproduced
+the same `Timed out waiting for WebSocket close` error with unchanged transport
+code. This confirms a scheduling-sensitive test deadline, not the exact cause
+of the remote failure or a production transport defect.
+
+The test now creates the silent client with public `autoPong: false`, registers
+close/ping listeners synchronously before awaiting any events, and uses the
+existing helper convention of a 1000 ms deadline. Both ordinary and deliberately
+delayed cases assert **exactly two received, unanswered pings and close 1013**.
+The responsive client must survive at least three pings. An intermediate rerun
+exposed a fixture error: waiting for the responsive connection to close and then
+reusing that disconnected account could reject the upgrade with 403. The silent
+client now uses the independent joined member. `closedWith` rejects socket errors
+directly and removes listeners on success, error or timeout.
+
+Only the realtime test file was executed:
+
+```powershell
+npm test -- tests\integration\realtime.test.ts
+```
+
+Final verification passed **12/12 tests**, followed by **three more consecutive
+12/12 passes** (12.53, 12.55 and 12.55 seconds total runner duration). The added
+case retains the controlled 300 ms delay as a regression. No production code,
+heartbeat interval or two-missed-pong policy changed. The owner subsequently
+authorized a separate test-fix commit and non-force push alongside T020; the
+combined final selection passed 12 files / 155 tests, including all 12 realtime
+tests. Pre-existing unrelated edits are preserved. Original T042 stays open.
+No Lightsail rerun, full-suite, browser, deployment or capacity result is claimed.
+
 ## Player facing-steered movement (2026-11-10, T019)
 
 The recorded focused selection passed **8 files / 117 tests** on the local

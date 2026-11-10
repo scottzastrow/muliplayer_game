@@ -184,23 +184,38 @@ describe("realtime transport", () => {
     expect(forfeited.statusCode).toBe(409);
   });
 
-  it("sends WebSocket heartbeats and closes after two missing pong responses", async () => {
-    const responsive = await connect(creatorCookie);
-    await nextMessage(responsive);
-    let pingCount = 0;
-    responsive.on("ping", () => {
-      pingCount += 1;
-    });
-    await waitUntil(() => pingCount > 0);
-    await delay(60);
-    expect(responsive.readyState).toBe(WebSocket.OPEN);
-    responsive.close();
+  it.each([0, 300])(
+    "sends WebSocket heartbeats and closes after two missing pong responses (event-loop delay: %i ms)",
+    async (eventLoopDelayMs) => {
+      const responsive = await connect(creatorCookie);
+      await nextMessage(responsive);
+      let pingCount = 0;
+      responsive.on("ping", () => {
+        pingCount += 1;
+      });
+      await waitUntil(() => pingCount >= 3);
+      expect(responsive.readyState).toBe(WebSocket.OPEN);
 
-    const silent = await connect(creatorCookie);
-    await nextMessage(silent);
-    (silent as WebSocket & { _autoPong: boolean })._autoPong = false;
-    expect(await closedWith(silent, 250)).toBe(1013);
-  });
+      const responsiveClosed = closedWith(responsive, 1_000);
+      responsive.close();
+      await responsiveClosed;
+
+      const silent = createSocket(memberCookie, sessionId, false);
+      const silentClosed = closedWith(silent, 1_000);
+      let silentPingCount = 0;
+      silent.on("ping", () => {
+        silentPingCount += 1;
+      });
+      silent.once("ping", () => {
+        if (eventLoopDelayMs > 0) {
+          // Model a busy test worker without changing the heartbeat policy.
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, eventLoopDelayMs);
+        }
+      });
+      expect(await silentClosed).toBe(1013);
+      expect(silentPingCount).toBe(2);
+    }
+  );
 
     it("rejoins an existing account after login with retained score, one avatar and unchanged NPC totals", async () => {
       const socket = await connect(memberCookie);
@@ -353,29 +368,35 @@ describe("realtime transport", () => {
 
   function connect(cookie: string, targetSessionId = sessionId): Promise<WebSocket> {
     return new Promise((resolve, reject) => {
-      const socket = new WebSocket(webSocketUrl(targetSessionId), {
-        headers: { cookie, origin: ORIGIN }
-      });
-      receivedMessages.set(socket, []);
-      messageWaiters.set(socket, []);
-      socket.on("message", (data: RawData) => {
-        const waiter = messageWaiters.get(socket)?.shift();
-        if (waiter) {
-          clearTimeout(waiter.timeout);
-          try {
-            waiter.resolve(parseMessage(data));
-          } catch (error) {
-            waiter.reject(error);
-          }
-        } else {
-          receivedMessages.get(socket)?.push(data);
-        }
-      });
-      socket.on("close", () => activeSockets.delete(socket));
+      const socket = createSocket(cookie, targetSessionId);
       socket.once("open", () => resolve(socket));
       socket.once("error", reject);
-      activeSockets.add(socket);
     });
+  }
+
+  function createSocket(cookie: string, targetSessionId = sessionId, autoPong = true): WebSocket {
+    const socket = new WebSocket(webSocketUrl(targetSessionId), {
+      headers: { cookie, origin: ORIGIN },
+      autoPong
+    });
+    receivedMessages.set(socket, []);
+    messageWaiters.set(socket, []);
+    socket.on("message", (data: RawData) => {
+      const waiter = messageWaiters.get(socket)?.shift();
+      if (waiter) {
+        clearTimeout(waiter.timeout);
+        try {
+          waiter.resolve(parseMessage(data));
+        } catch (error) {
+          waiter.reject(error);
+        }
+      } else {
+        receivedMessages.get(socket)?.push(data);
+      }
+    });
+    socket.on("close", () => activeSockets.delete(socket));
+    activeSockets.add(socket);
+    return socket;
   }
 
   function rejectedStatus(cookie?: string, origin = ORIGIN): Promise<number> {
@@ -500,11 +521,25 @@ function parseMessage(data: RawData): Record<string, unknown> {
 
 function closedWith(socket: WebSocket, timeoutMs: number): Promise<number> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("Timed out waiting for WebSocket close.")), timeoutMs);
-    socket.once("close", (code) => {
+    const cleanup = () => {
       clearTimeout(timeout);
+      socket.removeListener("close", onClose);
+      socket.removeListener("error", onError);
+    };
+    const onClose = (code: number) => {
+      cleanup();
       resolve(code);
-    });
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error("Timed out waiting for WebSocket close."));
+    }, timeoutMs);
+    socket.once("close", onClose);
+    socket.once("error", onError);
   });
 }
 
