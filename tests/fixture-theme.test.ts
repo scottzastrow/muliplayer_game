@@ -63,9 +63,13 @@ describe("fixture theme", () => {
     expect(FIXTURE_NPC_FLEE_SPEED).toBeGreaterThan(0);
   });
 
-  it("steers nearby enemies away while the default module pursues them", () => {
+  it.each([
+    { distance: 500, behavior: "approaches outside shot range", defaultDirection: -1 },
+    { distance: 200, behavior: "holds ranged standoff", defaultDirection: 0 }
+  ])("flees at $distance units while the default NPC $behavior", ({ distance, defaultDirection }) => {
     const defaultSimulation = createSimulation(defaultModuleFactory);
     const fixtureSimulation = createSimulation(fixtureModuleFactory);
+    const npcStart = { x: 400 + distance, y: 400 };
     try {
       for (const simulation of [defaultSimulation, fixtureSimulation]) {
         moveEntity(simulation.context, "player:fixture-player", { x: 400, y: 400 });
@@ -77,7 +81,7 @@ describe("fixture theme", () => {
             simulation.context.entities.remove(entity.id);
           }
         }
-        moveEntity(simulation.context, npc.id, { x: 600, y: 400 });
+        moveEntity(simulation.context, npc.id, npcStart);
       }
 
       const defaultNpc = defaultSimulation.context.entities.values().find((entity) =>
@@ -89,8 +93,15 @@ describe("fixture theme", () => {
       defaultSimulation.module.step(1 / 30, 1);
       fixtureSimulation.module.step(1 / 30, 1);
 
-      expect(defaultSimulation.context.entities.get(defaultNpc.id)?.position.x).toBeLessThan(600);
-      expect(fixtureSimulation.context.entities.get(fixtureNpc.id)?.position.x).toBeGreaterThan(600);
+      const defaultAfter = defaultSimulation.context.entities.get(defaultNpc.id)!;
+      const fixtureAfter = fixtureSimulation.context.entities.get(fixtureNpc.id)!;
+      expect(defaultAfter.state).toMatchObject({ targetId: "player:fixture-player" });
+      expect(defaultAfter.position.x).toBeCloseTo(
+        npcStart.x + defaultDirection * DEFAULT_GAME_SETTINGS.npcMovementSpeed / 30, 6
+      );
+      expect(defaultAfter.position.y).toBe(npcStart.y);
+      expect(fixtureAfter.position.x).toBeGreaterThan(npcStart.x);
+      expect(fixtureAfter.position.y).toBe(npcStart.y);
     } finally {
       defaultSimulation.module.dispose();
       fixtureSimulation.module.dispose();

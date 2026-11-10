@@ -1,5 +1,69 @@
 # Local verification
 
+## Release-test blockers for `1d98585` (2026-11-10)
+
+**Full Linux suite passed: 54 files / 334 tests, zero failures or skips,
+31.84 seconds, with existing timeouts and default worker settings unchanged.**
+This is local release-test evidence, not deployment, browser or capacity evidence.
+Unrelated worktree edits are retained; original T042 and live-release gates
+remain open. No commit, push or deployment was performed.
+
+| Blocker | Correction and executed result |
+| --- | --- |
+| Linux deployment paths | Replace Windows-only backslash literals with `node:path.join` for the four deployment/documentation reads. All four deployment tests pass on Linux. |
+| Linux load-workload path | Read the workload through `join("tools", "load", "workloads.json")`. Both load-harness unit tests pass on Linux. |
+| Stale migration expectation | `git ls-files` confirms eight tracked SQL migrations, including `008-match-completion-reason.sql` (adds the nullable results column). Add that filename to the explicit expectation; retain both migration runs and the per-name `count: 1` assertion. Both database tests pass. No migration was removed or rewritten. |
+| Fixture `600 < 600` assertion | At 200 units, the default NPC correctly holds ranged standoff (96-unit minimum separation, 384-unit shot range), rather than moving toward the player. Cover both 500 units (inside 512-unit detection but outside shot range: default approaches by 2.25 units per update) and 200 units (default holds position). Assert the default's assigned target and unchanged y; the fixture flees farther away in both cases. All four fixture-theme tests pass. No gameplay change. |
+| Movement-collision initialization | The old global bad `moveCircle` result broke the reachable-cell checks before any NPC could spawn. Initialize using real geometry, assert NPCs exist, then inject the bad move only for the rejected-update test. Verify the exception, preserved player fields/position, unchanged entity count, retained spatial entry and no entry at the rejected position. All six movement-collision tests pass. |
+| Reported NPC-spawn / five-world timeouts | Did not recur in either full Linux run or the separate two-file comparison. All 12 NPC-spawn tests and all four integrated gameplay tests pass without timeout changes. This does not establish timing on a different host. |
+
+### Linux execution and timing comparison
+
+Docker Desktop Linux container using `node:24-bookworm`, Node **24.22.2**,
+npm **11.19.1**, x86_64 WSL2 Linux **5.15.167.4**, eight visible processors
+and approximately 15.6 GiB VM memory; no container CPU quota or memory limit.
+The checkout is mounted read-only and copied into the container's own filesystem,
+including the existing unrelated tracked edits. Local runtime `.env`, databases,
+dependencies and generated output are excluded; only tracked `.env.example` is
+included. Local Git history is copied for the real immutable-contract gate.
+The initial build reported missing `tsc`; `npm ci --no-audit --no-fund` and
+`npm run build` then passed using the existing lockfile.
+
+The pre-fix Linux selection reproduced both path failures, the stale migration
+list, `600 < 600`, and spawn initialization's "only 0 reachable clear NPC
+locations for 10 enemies." After correction, the same selection passed
+**5 files / 18 tests** in 5.74 seconds.
+
+The first full run passed 333 tests but failed the external-consumer contract
+gate solely because the Windows bind-mount copy made tracked `100644` files
+executable (`100755`). Restore the copied files' modes from the Git index,
+without changing source content, the immutable pin or the gate. The actual
+`git diff` against the pinned protocol/SDK revision is then empty. The final
+full run, including packaged external-consumer conformance, passes all 334 tests.
+
+Before that final run, execute the NPC-spawn/gameplay selection separately
+(16 tests passing, 23.51 seconds). Representative per-test durations:
+
+| Case | Existing timeout | Separate two-file run | Final full suite |
+| --- | --- | --- | --- |
+| Fixed repeat-seed / two-wave spawn test | 5 s | 3.303 s | 3.943 s |
+| Fixed multi-seed clearance/navigation test | 20 s | 13.374 s | 14.314 s |
+| Fixed 2000-NPC ceiling | 5 s | 1.313 s | 1.491 s |
+| Five simultaneous isolated worlds | 5 s | 3.587 s | 3.760 s |
+
+Commands inside the Linux copy (no timeout or concurrency overrides):
+
+```sh
+npm test -- tests/deployment.test.ts tests/load-harness.test.ts tests/database.test.ts tests/fixture-theme.test.ts tests/movement-collision.test.ts
+npm test -- tests/npc-spawns.test.ts tests/integration/gameplay.test.ts
+npm test -- --reporter=default --reporter=json --outputFile=/tmp/release-full-final.json
+```
+
+Raw default-reporter logs and JSON reports for baseline, repaired selection,
+initial full run, separate timing selection and final full run persist in ignored
+`var\release-test-1d98585-linux\`. Test content, counts and timings above come
+from those executed reports; no timeouts were raised.
+
 ## NPC pace and reserved-color correction (2026-11-10, T017)
 
 **Current local result; supersedes T016's 10x Explore pace and two-tone NPC

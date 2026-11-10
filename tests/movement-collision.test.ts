@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ModuleContext } from "@multiplayer-game/theme-sdk";
 import {
   defaultModuleFactory,
@@ -87,19 +87,26 @@ describe("rejected entity updates", () => {
   });
 
   it("propagate from the default simulator without removing or corrupting the player", () => {
-    const { module, world } = createSimulation({
-      moveCircle: () => ({ x: OBSTACLE.x + 10, y: OBSTACLE.y + 10 })
-    });
+    const { module, world, context } = createSimulation();
+    const move = vi.spyOn(context.geometry, "moveCircle")
+      .mockReturnValue({ x: OBSTACLE.x + 10, y: OBSTACLE.y + 10 });
     try {
       placePlayer(world, CORNER_APPROACH);
       const before = world.getEntity("player:alice")!;
+      const count = world.entityCount;
       module.applyInput("alice", { type: "combat", moveX: 1, moveY: 1, aimX: 0, aimY: 0, fire: false });
       expect(() => module.step(TICK_SECONDS, 1)).toThrow(/outside walkable world geometry/);
       expect(world.getEntity("player:alice")).toMatchObject({
         ...before,
         state: { ...before.state, facing: expect.any(Object) }
       });
+      expect(world.entityCount).toBe(count);
+      expect(world.queryEntities(CORNER_APPROACH, 1).find(entity => entity.id === before.id))
+        .toEqual(world.getEntity(before.id));
+      expect(world.queryEntities({ x: OBSTACLE.x + 10, y: OBSTACLE.y + 10 }, 1)
+        .some(entity => entity.id === before.id)).toBe(false);
     } finally {
+      move.mockRestore();
       module.dispose();
     }
   });
@@ -163,7 +170,6 @@ describe("default simulator movement near the map obstacle", () => {
 
 function createSimulation(options: {
   random?: number;
-  moveCircle?: ModuleContext<DefaultEntity>["geometry"]["moveCircle"];
 } = {}) {
   const map = generateMap(42).map;
   expect(map.obstacles).toContainEqual(OBSTACLE);
@@ -187,8 +193,7 @@ function createSimulation(options: {
     geometry: {
       isWalkable: (x, y, radius = 0) => world.geometry.isCircleWalkable({ x, y }, radius),
       intersectsObstacle: (x, y, radius) => world.geometry.intersectsObstacle({ x, y }, radius),
-      moveCircle: options.moveCircle ??
-        ((position, delta, radius) => world.geometry.moveCircle(position, delta, radius))
+      moveCircle: (position, delta, radius) => world.geometry.moveCircle(position, delta, radius)
     },
     navigation: { requestPath: () => undefined, getPath: () => undefined },
     emit: () => {},
@@ -199,10 +204,11 @@ function createSimulation(options: {
     context, {}, [{ accountId: "alice", username: "Alice", joinedOrder: 0 }], 42
   );
   module.initialize();
+  expect(world.entities().some(entity => entity.state.kind === "npc")).toBe(true);
   for (const entity of world.entities()) {
     if (entity.state.kind === "npc") world.removeEntity(entity.id);
   }
-  return { module, world };
+  return { module, world, context };
 }
 
 function placePlayer(world: SessionWorld<DefaultEntity>, position: Vector2, health = 100): void {

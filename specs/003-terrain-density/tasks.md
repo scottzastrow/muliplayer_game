@@ -228,6 +228,27 @@ workspace check, browser-script syntax and 17 focused files / 184 tests passed.
 This supersedes only T016/T017's uncommitted handoff; preserve unrelated edits.
 Original T042, T010 and T013 stay open; no push or deployment is authorized.
 
+- [x] T018 Fix the authorized release-test blockers for `1d98585`: portable
+  deployment/load fixture paths, tracked migration expectation with exact-once
+  coverage, fixture fleeing versus deliberate ranged approach/standoff distances,
+  and rejected-movement injection after successful NPC spawn initialization.
+  Run the full Linux suite at existing timeouts, compare separate/full timings
+  for the reported slow tests, preserve unrelated edits and leave T042 open.
+  Follows T017; no push or deployment.
+
+T018 evidence: the Linux baseline reproduced all five blocker surfaces. The
+repaired selection passed 5 files / 18 tests. A separate NPC-spawn/gameplay run
+passed 2 files / 16 tests; the final full Linux suite passed **54 files / 334
+tests**, zero failures/skips, in 31.84 seconds with default workers and unchanged
+timeouts. Neither reported timeout recurred; five-world timings were 3.587 seconds
+separately / 3.760 seconds full, and all 12 spawn tests passed. The first full run
+had one copy-induced Git file-mode failure; restoring tracked modes in the
+disposable Linux copy allowed the unchanged external-consumer gate to pass.
+`docs/verification.md` records environment, commands, per-blocker outcomes and
+timings; raw reports/logs persist in `var\release-test-1d98585-linux\`.
+Unrelated edits are retained. Original T042, T010 and T013 stay open; no commit,
+push or deployment was performed.
+
 ## Evidence
 
 Checklist: 16 checked, 0 unchecked (PASS). The prerequisite helper resolved this

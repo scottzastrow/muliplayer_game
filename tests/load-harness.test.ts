@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_GAME_SETTINGS } from "@multiplayer-game/protocol";
 import { combatIntent, LoadViewSchema, seededRandom, WorkloadSchema } from "../tools/load/index.js";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const config = {
   target: "http://127.0.0.1:3000", seed: 42, playersPerRoom: 1, spectatorsPerRoom: 0,
@@ -11,7 +12,7 @@ const config = {
 
 describe("external load workload", () => {
   it("validates the supplied matrix and bounds clients, timing, target and roster settings", () => {
-    expect(WorkloadSchema.parse(JSON.parse(readFileSync("tools\\load\\workloads.json", "utf8")))
+    expect(WorkloadSchema.parse(JSON.parse(readFileSync(join("tools", "load", "workloads.json"), "utf8")))
       .steps.map(({ rooms }) => rooms)).toEqual([1, 3, 5]);
     for (const change of [
       { target: "https://user:password@example.test" },

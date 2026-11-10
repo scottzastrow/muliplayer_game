@@ -7,10 +7,10 @@ import { join, resolve } from "node:path";
 import { openDatabase, type SqliteDatabase } from "../apps/server/src/storage/database.js";
 import { readConfig } from "../apps/server/src/config.js";
 
-const service = readFileSync("deploy\\game.service", "utf8");
-const nginx = readFileSync("deploy\\nginx.conf", "utf8");
-const runbook = readFileSync("deploy\\README.md", "utf8");
-const hosting = readFileSync("docs\\hosting.md", "utf8");
+const service = readFileSync(join("deploy", "game.service"), "utf8");
+const nginx = readFileSync(join("deploy", "nginx.conf"), "utf8");
+const runbook = readFileSync(join("deploy", "README.md"), "utf8");
+const hosting = readFileSync(join("docs", "hosting.md"), "utf8");
 
 describe("deployment examples", () => {
   it("runs compiled Node with private systemd state and the documented production environment", () => {
