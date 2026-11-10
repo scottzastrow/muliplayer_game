@@ -64,7 +64,7 @@ export async function verifyCompactLayout({ player, observer, cdp, evaluate, wai
       assert.ok(view.bar.height <= 48, "one slim top bar");
       assert.ok(view.canvas.height >= view.viewport.height - 48, "arena fills remaining height");
       assert.deepEqual(view.stats.slice(0, 3).map(stat => stat.text), [
-        "Back to lobby", "Score: 0", "Health: 150 / 150"
+        "Back to lobby", "Score: 0", "Health: 200 / 200"
       ]);
       assert.equal(view.stats.length, 3);
       assert.ok(view.stats.every(stat => stat.y >= view.bar.y && stat.bottom <= view.bar.bottom));

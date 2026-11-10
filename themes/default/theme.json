@@ -34,7 +34,7 @@
     "initialNpcsPerPlayer": 5,
     "npcPopulationGrowthPercent": 20,
     "baseNpcHealth": 50,
-    "playerMaxHealth": 150,
+    "playerMaxHealth": 200,
     "npcHealthGrowthPercent": 10,
     "respawnDelaySeconds": 5,
     "maxLevels": 5,

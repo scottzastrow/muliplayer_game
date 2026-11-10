@@ -319,10 +319,10 @@ describe("NPC wave-start roaming and per-player engagement", () => {
       s.step(1);
       s.place("test:2", { x: 700, y: 700 });
       s.step(2);
-      expect(s.world.getEntity("player:p0")!.state.health).toBe(150);
+      expect(s.world.getEntity("player:p0")!.state.health).toBe(200);
       s.place("test:0", { x: 710, y: 700 });
       s.step(3);
-      expect(s.world.getEntity("player:p0")!.state.health).toBe(150);
+      expect(s.world.getEntity("player:p0")!.state.health).toBe(200);
       expect(s.world.getEntity("test:2")!.position).toEqual({ x: 700, y: 700 });
       expect(s.navigation.outstandingRequests).toBe(0);
     } finally { s.module.dispose(); }

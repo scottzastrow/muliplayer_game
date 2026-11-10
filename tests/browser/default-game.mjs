@@ -1314,8 +1314,8 @@ try {
     mounted.dispose(); root.remove();
     return {countdown,health,returned,camera,inputs,sharedRespawnColor: Boolean(body && facing)};
   })()`);
-  assert.deepEqual(spectatorFixture, {countdown:"Respawning in 5s",health:"Health: 0 / 150",
-    returned:"Health: 150 / 150",camera:{x:800,y:600},inputs:0,sharedRespawnColor:true});
+  assert.deepEqual(spectatorFixture, {countdown:"Respawning in 5s",health:"Health: 0 / 200",
+    returned:"Health: 200 / 200",camera:{x:800,y:600},inputs:0,sharedRespawnColor:true});
 
   assert.deepEqual(own(startB).facing, { x: 1, y: 0 }, "Bob starts facing screen-right");
   await move(bob, "KeyW", 1400);

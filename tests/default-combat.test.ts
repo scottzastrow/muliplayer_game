@@ -27,7 +27,7 @@ const roster: readonly RosterMember[] = [
 ];
 
 describe("default combat", () => {
-  it.each([150, 37, 275])("caps healing at configured %s HP and leaves full-health pickups unclaimed", maximum => {
+  it.each([200, 150, 37, 275])("caps healing at configured %s HP and leaves full-health pickups unclaimed", maximum => {
     const { context, module } = createSimulation(undefined, { playerMaxHealth: maximum });
     try {
       removeNpcs(context);
@@ -128,7 +128,7 @@ describe("default combat", () => {
     expect(context.entities.get("projectile:1")).toBeDefined();
     expect(context.entities.get("player:player-b")?.state).toMatchObject({
       kind: "player",
-      health: 150
+      health: 200
     });
     expect(context.entities.get("npc:target")?.state).toMatchObject({
       kind: "npc",

@@ -439,8 +439,13 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
             markerColors: {
               player: PLAYER_COLORS[0]!, enemy: NPC_COLOR, pickup: "#ffa64d", terrain: "#344a60"
             },
-            markerColorOverrides: Object.fromEntries(current.players.map(item =>
-              [`player:${item.accountId}`, playerColors.get(item.accountId)!])),
+            markerColorOverrides: Object.fromEntries([
+              ...current.players.map(item =>
+                [`player:${item.accountId}`, playerColors.get(item.accountId)!]),
+              ...current.entities.filter(entity =>
+                entity.state.kind === "pickup" && entity.state.pickupType === "health")
+                .map(entity => [entity.id, "#0088ff"])
+            ]),
             markerShapes: { pickup: "diamond", terrain: "footprint" },
             enabledCategories: [...enabledCategories],
             anchorColor: playerColors.get(player.accountId)!

@@ -7,7 +7,7 @@ health endpoints disclose no details. Cookies are HttpOnly, SameSite=Lax, Secure
 HTTPS; local HTTP development is the only Secure-cookie exception.
 
 Session settings accept additive `playerMaxHealth` (integer 1-100000, default
-150 when omitted). Create/edit/read/storage preserve explicit overrides;
+200 when omitted). Create/edit/read/storage preserve explicit overrides;
 invalid values return the existing 422 `INVALID_SETTINGS` response without
 changing saved settings. Reading legacy records resolves the default without
 rewriting their stored JSON.

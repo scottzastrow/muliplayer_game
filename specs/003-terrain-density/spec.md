@@ -1,5 +1,21 @@
 # Feature Specification: Per-Level Terrain Density
 
+## 200-HP default and health radar follow-up (2026-11-10)
+
+Supersede only the earlier 150-HP default with 200 through the existing
+`playerMaxHealth` setting. Preserve explicit overrides (including 150), initial
+spawn/respawn consistency, reconnect health, healing limits and enemy damage.
+Health pickup radar markers must be bright blue diamonds in both player and
+spectator views, distinct from circular players and orange other pickups.
+Keep arena pickup styling unchanged. Run focused lifecycle and render checks
+and report results before any push; no deployment or original T042 completion.
+
+Subsequent scoped review authorization permits committing only this health/radar
+slice and its tests/docs, followed by a separate immutable-consumer pin commit
+to that exact revision. Run the full Linux suite with drift detection enabled;
+push only the intended commits without force if it passes. Preserve unrelated
+edits, report the full remote tip hash and leave original T042 open.
+
 ## Player maximum health follow-up (2026-11-10)
 
 Expose validated `playerMaxHealth` through theme settings and the public SDK.

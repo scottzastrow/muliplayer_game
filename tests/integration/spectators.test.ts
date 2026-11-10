@@ -90,7 +90,7 @@ describe("spectator admission and targets", () => {
     expect(observed.payload).toMatchObject({
       viewerAccountId: owner.id, viewerRole: "spectator",
       spectatorView: { targetAccountId: owner.id, cameraAnchor: { x: 272, y: 272 },
-        hud: { points: 0, health: 150 }, death: { alive: true, remainingSeconds: 0 } }
+        hud: { points: 0, health: 200 }, death: { alive: true, remainingSeconds: 0 } }
     });
     spectator.socket.send(JSON.stringify({ v: 1, type: "client.spectate.target", payload: { targetAccountId: rival.id } }));
     expect(await spectator.next("server.error")).toMatchObject({ payload: { code: "FORBIDDEN", fatal: false } });

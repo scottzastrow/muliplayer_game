@@ -115,7 +115,7 @@ describe("host NPC settings", () => {
     const createNpcCount = elements().find(element => element.name === "setting-initialNpcsPerPlayer")!;
     const createTimeout = elements().find(element => element.name === "setting-noKillTimeoutSeconds")!;
     const createPlayerHealth = elements().find(element => element.name === "setting-playerMaxHealth")!;
-    expect(createPlayerHealth.value).toBe("150");
+    expect(createPlayerHealth.value).toBe("200");
     expect([createPlayerHealth.min, createPlayerHealth.max, createPlayerHealth.step]).toEqual(["1", "100000", "1"]);
     createPlayerHealth.value = "37";
     expect(createNpcCount.value).toBe("5");

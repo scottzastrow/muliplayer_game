@@ -42,6 +42,7 @@ class HudElement extends EventTarget {
   readonly drawnColors: string[] = [];
   readonly drawnRotations: number[] = [];
   readonly drawnRects: { x: number; y: number; width: number; height: number; color: string }[] = [];
+  readonly drawnPaths: { points: number[][]; color: string }[] = [];
   name = "";
   type = "";
   checked = false;
@@ -58,14 +59,20 @@ class HudElement extends EventTarget {
   getBoundingClientRect() { return { left: 0, top: 0, width: 800, height: 600 }; }
   getContext() {
     let color = "";
+    let path: number[][] = [];
     return {
       setTransform() {},
       fillRect: (x: number, y: number, width: number, height: number) =>
         this.drawnRects.push({ x, y, width, height, color }),
-      beginPath() {}, closePath() {},
+      beginPath() { path = []; }, closePath() {},
       arc: (x: number, y: number, radius: number) => this.drawnArcs.push({ x, y, radius }),
-      fill: () => this.drawnColors.push(color), strokeRect() {},
-      save() {}, restore() {}, clip() {}, stroke() {}, moveTo() {}, lineTo() {},
+      fill: () => {
+        this.drawnColors.push(color);
+        this.drawnPaths.push({ points: [...path], color });
+      }, strokeRect() {},
+      save() {}, restore() {}, clip() {}, stroke() {},
+      moveTo(x: number, y: number) { path.push([x, y]); },
+      lineTo(x: number, y: number) { path.push([x, y]); },
       translate() {},
       rotate: (angle: number) => this.drawnRotations.push(angle),
       fillText: (text: string, x: number, y: number) => {
@@ -82,6 +89,64 @@ class HudElement extends EventTarget {
 
 describe("Dots and Squares presentation", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it.each(["player", "spectator"] as const)(
+    "renders health radar pickups as bright blue diamonds without changing other markers (%s)", role => {
+      vi.stubGlobal("document", Object.assign(new EventTarget(), {
+        createTextNode: (text: string) => Object.assign(new HudElement(), { textContent: text }),
+        createElement: () => new HudElement()
+      }));
+      vi.stubGlobal("window", new EventTarget());
+      const base = view(100);
+      const pickups = (["health", "rapid-fire", "spread"] as const).map((pickupType, index) => ({
+        id: `pickup:${pickupType}`, radius: 12, position: { x: 200 + index * 100, y: 100 },
+        state: { kind: "pickup" as const, pickupType }
+      }));
+      const snapshot: DefaultView = {
+        ...base, viewerRole: role,
+        ...(role === "spectator" ? { spectatorView: {
+          targetAccountId: "alice", cameraAnchor: { x: 100, y: 100 },
+          hud: { points: 200, health: 90 }, death: { alive: true, remainingSeconds: 0 }
+        } } : {}),
+        entities: [...base.entities, ...pickups],
+        radar: { categories: ["player", "enemy", "pickup"], markers: [
+          { id: "player:bob", category: "player", position: { x: 100, y: 200 } },
+          ...base.radar!.markers,
+          ...pickups.map(pickup => ({ id: pickup.id, category: "pickup", position: pickup.position }))
+        ] }
+      };
+      const host: SkinHost = {
+        slots: new Map(["world", "hud", "controls"].map(name => [name, document.createElement("div")])),
+        selectedTarget: { accountId: "alice", username: "Alice" },
+        cameraAnchor: undefined, setCameraAnchor(anchor) { this.cameraAnchor = anchor; },
+        dispatchInput: vi.fn(), navigate: () => {}
+      };
+      const skin = defaultSkinFactory.mount(host, {
+        image: async () => { throw new Error("No images used."); },
+        audio: async () => { throw new Error("No audio used."); }
+      });
+      try {
+        skin.handleViewport(800, 600, 1);
+        skin.handleSnapshot(snapshot);
+        skin.render(0, snapshot);
+        const canvas = (host.slots.get("world") as unknown as HudElement).children[0]!;
+        for (const [index, color] of ["#0088ff", "#ffa64d", "#ffa64d"].entries()) {
+          const x = 716 + (100 + index * 100) * 67 / 512;
+          expect(canvas.drawnPaths).toContainEqual({
+            color, points: [[x, 81], [x + 3, 84], [x, 87], [x - 3, 84]]
+          });
+        }
+        // Player and enemy radar markers remain circular and retain their colors.
+        expect(canvas.drawnArcs).toContainEqual({ x: 716, y: 84 + 100 * 67 / 512, radius: 3 });
+        expect(canvas.drawnArcs).toContainEqual({ x: 716 + 100 * 67 / 512, y: 84, radius: 3 });
+        expect(canvas.drawnColors).toContain(PLAYER_COLORS[0]);
+        expect(canvas.drawnColors).toContain(NPC_COLOR);
+        // Only the radar uses blue; the arena health pickup keeps its existing styling.
+        expect(canvas.drawnColors.filter(color => color === "#0088ff")).toHaveLength(1);
+        expect(canvas.drawnRects.some(rect => rect.color === "#0088ff")).toBe(false);
+      } finally { skin.dispose(); }
+    }
+  );
 
   it.each(["player", "spectator"] as const)(
     "renders 32 distinct fallback colors consistently in arena and radar after rejoin (%s)", role => {

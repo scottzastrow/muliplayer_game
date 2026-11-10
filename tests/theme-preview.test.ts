@@ -18,7 +18,7 @@ describe("deterministic theme preview fixtures", () => {
     ]);
 
     for (const scenario of snapshotScenarios) {
-      expect(DefaultViewSchema.parse(createPreviewSnapshot(scenario)).playerMaxHealth).toBe(150);
+      expect(DefaultViewSchema.parse(createPreviewSnapshot(scenario)).playerMaxHealth).toBe(200);
     }
 
     const deathSnapshot = createPreviewSnapshot("death");

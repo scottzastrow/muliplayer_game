@@ -2,6 +2,35 @@
 
 Scoped sequential feature; retains original engine and Theme Credits context.
 
+## 200-HP default and health radar follow-up (2026-11-10)
+
+- [x] T024 Raise the existing `playerMaxHealth` default from 150 to 200, preserve
+  explicit overrides and enemy damage, verify default initial spawn/respawn and
+  both HUD roles, and style only health radar markers bright blue with their
+  existing diamond shape. Verify player/spectator rendering, unchanged orange
+  other pickups and circular players; record focused results before any push.
+  Follows T023; preserve unrelated edits, immutable consumer gate and T042.
+
+T024 evidence: protocol/default-theme builds and protocol/server/client
+type-checks passed. The final focused run passed **15 files / 204 tests** in
+35.81 seconds, including default 200 initial spawn/respawn, explicit 150 and
+other overrides, retained reconnect health, healing, API/storage defaults and
+blue-diamond Canvas render checks for both roles. Enemy shots still deal 10
+every 30 ticks; 200 HP survives 19 hits and dies on hit 20. Other pickup colors,
+player shapes/colors and arena styling remain unchanged. Browser-script syntax
+and whitespace checks passed. `docs/verification.md` records commands and
+intermediate failures. The separately executed unchanged immutable consumer
+gate fails on precisely the two protocol default edits; packed conformance is
+blocked pending a reviewed committed revision/pin. No gate/lock change, full
+suite, browser, capacity, commit, push or deployment claim. No hooks file exists;
+unrelated edits and original T042/live gates are preserved.
+
+Subsequent scoped review found no blocking health/radar defects. The owner
+authorizes a T024-only commit followed by a separate exact-revision pin commit,
+with an unfiltered Linux suite and drift detection enabled before a non-force
+push of only those intended commits. Preserve unrelated edits and original
+T042; record the actual Linux result and full remote tip after execution.
+
 ## Player maximum health follow-up (2026-11-10)
 
 - [x] T023 Expose validated theme/SDK `playerMaxHealth`, default 150 from the

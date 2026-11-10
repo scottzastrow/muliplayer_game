@@ -20,7 +20,7 @@ auth cookies. Renderers receive immutable state; presentation never changes auth
 Implement TypeScript interfaces and runtime schemas in `packages/theme-sdk/src/`.
 
 The public `PlayerMaxHealthSchema` validates integer theme settings from 1 to
-100000. Dots and Squares declares `playerMaxHealth` with default 150, preserving
+100000. Dots and Squares declares `playerMaxHealth` with default 200, preserving
 explicit overrides. Its additive v4 snapshot field of the same name supplies
 the current/maximum HUD for both roles; old v4 snapshots omit it and retain a
 100 maximum for display. Spawn, death respawn and healing share the resolved

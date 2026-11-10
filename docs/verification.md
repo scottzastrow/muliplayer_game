@@ -1,5 +1,69 @@
 # Local verification
 
+## 200-HP default and blue health radar markers (2026-11-10, T024)
+
+The existing `playerMaxHealth` schema fallback, settings default and theme
+manifest now agree on **200 HP**, superseding T023's 150 default below.
+Explicit 37/100/150/275 overrides remain authoritative; omitted settings spawn
+and respawn at 200. Player and spectator snapshots retain the configured maximum
+after respawn, reconnect retains remaining health, and healing stays capped.
+Enemy implementation/tuning is unchanged: actual projectile traces at 200 HP
+survive 19 landed hits and die on hit 20, each dealing 10 damage with the same
+30-tick cadence. The explicit 150-HP trace still survives 14 and dies on hit 15.
+
+Health radar markers use `#0088ff` through existing per-marker color overrides,
+selected from pickup entity state. Both player and spectator Canvas render tests
+verify exact diamond vertices and blue fill. Other pickups retain orange
+diamonds, player/enemy radar markers remain circular with their existing colors,
+and arena pickup rendering is unchanged. This is a focused mocked-Canvas render
+check, not a real-browser/pixel observation.
+
+Executed on the existing local Windows/npm workspace:
+
+```powershell
+npm run build --workspace @multiplayer-game/protocol
+npm run build --workspace @multiplayer-game/default-theme
+npm run check --workspace @multiplayer-game/protocol
+npm run check --workspace @multiplayer-game/server
+npm run check --workspace @multiplayer-game/client
+npm test -- tests\player-max-health.test.ts tests\default-respawn.test.ts tests\default-skin.test.ts tests\default-combat.test.ts tests\npc-ranged.test.ts tests\default-entities.test.ts tests\npc-engagement.test.ts tests\movement-collision.test.ts tests\lobby-settings.test.ts tests\wave-countdown.test.ts tests\integration\gameplay.test.ts tests\theme-preview.test.ts tests\terrain-density.test.ts tests\integration\terrain-settings.test.ts tests\integration\spectators.test.ts
+node --check tests\browser\default-game.mjs
+node --check tests\browser\compact-match.mjs
+git diff --check
+```
+
+Builds, type-checks, syntax and whitespace checks passed. The final focused run
+passed **15 files / 204 tests** in **35.81 seconds**, including both new radar
+render cases, explicit 150 lifecycle coverage and API/storage default resolution.
+The initial red selection failed four expected cases (old 150 default/spawn and
+orange radar in both roles), with four explicit-override cases passing. The
+first post-change selection passed 203/204; its remaining assertion still
+expected 140 after a 10-damage post-respawn hit. Updating that expected value to
+190 resolved it without changing enemy damage.
+
+Separately executed the unchanged immutable external-consumer gate:
+
+```powershell
+npm test -- tests\contract\themes.test.ts -t 'builds and loads an isolated external consumer'
+```
+
+That selected test **fails at the drift assertion**, solely on the two intended
+protocol default changes from 150 to 200 (four other tests unselected). Packed
+consumer conformance remains blocked until a reviewed committed revision can be
+pinned; neither the gate nor lock was weakened/changed. No full-suite, real-browser,
+capacity or deployment result is claimed. No extension hooks file exists.
+Unrelated worktree edits are preserved; no commit or push was performed.
+Original T042 and live-release gates remain open.
+
+Subsequent scoped review authorization permits committing T024 and its tests/docs
+first, then pinning the consumer to that exact commit separately. Direct review
+found no blocking defects: defaults agree, explicit values remain authoritative,
+enemy implementation is unchanged and the shared radar path retains diamonds.
+Before staging, fetched origin and confirmed HEAD and the remote branch both
+at `3de1894ed2a3ef91fa9a03707d1629c9e7b8a4a7`. Only the intended commits may be
+pushed without force after the full Linux suite passes with drift detection
+enabled. Unrelated mixed-file hunks remain unstaged; original T042 stays open.
+
 ## Configurable player maximum health (2026-11-10, T023)
 
 The pre-change effective Dots and Squares health was **100**, from both

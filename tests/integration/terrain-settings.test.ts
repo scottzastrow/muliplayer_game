@@ -69,12 +69,12 @@ describe("saved terrain settings", () => {
       const defaulted = (await app.inject({ url: `/api/v1/sessions/${explicitNoSchedule.json().session.id}`,
         headers: authorized })).json().settings;
       expect(defaulted).not.toHaveProperty("terrainDensity");
-      expect(defaulted.playerMaxHealth).toBe(150);
+      expect(defaulted.playerMaxHealth).toBe(200);
       const oldJson = JSON.stringify(oldSettings);
       const oldId = explicitNoSchedule.json().session.id as string;
       database.prepare("UPDATE matches SET settings_json = ? WHERE id = ?").run(oldJson, oldId);
       expect((await app.inject({ url: `/api/v1/sessions/${oldId}`, headers: authorized }))
-        .json().settings.playerMaxHealth).toBe(150);
+        .json().settings.playerMaxHealth).toBe(200);
       expect(database.prepare("SELECT settings_json FROM matches WHERE id = ?").get(oldId))
         .toEqual({ settings_json: oldJson });
     } finally {

@@ -1,5 +1,22 @@
 # Implementation Plan: Per-Level Terrain Density
 
+## 200-HP default and health radar follow-up (2026-11-10)
+
+Update the existing protocol default/schema fallback and theme manifest to 200;
+reuse the resolved spawn/respawn/healing/HUD path without changing enemy tuning.
+Use the existing radar per-marker color overrides, selecting health pickups by
+entity state rather than ID naming. Preserve diamond shapes and all other radar
+colors in the common player/spectator skin. Add role-parameterized Canvas draw
+checks and retain explicit 150-HP lifecycle coverage. Keep the immutable consumer
+gate intact; a new pin requires a reviewed committed revision. Report focused
+results before pushing; preserve unrelated work and keep original T042 open.
+
+For the scoped commit review, stage only T024 hunks in mixed files, commit the
+health/radar slice first, then pin the external consumer to that exact commit
+separately. Validate a disposable Linux copy of the intended release contents
+with the unfiltered suite and unchanged drift gate. Push without force only
+after success and confirmation that no unrelated commits are outgoing.
+
 ## Player maximum health follow-up (2026-11-10)
 
 Add a bounded positive integer `playerMaxHealth` to the protocol settings schema,

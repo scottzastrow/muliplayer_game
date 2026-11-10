@@ -5,17 +5,17 @@ import { defaultModuleFactory, resolveDefaultSettings } from "@multiplayer-game/
 import { readFileSync } from "node:fs";
 
 describe("public player maximum health setting", () => {
-  it("defaults omitted settings to 150 without replacing explicit values", () => {
+  it("defaults omitted settings to 200 without replacing explicit values", () => {
     const { playerMaxHealth: _omitted, ...legacy } = DEFAULT_GAME_SETTINGS;
-    expect(GameSettingsSchema.parse(legacy).playerMaxHealth).toBe(150);
-    expect(resolveDefaultSettings({}, 1).playerMaxHealth).toBe(150);
-    for (const value of [1, 37, 100, 275, 100_000]) {
+    expect(GameSettingsSchema.parse(legacy).playerMaxHealth).toBe(200);
+    expect(resolveDefaultSettings({}, 1).playerMaxHealth).toBe(200);
+    for (const value of [1, 37, 100, 150, 275, 100_000]) {
       expect(PlayerMaxHealthSchema.parse(value)).toBe(value);
       expect(resolveDefaultSettings({ playerMaxHealth: value }, 1).playerMaxHealth).toBe(value);
       expect(defaultModuleFactory.validateSettings({ playerMaxHealth: value })).toBe(true);
     }
     const definition = JSON.parse(readFileSync(new URL("../themes/default/theme.json", import.meta.url), "utf8"));
-    expect(definition.settingsDefaults.playerMaxHealth).toBe(150);
+    expect(definition.settingsDefaults.playerMaxHealth).toBe(200);
     expect(definition.settingsSchema.playerMaxHealth)
       .toEqual({ type: "integer", minimum: 1, maximum: 100000 });
   });
