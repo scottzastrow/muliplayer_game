@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { HttpError } from "../errors.js";
 import type { SqliteDatabase } from "../storage/database.js";
 import type { AuthenticatedAccount, ControlMode } from "./accounts.js";
+import { normalizeControlMode } from "./accounts.js";
 
 export const SESSION_COOKIE_NAME = "mp_session";
 export const SESSION_LIFETIME_SECONDS = 7 * 24 * 60 * 60;
@@ -10,7 +11,7 @@ interface SessionAccountRow {
   id: string;
   username: string;
   role: "player" | "operator";
-  control_mode: ControlMode | null;
+  control_mode: ControlMode | "first-person" | null;
 }
 
 export interface IssuedSession {
@@ -85,7 +86,7 @@ export function authenticateSession(
     id: row.id,
     username: row.username,
     role: row.role,
-    controlMode: row.control_mode
+    controlMode: normalizeControlMode(row.control_mode)
   });
 }
 

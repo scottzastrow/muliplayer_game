@@ -1,5 +1,21 @@
 # Implementation Plan: Per-Level Terrain Density
 
+## Controller-menu cleanup (2026-11-11)
+
+Narrow client and public account control types to the two canonical choices.
+Normalize legacy database values in public account, credential and session
+reads, and accept legacy API writes as an alias for Keyboard Only. Reuse the
+shared signup/lobby fieldset; keep the SQLite migration and theme input support
+unchanged. Add mounted UI and HTTP/storage/authentication regressions, retaining
+NULL behavior and invalid-input errors. Check only affected workspaces and
+focused control/gameplay regressions; record real results under T034.
+
+For the scoped review, stage only controller cleanup and matching note hunks,
+run `git diff --cached --check`, and commit. Temporarily preserve unrelated
+work outside the candidate, run the full suite once on the clean commit, and
+restore that work. Stop and report if the suite fails; otherwise fetch origin
+and report all exact outgoing commits. No push, deployment or T042 completion.
+
 ## Frontend appearance follow-up (2026-11-10)
 
 Keep tokens and preference handling in `apps/client`. Mount a persistent native

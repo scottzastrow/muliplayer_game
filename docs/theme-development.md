@@ -125,16 +125,19 @@ reasserting facing. In Keyboard + Mouse mode, hold Down Arrow, move the pointer
 left and click to keep the downward input while aiming/firing left. In Keyboard
 Only mode, hold S, rotate with Left/Right Arrow and press Space: the held input
 remains down while travel bends toward facing and firing follows the rotation.
-First-Person is a separate saved control choice using the same Keyboard Only
-bindings. All three modes apply the same facing-steered movement, including
-mouse aim while a movement key is held.
+Signup and lobby preferences offer only Keyboard Only and Keyboard + Mouse.
+Legacy saved First-Person preferences read as Keyboard Only without changing
+storage on read; future preference updates store the canonical choice, including
+requests from old clients that still send `first-person`. Both choices apply the
+same facing-steered movement, including mouse aim while a movement key is held.
 
 Dots and Squares exports the theme tuning setting `PLAYER_FACING_MOVEMENT_BLEND`
 from `themes/default/src/module/tuning.ts`, set to `0.40`, and explicitly passes
 it to the SDK controller's `facingMovementBlend` option. Its range is 0 to 1:
 0 follows movement input exactly; 1 follows facing whenever movement is held.
-Combat intent includes `controlMode: "first-person"`, `"keyboard-only"` or
-`"keyboard-mouse"`; all three apply this blend. Legacy actions without a mode
+Combat intent includes `controlMode: "keyboard-only"` or `"keyboard-mouse"`;
+legacy `"first-person"` theme input remains supported with the same keyboard
+bindings and blend. Legacy actions without a mode
 still follow the input exactly. Each authoritative update starts
 from the normalized held input and rotates it
 by that fraction of the shortest signed angle toward current facing, preserving

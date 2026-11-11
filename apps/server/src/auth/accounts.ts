@@ -6,7 +6,7 @@ import { HttpError } from "../errors.js";
 
 const SCRYPT_OPTIONS = Object.freeze({ N: 16_384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
 const HASH_BYTES = 64;
-export type ControlMode = "keyboard-only" | "keyboard-mouse" | "first-person";
+export type ControlMode = "keyboard-only" | "keyboard-mouse";
 
 export interface AccountWithControlMode extends PublicAccount {
   readonly controlMode: ControlMode | null;
@@ -31,7 +31,7 @@ interface AccountRow {
   password_hash: string;
   password_salt: string;
   role: "player" | "operator";
-  control_mode: ControlMode | null;
+  control_mode: ControlMode | "first-person" | null;
 }
 
 export interface AuthenticatedAccount {
@@ -110,10 +110,15 @@ export function validatePassword(input: unknown): string {
 }
 
 export function validateControlMode(input: unknown): ControlMode {
-  if (input !== "keyboard-only" && input !== "keyboard-mouse" && input !== "first-person") {
+  if (input === "first-person") return "keyboard-only";
+  if (input !== "keyboard-only" && input !== "keyboard-mouse") {
     throw new HttpError(400, "BAD_REQUEST", "Choose a supported control mode.");
   }
   return input;
+}
+
+export function normalizeControlMode(input: unknown): ControlMode | null {
+  return input === null ? null : validateControlMode(input);
 }
 
 export function updateControlMode(
@@ -181,7 +186,7 @@ export async function verifyCredentials(
     id: row.id,
     username: row.username,
     role: row.role,
-    controlMode: row.control_mode
+    controlMode: normalizeControlMode(row.control_mode)
   });
 }
 
@@ -195,12 +200,12 @@ export function getPublicAccount(
       id: string;
       username: string;
       role: "player" | "operator";
-      control_mode: ControlMode | null;
+      control_mode: ControlMode | "first-person" | null;
     } | undefined;
   return row
     ? {
         ...serializePublicAccount(row),
-        controlMode: row.control_mode
+        controlMode: normalizeControlMode(row.control_mode)
       }
     : undefined;
 }

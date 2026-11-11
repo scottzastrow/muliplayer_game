@@ -1,5 +1,54 @@
 # Local verification
 
+## Controller-menu cleanup (2026-11-11, T034)
+
+Signup and lobby now share exactly two choices: Keyboard Only and Keyboard +
+Mouse. Public account, credential and authenticated-session reads map persisted
+`first-person` to `keyboard-only` without writing during reads. Signup and
+preference updates accept the legacy alias but persist/return the canonical
+value. Existing NULL preferences still prompt for a choice; invalid values
+still reject. SQLite migrations, theme legacy inputs, bindings, SDK source and
+the default-theme 0.40 movement blend are unchanged.
+
+Executed locally on Windows:
+
+```powershell
+npm test -- tests\lobby-settings.test.ts tests\integration\accounts-lobby.test.ts -t 'canonical|legacy saved First-Person'
+npm test -- tests\lobby-settings.test.ts tests\integration\accounts-lobby.test.ts tests\database.test.ts tests\movement-controller.test.ts tests\default-skin.test.ts tests\default-entities.test.ts
+npm run check --workspace @multiplayer-game/client
+npm run check --workspace @multiplayer-game/server
+git diff --check
+```
+
+The test-first selection reproduced six expected failures: four mounted
+signup/lobby cases still saw the third choice, while two preference cases still
+returned/stored `first-person`. After implementation the full focused selection
+passed **6 files / 119 tests**, zero failures/skips, in **14.93 seconds**.
+Both affected workspace type-checks and whitespace checks passed. Coverage
+includes both canonical UI submissions/selections, rejection of a forged legacy
+radio value, old-client registration/update aliases, login/current-account/
+authenticated-session normalization, no storage writes during reads, canonical
+storage on the next save, NULL behavior, migrations, bindings and exact blend.
+
+No actual browser, full suite, capacity or deployment run was performed. No
+extension hooks file exists. All changes remain local and uncommitted; no push
+or deployment occurred. Unrelated existing edits are preserved. Original T042
+remains unchecked; deployment status is not inferred from Git.
+
+### Scoped commit review
+
+The subsequent owner authorization permits committing only the controller-menu
+cleanup, legacy preference normalization, related tests and matching notes.
+Review traced registration, preference updates, public-account reads, credential
+verification and session authentication; no blocking defect was found.
+Unrelated wave-refill, Developer Kit, historical verification and browser edits
+are excluded. Run `git diff --cached --check` before committing, then run the
+full suite once on the clean committed candidate with unrelated edits preserved
+separately. Stop and report any failure. Only on success, fetch origin and report
+the exact outgoing commits, including the existing Developer Kit commit if
+ahead. No push or deployment is authorized; original T042 remains unchecked.
+The committed-candidate suite result is not yet available at note-writing time.
+
 ## Frontend Dark/Light appearance (2026-11-10, T030)
 
 Shared frontend tokens now cover page/card/HUD surfaces, text, borders, form

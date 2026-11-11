@@ -1,5 +1,21 @@
 # Feature Specification: Per-Level Terrain Density
 
+## Controller-menu cleanup (2026-11-11)
+
+Offer only Keyboard Only and Keyboard + Mouse at signup and in lobby
+preferences. Read legacy saved `first-person` as `keyboard-only` without
+rewriting storage during reads; future preference writes, including legacy
+requests, store the canonical value. Preserve NULL/unselected preferences,
+existing bindings, legacy theme inputs and the 0.40 movement blend. Run focused
+UI/preference compatibility checks only. Preserve unrelated edits, keep work
+local/uncommitted and leave original T042 open; no push or deployment.
+
+Subsequent review authorization permits committing only this cleanup, legacy
+preference normalization, related tests and matching notes. Run the full suite
+once on the clean committed candidate; stop and report on failure. On success,
+fetch origin and report every exact outgoing commit, including the separate
+Developer Kit commit if ahead. Do not push or deploy; leave T042 open.
+
 ## Frontend appearance follow-up (2026-11-10)
 
 Provide polished Dark and Light frontend appearances using shared design tokens

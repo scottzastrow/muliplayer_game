@@ -2,6 +2,34 @@
 
 Scoped sequential feature; retains original engine and Theme Credits context.
 
+## Controller-menu cleanup (2026-11-11)
+
+- [x] T034 Offer only Keyboard Only and Keyboard + Mouse in signup/lobby,
+  normalize legacy saved First-Person on all account reads and canonicalize
+  future preference writes. Add focused mounted UI and preference compatibility
+  tests; preserve NULL, bindings, 0.40 blend, legacy theme inputs and unrelated
+  edits. Record relevant checks only; keep changes local/uncommitted, original
+  T042 open and do not push or deploy. Authorized independently of T031/live gates.
+
+T034 evidence: the six new/updated menu/compatibility cases first failed against
+the three-choice UI and unnormalized preferences. After the account-boundary
+fix, focused UI, HTTP/storage/authentication, migration, SDK movement, default
+skin and entity regressions passed **6 files / 119 tests**, zero failures/skips,
+in **14.93 seconds**. Client and server type-checks and whitespace checks passed.
+All three account read paths normalize legacy values without writes; signup and
+updates persist canonical values, including old-client aliases. NULL behavior,
+bindings and 0.40 blend are retained; theme/SDK source and original T042 are
+unchanged. No hooks file exists. Detailed commands are in docs/verification.md.
+No browser, full-suite, capacity or deployment run was performed. Changes remain
+local/uncommitted; unrelated edits are preserved and original T042 remains open.
+
+Subsequent review authorization permits a controller-only commit, including
+legacy normalization, related tests and matching notes, after staged whitespace
+review. Run the full suite once on the clean committed candidate and stop on
+failure. If it passes, fetch origin and report exact outgoing commits, including
+the separate Developer Kit commit if ahead. Preserve unrelated edits and leave
+T042 open; no push or deployment.
+
 ## Frontend appearance follow-up (2026-11-10)
 
 - [x] T030 Add frontend-only shared Dark/Light tokens and an accessible locally

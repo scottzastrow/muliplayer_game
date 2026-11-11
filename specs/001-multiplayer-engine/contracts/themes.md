@@ -157,7 +157,10 @@ The host sets `controls.dataset.controlMode` to the authenticated account prefer
 Keyboard Only maps WASD to screen-direction movement and facing, left/right arrows
 to turning in place, and Space to firing. Keyboard + Mouse maps all arrows to
 screen-direction movement and facing, mouse movement to aim and left click to firing.
-First-Person uses Keyboard Only bindings. All three Dots and Squares modes rotate
+Only Keyboard Only and Keyboard + Mouse are offered as account preferences;
+legacy saved First-Person reads as Keyboard Only. The skin still accepts legacy
+`first-person` input with Keyboard Only bindings. Both canonical modes and that
+legacy input rotate
 held movement 40% of the shortest signed angle toward facing each authoritative update.
 The skin includes `controlMode` (`keyboard-only`, `keyboard-mouse`, `first-person`)
 in its default-theme combat intent; missing mode preserves unsteered legacy input.

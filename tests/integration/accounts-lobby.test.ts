@@ -4,6 +4,8 @@ import { DEFAULT_GAME_SETTINGS, validateMatchCapacity } from "@multiplayer-game/
 import { createApp } from "../../apps/server/src/app.js";
 import { readConfig } from "../../apps/server/src/config.js";
 import { openDatabase, runMigrations } from "../../apps/server/src/storage/database.js";
+import { verifyCredentials } from "../../apps/server/src/auth/accounts.js";
+import { authenticateSession } from "../../apps/server/src/auth/sessions.js";
 
 const ORIGIN = "https://game.example.test";
 const BASE_HEADERS = { origin: ORIGIN, "content-type": "application/json" };
@@ -494,24 +496,60 @@ describe("accounts and lobby integration", () => {
     expect(invalid.statusCode).toBe(400);
   });
 
-  it("persists First-Person at signup, login and lobby preference changes", async () => {
+  it("canonicalizes legacy First-Person requests at signup and preference updates", async () => {
     const account = await register("FirstPerson", "first-person");
-    expect(account.controlMode).toBe("first-person");
+    const storedMode = () => (database.prepare("SELECT control_mode FROM accounts WHERE id = ?")
+      .get(account.id) as { control_mode: string }).control_mode;
+    expect(account.controlMode).toBe("keyboard-only");
+    expect(storedMode()).toBe("keyboard-only");
     const signedIn = await login("FirstPerson", "correct horse battery staple 123");
-    expect(signedIn.json().account.controlMode).toBe("first-person");
+    expect(signedIn.json().account.controlMode).toBe("keyboard-only");
     const cookie = cookieFrom(signedIn);
     for (const controlMode of ["keyboard-only", "keyboard-mouse", "first-person"]) {
+      const expected = controlMode === "first-person" ? "keyboard-only" : controlMode;
       const saved = await app.inject({
         method: "PATCH", url: "/api/v1/me/control-mode",
         headers: { ...BASE_HEADERS, cookie }, payload: { controlMode }
       });
       expect(saved.statusCode).toBe(200);
-      expect(saved.json().account.controlMode).toBe(controlMode);
+      expect(saved.json().account.controlMode).toBe(expected);
+      expect(storedMode()).toBe(expected);
       const me = await app.inject({ url: "/api/v1/me", headers: { cookie } });
-      expect(me.json().account.controlMode).toBe(controlMode);
+      expect(me.json().account.controlMode).toBe(expected);
     }
     const signedInAgain = await login("FirstPerson", "correct horse battery staple 123");
-    expect(signedInAgain.json().account.controlMode).toBe("first-person");
+    expect(signedInAgain.json().account.controlMode).toBe("keyboard-only");
+  });
+
+  it("reads legacy saved First-Person as Keyboard Only without rewriting until an update", async () => {
+    const account = await register("LegacyFirstPerson");
+    database.prepare("UPDATE accounts SET control_mode = 'first-person' WHERE id = ?").run(account.id);
+    const password = "correct horse battery staple 123";
+    expect((await verifyCredentials(database, "LegacyFirstPerson", password))?.controlMode)
+      .toBe("keyboard-only");
+    const signedIn = await login("LegacyFirstPerson", password);
+    expect(signedIn.statusCode).toBe(200);
+    expect(signedIn.json().account.controlMode).toBe("keyboard-only");
+    const cookie = cookieFrom(signedIn);
+    const token = cookie.slice(cookie.indexOf("=") + 1);
+    expect(authenticateSession(database, token).controlMode).toBe("keyboard-only");
+    const me = await app.inject({ url: "/api/v1/me", headers: { cookie } });
+    expect(me.statusCode).toBe(200);
+    expect(me.json().account.controlMode).toBe("keyboard-only");
+    const storedMode = () => (database.prepare("SELECT control_mode FROM accounts WHERE id = ?")
+      .get(account.id) as { control_mode: string }).control_mode;
+    expect(storedMode()).toBe("first-person");
+
+    const saved = await app.inject({
+      method: "PATCH", url: "/api/v1/me/control-mode",
+      headers: { ...BASE_HEADERS, cookie },
+      payload: { controlMode: me.json().account.controlMode }
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().account.controlMode).toBe("keyboard-only");
+    expect(storedMode()).toBe("keyboard-only");
+    expect((await login("LegacyFirstPerson", password)).json().account.controlMode)
+      .toBe("keyboard-only");
   });
 
   async function register(

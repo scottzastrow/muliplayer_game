@@ -18,7 +18,7 @@ rewriting their stored JSON.
 | POST /auth/login | username, password | 200 account and Set-Cookie | Public, throttled |
 | POST /auth/logout | Empty | 204 and cleared cookie | Logged in |
 | GET /me | None | Account id/display name/role | Logged in |
-| PATCH /me/control-mode | controlMode (`keyboard-only`, `keyboard-mouse` or `first-person`) | Updated public account preference | Logged in |
+| PATCH /me/control-mode | controlMode (`keyboard-only` or `keyboard-mouse`; legacy `first-person` alias accepted) | Updated canonical public account preference | Logged in |
 | GET /sessions | None | Active session summaries | Logged in |
 | POST /sessions | settings, optional requestId | 201 session; creator joins as player | Logged in |
 | PATCH /sessions/:id/settings | Full validated settings, expectedRevision | Updated waiting session | Creator |
@@ -66,7 +66,11 @@ settings/package compatibility, 429 throttled, 503 not ready. Login failure uses
 generic message regardless of whether the username exists.
 
 `controlMode` is saved on the account and returned by registration, login and
-`GET /me`. Signup requires a valid value. Existing accounts receive `null` until
+`GET /me`. Canonical choices are `keyboard-only` and `keyboard-mouse`, the only
+choices offered at signup and in lobby preferences. Saved `first-person` values
+read as `keyboard-only` without rewriting storage. Registration and preference
+updates accept the legacy alias but persist and return `keyboard-only`.
+Signup requires a valid value. Existing accounts receive `null` until
 they choose one; the client blocks lobby access with a first-sign-in prompt. The
 authenticated same-origin update endpoint allows a player to change the value from
 the lobby. The preference does not alter server authority or the module's opaque
