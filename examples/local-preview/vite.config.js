@@ -1,3 +1,9 @@
+/* Theme Credits (generated)
+ * Project: Local Preview Sample
+ * Author: Scott Zastrow
+ * Description: Loopback-only Vite development configuration.
+ * End Theme Credits
+ */
 import { defineConfig } from "vite";
 
 export default defineConfig({

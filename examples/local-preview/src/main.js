@@ -1,3 +1,9 @@
+/* Theme Credits (generated)
+ * Project: Local Preview Sample
+ * Author: Scott Zastrow
+ * Description: Composes public runtime, module and skin for browser preview.
+ * End Theme Credits
+ */
 import { createLocalGame, mountLocalPreview } from "@multiplayer-game/local-preview";
 import { sampleGameModule } from "./game.js";
 import { sampleMap } from "./map.js";

@@ -161,10 +161,34 @@ manifest only; executable code is never accepted from an uploaded archive.
 
 ## Local workspace
 
+### Versioned Developer Kit assembly (2026-11-11)
+
+The engine-side standalone kit is now assembled at revision
+`570884aa82a18bdee2d4d58c18265098164238ba`. See
+[Developer Kit commands and distribution boundaries](developer-kit.md) and
+[API/settings reference](developer-kit-api.md). The single local ZIP contains
+built public protocol/SDK/local-preview packages, runtime dependencies, an
+editable credited sample, unchanged existing companion exporter/credits tools,
+a development-tool lockfile, provenance and checksums. Registry access is
+required for initial Vite tooling installation; no fully offline claim is made.
+
+The actual unpacked ZIP passed clean install, confirmed-credit setup, edited
+module/browser preview and asset export. Its exact manifest-only export passed
+the real importer with disposable SQLite/assets and matching sample metadata;
+unregistered code was rejected. This is not a production code registration or
+companion pin upgrade. The sample's confirmed Project is `Local Preview Sample`,
+public Author is `Scott Zastrow`, and Course is omitted. New projects must enter
+and confirm their own credits with the existing workflow.
+
+T031 remains open for separate companion adoption/pin integration and owner
+acceptance; T042 remains open. See docs/verification.md for actual evidence.
+No publish, commit, push or deployment was performed.
+
 ### Standalone local preview milestone (2026-11-10)
 
-The publishable (not published) local preview runtime and one sample are
-implemented; the complete Game Developer Kit remains deferred. The package is
+At this earlier milestone, the publishable (not published) local preview runtime
+and one sample were implemented; complete kit assembly was deferred to the
+2026-11-11 slice above. The package is
 `@multiplayer-game/local-preview` and uses the existing module, simulation and
 skin contracts:
 

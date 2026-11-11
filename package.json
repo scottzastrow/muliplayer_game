@@ -29,6 +29,8 @@
     "theme:build": "npm run build --workspace @multiplayer-game/protocol && npm run build --workspace @multiplayer-game/theme-sdk && npm run build --workspace @multiplayer-game/engine && npm run build --workspace @multiplayer-game/local-preview && npm run build --workspace @multiplayer-game/default-theme && npm run build --workspace @multiplayer-game/fixture-theme",
     "theme:preview": "npm run theme:build && npm run preview:themes --workspace @multiplayer-game/client",
     "theme:preview:verify": "node tools/verify-local-preview.mjs",
+    "kit:build": "node tools/build-developer-kit.mjs",
+    "kit:verify": "node tools/verify-developer-kit.mjs",
     "start": "node --env-file=.env apps/server/dist/main.js"
   },
   "devDependencies": {

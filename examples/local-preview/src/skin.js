@@ -1,3 +1,9 @@
+/* Theme Credits (generated)
+ * Project: Local Preview Sample
+ * Author: Scott Zastrow
+ * Description: Renders sample movement, map, score and accessible controls.
+ * End Theme Credits
+ */
 import { sampleMap } from "./map.js";
 
 export const sampleSkinFactory = Object.freeze({

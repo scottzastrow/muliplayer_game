@@ -14,5 +14,13 @@ movement, stop input and HUD output.
 
 This project is intentionally separate from the existing theme manifest/assets
 ZIP. That ZIP does not contain executable game code and cannot install or run
-this editable project. The visual editor and complete developer-kit ZIP remain
-deferred.
+this editable project. The versioned Developer Kit wraps this project and the
+built public preview packages separately; see the kit's root README and API
+guide. The visual editor remains deferred.
+
+The reference sample uses owner-confirmed Project `Local Preview Sample` and
+public Author `Scott Zastrow`, without Course. Preserve existing attribution.
+New projects must run the kit's `npm run credits` workflow and confirm their
+own public credits before `npm run theme:export -- --output theme-assets.zip`.
+The source manifest's placeholder digest is refreshed in the exported ZIP,
+not rewritten in source. No media assets are declared initially.

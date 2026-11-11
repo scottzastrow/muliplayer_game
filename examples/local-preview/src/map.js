@@ -1,3 +1,9 @@
+/* Theme Credits (generated)
+ * Project: Local Preview Sample
+ * Author: Scott Zastrow
+ * Description: Validated One Wall map and player spawns.
+ * End Theme Credits
+ */
 import { validateMapDefinition } from "@multiplayer-game/theme-sdk";
 
 export const sampleMap = validateMapDefinition({

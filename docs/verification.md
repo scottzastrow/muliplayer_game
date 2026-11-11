@@ -3059,3 +3059,88 @@ passing clean install. All were corrected before the passing browser
 verification. T031 remains open and T042 remains unchecked. The preview slice
 and its pin are committed locally for review; no push, publish or deployment has
 occurred.
+## Standalone Developer Kit ZIP (2026-11-11)
+
+Authorized engine revision: `570884aa82a18bdee2d4d58c18265098164238ba`.
+All changes remain local/uncommitted. Existing unrelated edits in the client,
+browser fixtures, account test and mixed feature/docs files were preserved.
+The companion checkout was read only; no source or contract-pin update occurred.
+T031 and original T042 remain open. No full suite, capacity run, multiplayer
+server, publish, commit, push or deployment was performed.
+
+Artifact:
+`var\developer-kit\multiplayer-game-developer-kit-0.1.0-570884aa82a1.zip`.
+SHA-256:
+`85364ffd83253ec19eb0f5f3ace2b05363345cd3b0bf3fdac760c221ac70f417`.
+Its adjacent `.zip.sha256` checks the whole archive; internal `SHA256SUMS`
+checks all 25 distributed files. A final rebuild with the explicit sample-source
+allowlist reproduced the exact same ZIP SHA-256, so the clean verification
+applies to the retained artifact. Contents include built public protocol,
+Theme SDK and local-preview 0.1.0 npm tarballs (no source maps), Zod 4.6.7,
+fflate 0.8.3, the editable sample, existing tools, lockfile, API/settings docs
+and provenance. Vite 7.3.7's development dependencies need initial npm registry
+access. Package licenses/attribution are retained. The private engine package,
+backend source, secrets, `.env`, storage and deployment files are excluded.
+
+Executed scoped commands:
+
+```powershell
+npm run kit:build -- --themes-directory ..\multiplayer-game-themes
+npm run kit:verify -- --archive var\developer-kit\multiplayer-game-developer-kit-0.1.0-570884aa82a1.zip
+npm test -- tests\local-preview.test.ts tests\theme-packages.test.ts
+npm run check --workspace @multiplayer-game/local-preview
+node --check tools\build-developer-kit.mjs
+node --check tools\verify-developer-kit.mjs
+node --check tools\verify-developer-kit-import.mjs
+node --check tools\developer-kit-checksums.mjs
+```
+
+Final artifact verification extracted to
+`C:\Users\Owner\AppData\Local\Temp\multiplayer-kit-verify-JXdtZU\unpacked`,
+outside the engine checkout. Integrity passed; `npm ci` installed 69 packages
+without an installed private engine package. The unchanged companion tools came
+from revision `778319f578b25081420e3334e1e68fa4de7540ec`; their actual file
+hashes are recorded in kit.json. The existing credit tool was used both to
+generate the seven source headers and from the clean-installed kit to reconfirm
+the owner's explicit Project `Local Preview Sample`, public Author
+`Scott Zastrow`, with no Course. Reconfirmation preserved manifest/source bytes.
+
+The sample's deterministic source-edit smoke measured a one-tick move of
+**4 -> 8**. The verifier then edited the actual unpacked `src\game.js` to
+multiplier 2, built it and started its own loopback Vite and headless Chrome
+with a disposable profile. Browser-loaded edited-module movement was exactly
+**8** per tick; rendered movement was **48 -> 72**, Stop halted movement and
+HUD output rendered without exceptions. This verifies local playable behavior,
+not production/multiplayer/browser-capacity behavior. Vite emitted only the
+previously observed upstream Zod annotation warnings.
+
+Whitespace-only `project` and `author` exports failed with the exact field
+errors and no output ZIP. The unchanged existing exporter then produced
+`theme-assets.zip` (**493 bytes**, only `theme.json`; the sample declares no
+media). It did not rewrite the source manifest. Exact asset ZIP SHA-256:
+`25e0d3475fc38b321aa3b12910ff2bea69ceac654096df92ff1183cb34f1e41c`.
+Canonical `assetsDigest`:
+`80f2bf631105615c36210fc1932680c4559a23072df131e4ae6bceec2e141553`.
+The real importer first rejected unregistered code without changing migration-
+seeded registry rows, then accepted those exact ZIP bytes with explicit test-only
+sample module/skin metadata. Imported credits, canonical digest, registry row,
+manifest-only installed files and unchanged archive bytes matched. This metadata
+fixture is not a production executable-code installation; stock engines still
+require reviewed owner registration before importing the sample package.
+
+Focused preview/importer regression selection passed **2 files / 10 tests**
+in **892 ms**. Runtime type-check and all four tooling syntax checks passed.
+Early packaging/verification attempts exposed four harness issues, corrected
+before the final pass: workspace npm packs initially included source maps
+(now removed only in temporary public-package staging); Git-normalized LF
+differed from checked-out CRLF (compare normalized text, copy original bytes);
+CDP evaluation required returning a promise instead of top-level await; and
+new SQLite migrations seed two reference revisions (assert unchanged baseline,
+not zero). No broad suite was repeated and no engine runtime/importer change
+was needed.
+
+The verifier stopped only its owned process IDs and removed its temporary
+extraction, browser profile and SQLite/assets. The versioned kit ZIP and sidecar
+remain in ignored `var\developer-kit`. Asset export distributes no executable
+module/skin; the outer kit distributes the editable developer preview project,
+not a deployed authoritative multiplayer game. No extension hooks file exists.

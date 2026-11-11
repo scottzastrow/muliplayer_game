@@ -76,6 +76,29 @@ try {
     "the selected map renders in the sample skin"
   );
   const initialX = await evaluate(sessionId, readXExpression());
+  if (process.env.SAMPLE_EXPECTED_STEP) {
+    const step = Number(process.env.SAMPLE_EXPECTED_STEP);
+    assert.ok(Number.isFinite(step) && step > 0);
+    const editedStep = await evaluate(sessionId, `(async () => {
+      const { createLocalGame } = await import("/node_modules/@multiplayer-game/local-preview/dist/index.js");
+      const { sampleGameModule } = await import("/src/game.js");
+      const { sampleMap } = await import("/src/map.js");
+      const { sampleSettings } = await import("/src/settings.js");
+      const game = await createLocalGame({
+        moduleFactory: sampleGameModule, settings: sampleSettings, map: sampleMap,
+        seed: 42, roster: [{ accountId: "edited", username: "Edited", joinedOrder: 0 }],
+        viewer: { accountId: "edited", role: "player" }
+      });
+      try {
+        const before = game.snapshot.players[0].position.x;
+        game.sendInput("edited", { type: "move", x: 1, y: 0 });
+        game.step();
+        return game.snapshot.players[0].position.x - before;
+      } finally { game.dispose(); }
+    })()`);
+    assert.equal(editedStep, step, "browser-loaded edited module has the exact expected movement");
+    console.log(`Browser-loaded source edit: one-step movement ${editedStep}.`);
+  }
   await evaluate(sessionId, `[...document.querySelectorAll("button")].find(button => button.textContent === "Move east").click()`);
   await waitFor(sessionId, `${readXExpression()} > ${initialX}`);
   const movedX = await evaluate(sessionId, readXExpression());

@@ -1,3 +1,9 @@
+/* Theme Credits (generated)
+ * Project: Local Preview Sample
+ * Author: Scott Zastrow
+ * Description: Editable fixed-step movement module for the local preview sample.
+ * End Theme Credits
+ */
 import { sampleMap } from "./map.js";
 
 const SPEED_MULTIPLIER = 1;
