@@ -21,6 +21,7 @@ const INPUT_INTERVAL_MS = 1000 / 30;
 const SNAPSHOT_INTERVAL_MS = 1000 / 15;
 const FACING_DOT_RADIUS = 3;
 const TURN_RADIANS_PER_SECOND = Math.PI;
+const GAMEPAD_DEADZONE = 0.15;
 const TERRAIN_TILE_SIZE = 32;
 const TERRAIN_TILE_COLORS = Object.freeze(["#2b3d51", "#2d4155"]);
 const TERRAIN_SEAM_COLOR = "#3b5168";
@@ -49,12 +50,15 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     const canvas = document.createElement("canvas");
     canvas.tabIndex = 0;
     const selectedMode = controls.dataset.controlMode;
-    const controlMode = selectedMode === "keyboard-only" || selectedMode === "first-person"
-      ? selectedMode : "keyboard-mouse";
-    const keyboardControls = controlMode !== "keyboard-mouse";
-    canvas.setAttribute("aria-label", keyboardControls
-      ? "Dots and Squares game. WASD to move and face, left and right arrows to turn, Space to fire."
-      : "Dots and Squares game. Arrow keys to move and face, mouse to aim, left click to fire.");
+    const controlMode = selectedMode === "keyboard-only" || selectedMode === "first-person" ||
+      selectedMode === "game-controller" ? selectedMode : "keyboard-mouse";
+    const keyboardControls = controlMode === "keyboard-only" || controlMode === "first-person";
+    const mouseControls = controlMode === "keyboard-mouse";
+    canvas.setAttribute("aria-label", controlMode === "game-controller"
+      ? "Dots and Squares game. Left stick to move, right stick to aim, right trigger to fire."
+      : keyboardControls
+        ? "Dots and Squares game. WASD to move and face, left and right arrows to turn, Space to fire."
+        : "Dots and Squares game. Arrow keys to move and face, mouse to aim, left click to fire.");
     canvas.style.display = "block";
     canvas.style.width = "100%";
     canvas.style.height = "100%";
@@ -100,12 +104,21 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     optionsTitle.textContent = "Controls & radar";
     options.append(optionsTitle);
     const help = document.createElement("p");
-    help.textContent = keyboardControls
-      ? "The game is focused when the match opens; click it to refocus. WASD: move and face. Left/Right arrows: turn in place. Space: fire."
-      : "The game is focused when the match opens; click it to refocus. Arrow keys: move and face. Mouse: aim. Left click: fire.";
-    help.textContent += " Held movement steers 40% toward facing; turning at rest stays in place.";
+    help.textContent = controlMode === "game-controller"
+      ? "The game is focused when the match opens; click it to refocus. Left stick: move at variable speed. Right stick: aim and turn. Right trigger: fire."
+      : keyboardControls
+        ? "The game is focused when the match opens; click it to refocus. WASD: move and face. Left/Right arrows: turn in place. Space: fire."
+        : "The game is focused when the match opens; click it to refocus. Arrow keys: move and face. Mouse: aim. Left click: fire.";
+    if (controlMode !== "game-controller") {
+      help.textContent += " Held movement steers 40% toward facing; turning at rest stays in place.";
+    }
     options.append(help);
-    controls.append(options);
+    const controllerStatus = document.createElement("div");
+    controllerStatus.setAttribute("role", "status");
+    controllerStatus.setAttribute("aria-live", "polite");
+    controllerStatus.hidden = controlMode !== "game-controller";
+    controllerStatus.textContent = "Controller disconnected. Connect a standard-mapped controller.";
+    controls.append(options, controllerStatus);
     world.append(canvas, life, terrainCoverage);
     const listeners = new AbortController();
     const radarFilters = document.createElement("fieldset");
@@ -153,6 +166,10 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     let pointerPosition: { x: number; y: number } | undefined;
     let mouseAiming = false;
     let localFacing = false;
+    let controllerConnected = false;
+    let controllerMovement = { x: 0, y: 0 };
+    let controllerAim: { x: number; y: number } | undefined;
+    let controllerFire = false;
 
     function sendNeutral(): void {
       if (!sending) return;
@@ -165,7 +182,12 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     function clearControls(): void {
       keys.clear();
       fire = false;
+      controllerMovement = { x: 0, y: 0 };
+      controllerFire = false;
       sendNeutral();
+    }
+    function setControllerStatus(message: string): void {
+      if (controllerStatus.textContent !== message) controllerStatus.textContent = message;
     }
     function listen(
       target: EventTarget,
@@ -174,6 +196,47 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     ): void {
       target.addEventListener(type, listener, { signal: listeners.signal });
     }
+    function pollGamepad(): boolean {
+      if (controlMode !== "game-controller") return false;
+      const getGamepads = document.defaultView?.navigator.getGamepads;
+      if (!getGamepads) {
+        setControllerStatus("Game controllers are not available in this browser.");
+        controllerConnected = false;
+        controllerMovement = { x: 0, y: 0 };
+        controllerAim = undefined;
+        controllerFire = false;
+        return false;
+      }
+      const gamepads = getGamepads.call(document.defaultView?.navigator);
+      const connected = Array.from(gamepads).filter((gamepad): gamepad is Gamepad =>
+        gamepad !== null && gamepad.connected);
+      const gamepad = connected.find(candidate => candidate.mapping === "standard");
+      if (!gamepad) {
+        const wasConnected = controllerConnected;
+        controllerConnected = false;
+        controllerMovement = { x: 0, y: 0 };
+        controllerAim = undefined;
+        controllerFire = false;
+        setControllerStatus(connected.length > 0
+          ? "Controller connected, but its browser mapping is unsupported. Use a standard-mapped controller."
+          : "Controller disconnected. Connect a standard-mapped controller.");
+        if (wasConnected) clearControls();
+        return false;
+      }
+
+      controllerConnected = true;
+      setControllerStatus(`Controller connected: ${gamepad.id || "standard gamepad"}.`);
+      controllerMovement = applyGamepadDeadzone(gamepad.axes[0] ?? 0, gamepad.axes[1] ?? 0);
+      const aim = applyGamepadDeadzone(gamepad.axes[2] ?? 0, gamepad.axes[3] ?? 0);
+      controllerAim = Math.hypot(aim.x, aim.y) > 0
+        ? { x: aim.x / Math.hypot(aim.x, aim.y), y: aim.y / Math.hypot(aim.x, aim.y) }
+        : undefined;
+      const trigger = gamepad.buttons[7];
+      controllerFire = trigger !== undefined && (trigger.pressed || trigger.value >= 0.5);
+      return true;
+    }
+    listen(window, "gamepadconnected", () => { pollGamepad(); });
+    listen(window, "gamepaddisconnected", () => { pollGamepad(); });
     listen(canvas, "focus", () => { focused = true; });
     listen(canvas, "blur", () => { focused = false; clearControls(); });
     listen(canvas, "keydown", (event) => {
@@ -236,6 +299,15 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     });
 
     function aimPoint(target: DefaultView["players"][number]): { x: number; y: number } {
+      if (controlMode === "game-controller" && controllerAim) {
+        facingAngle = Math.atan2(controllerAim.y, controllerAim.x);
+        facingInitialized = true;
+        localFacing = true;
+        return {
+          x: target.position.x + controllerAim.x * 100,
+          y: target.position.y + controllerAim.y * 100
+        };
+      }
       const camera = host.cameraAnchor ?? target.position;
       const pointerTarget = {
         x: Math.max(0, Math.min(current?.map.width ?? Infinity, camera.x + pointer.x - width / 2)),
@@ -257,6 +329,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     }
 
     function movement(): { x: number; y: number } {
+      if (controlMode === "game-controller") return controllerMovement;
       const x = keyboardControls
         ? Number(keys.has("KeyD")) - Number(keys.has("KeyA"))
         : Number(keys.has("ArrowRight")) - Number(keys.has("ArrowLeft"));
@@ -268,6 +341,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     }
 
     function isMovementKey(code: string): boolean {
+      if (!keyboardControls && !mouseControls) return false;
       return (keyboardControls
         ? ["KeyW", "KeyA", "KeyS", "KeyD"]
         : ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]).includes(code);
@@ -283,6 +357,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     }
 
     function isControlKey(code: string): boolean {
+      if (controlMode === "game-controller") return false;
       return keyboardControls
         ? ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowLeft", "ArrowRight", "Space"].includes(code)
         : ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(code);
@@ -352,6 +427,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
       },
       render(time) {
         if (disposed || !current) return;
+        const controllerAvailable = controlMode !== "game-controller" || pollGamepad();
         const elapsed = lastRenderAt === undefined
           ? 0
           : Math.min(0.1, Math.max(0, (time - lastRenderAt) / 1000));
@@ -491,7 +567,8 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
               ? "Waiting for a safe respawn..." : `Respawning in ${remaining}s`
           : "";
         life.hidden = life.textContent === "";
-        if (focused && player.alive && current.phase === "active" && current.viewerRole === "player" &&
+        if (focused && controllerAvailable && player.alive && current.phase === "active" &&
+            current.viewerRole === "player" &&
             time - lastInputAt >= INPUT_INTERVAL_MS) {
           const direction = movement();
           const aim = aimPoint(player);
@@ -502,7 +579,8 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
             controlMode,
             moveX: direction.x, moveY: direction.y,
             aimX: aim.x, aimY: aim.y,
-            fire: keyboardControls ? keys.has("Space") : fire
+            fire: keyboardControls ? keys.has("Space")
+              : controlMode === "game-controller" ? controllerFire : fire
           });
         }
 
@@ -532,6 +610,15 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
 function healthPulsePhase(time: number): number {
   return ((time % HEALTH_RADAR_PULSE_MS) + HEALTH_RADAR_PULSE_MS) % HEALTH_RADAR_PULSE_MS /
     HEALTH_RADAR_PULSE_MS;
+}
+
+function applyGamepadDeadzone(x: number, y: number): { x: number; y: number } {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return { x: 0, y: 0 };
+  const magnitude = Math.hypot(x, y);
+  if (magnitude <= GAMEPAD_DEADZONE) return { x: 0, y: 0 };
+  const scaledMagnitude = Math.min(1, (magnitude - GAMEPAD_DEADZONE) / (1 - GAMEPAD_DEADZONE));
+  const scale = scaledMagnitude / magnitude;
+  return { x: x * scale, y: y * scale };
 }
 
 function drawTerrain(

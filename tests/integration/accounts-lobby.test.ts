@@ -487,11 +487,26 @@ describe("accounts and lobby integration", () => {
     });
     expect(afterSignIn.json().account.controlMode).toBe("keyboard-mouse");
 
+    const savedController = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/me/control-mode",
+      headers: { ...BASE_HEADERS, cookie: secondCookie },
+      payload: { controlMode: "game-controller" }
+    });
+    expect(savedController.statusCode).toBe(200);
+    expect(savedController.json().account.controlMode).toBe("game-controller");
+    expect((await login("LegacyChoice", "correct horse battery staple 123"))
+      .json().account.controlMode).toBe("game-controller");
+    const controllerSignup = await register("ControllerSignup", "game-controller");
+    expect(controllerSignup.controlMode).toBe("game-controller");
+    expect((await login("ControllerSignup", "correct horse battery staple 123"))
+      .json().account.controlMode).toBe("game-controller");
+
     const invalid = await app.inject({
       method: "PATCH",
       url: "/api/v1/me/control-mode",
       headers: { ...BASE_HEADERS, cookie: secondCookie },
-      payload: { controlMode: "gamepad" }
+      payload: { controlMode: "game-pad" }
     });
     expect(invalid.statusCode).toBe(400);
   });
@@ -505,7 +520,7 @@ describe("accounts and lobby integration", () => {
     const signedIn = await login("FirstPerson", "correct horse battery staple 123");
     expect(signedIn.json().account.controlMode).toBe("keyboard-only");
     const cookie = cookieFrom(signedIn);
-    for (const controlMode of ["keyboard-only", "keyboard-mouse", "first-person"]) {
+    for (const controlMode of ["keyboard-only", "keyboard-mouse", "game-controller", "first-person"]) {
       const expected = controlMode === "first-person" ? "keyboard-only" : controlMode;
       const saved = await app.inject({
         method: "PATCH", url: "/api/v1/me/control-mode",
@@ -554,7 +569,7 @@ describe("accounts and lobby integration", () => {
 
   async function register(
     username: string,
-    controlMode: "keyboard-only" | "keyboard-mouse" | "first-person" = "keyboard-mouse"
+    controlMode: "keyboard-only" | "keyboard-mouse" | "game-controller" | "first-person" = "keyboard-mouse"
   ): Promise<Record<string, unknown>> {
     const response = await app.inject({
       method: "POST",

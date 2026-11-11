@@ -1,6 +1,6 @@
 import { showStatus } from "./ui.js";
 
-export type ControlMode = "keyboard-only" | "keyboard-mouse";
+export type ControlMode = "keyboard-only" | "keyboard-mouse" | "game-controller";
 
 export interface ClientAccount {
   id: string;
@@ -106,7 +106,8 @@ export function createControlModeFieldset(selected?: ControlMode): HTMLFieldSetE
   fieldset.append(legend);
   for (const [value, labelText] of [
     ["keyboard-only", "Keyboard Only — WASD to move, left/right arrows to turn, Space to fire"],
-    ["keyboard-mouse", "Keyboard + Mouse — all four arrow keys to move, mouse to aim, left click to fire"]
+    ["keyboard-mouse", "Keyboard + Mouse — all four arrow keys to move, mouse to aim, left click to fire"],
+    ["game-controller", "Game Controller — left stick to move, right stick to aim, right trigger to fire"]
   ] as const) {
     const label = document.createElement("label");
     const input = document.createElement("input");
@@ -123,7 +124,7 @@ export function createControlModeFieldset(selected?: ControlMode): HTMLFieldSetE
 
 export function selectedControlMode(fieldset: HTMLFieldSetElement): ControlMode | undefined {
   const value = fieldset.querySelector<HTMLInputElement>('input[name="controlMode"]:checked')?.value;
-  return value === "keyboard-only" || value === "keyboard-mouse"
+  return value === "keyboard-only" || value === "keyboard-mouse" || value === "game-controller"
     ? value : undefined;
 }
 

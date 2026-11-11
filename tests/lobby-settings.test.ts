@@ -45,8 +45,8 @@ class ElementStub extends EventTarget {
 describe("lobby settings and control preferences", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it.each(["keyboard-only", "keyboard-mouse"] as const)(
-    "offers only the two canonical signup choices and submits %s", async controlMode => {
+  it.each(["keyboard-only", "keyboard-mouse", "game-controller"] as const)(
+    "offers all three canonical signup choices and submits %s", async controlMode => {
       const root = new ElementStub("div");
       const status = new ElementStub("div");
       vi.stubGlobal("document", {
@@ -62,7 +62,9 @@ describe("lobby settings and control preferences", () => {
       form.children.find(node => node.className === "link-button")!.dispatchEvent(new Event("click"));
       const choices = root.descendants().find(node => node.tagName === "fieldset")!;
       const radios = choices.descendants().filter(node => node.name === "controlMode");
-      expect(radios.map(node => node.value)).toEqual(["keyboard-only", "keyboard-mouse"]);
+      expect(radios.map(node => node.value)).toEqual([
+        "keyboard-only", "keyboard-mouse", "game-controller"
+      ]);
       expect(radios.every(node => !node.disabled && !node.checked)).toBe(true);
       expect(choices.descendants().map(node => node.textContent).join(" ")).not.toContain("First-Person");
       root.descendants().find(node => node.name === "username")!.value = "Pilot";
@@ -77,8 +79,8 @@ describe("lobby settings and control preferences", () => {
     }
   );
 
-  it.each(["keyboard-only", "keyboard-mouse"] as const)(
-    "offers only the two canonical lobby preferences and restores/saves %s", async controlMode => {
+  it.each(["keyboard-only", "keyboard-mouse", "game-controller"] as const)(
+    "offers all three canonical lobby preferences and restores/saves %s", async controlMode => {
       vi.stubGlobal("document", {
         createElement: (tag: string) => new ElementStub(tag),
         createTextNode: (text: string) => Object.assign(new ElementStub("#text"), { textContent: text })
@@ -97,7 +99,9 @@ describe("lobby settings and control preferences", () => {
       const form = root.descendants().find(node => node.tagName === "form")!;
       const choices = form.children[0]!;
       const radios = choices.descendants().filter(node => node.name === "controlMode");
-      expect(radios.map(node => node.value)).toEqual(["keyboard-only", "keyboard-mouse"]);
+      expect(radios.map(node => node.value)).toEqual([
+        "keyboard-only", "keyboard-mouse", "game-controller"
+      ]);
       expect(radios.filter(node => node.checked).map(node => node.value)).toEqual([controlMode]);
       form.dispatchEvent(new Event("submit", { cancelable: true }));
       await vi.waitFor(() => expect(onSaved).toHaveBeenCalledWith(account));

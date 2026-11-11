@@ -898,6 +898,115 @@ describe("Dots and Squares presentation", () => {
     }
   });
 
+  it("uses a standard gamepad for analog movement, aim and fire, then stops on disconnect", () => {
+    const buttons = Array.from({ length: 8 }, () => ({ pressed: false, value: 0 }));
+    buttons[7] = { pressed: false, value: 0.75 };
+    const gamepad = {
+      id: "Simulated standard controller", connected: true, mapping: "standard",
+      axes: [0.5, 0, 0, -1], buttons
+    } as Gamepad;
+    let gamepads: (Gamepad | null)[] = [gamepad];
+    vi.stubGlobal("document", Object.assign(new EventTarget(), {
+      defaultView: { navigator: { getGamepads: () => gamepads } },
+      createTextNode: (text: string) => Object.assign(new HudElement(), { textContent: text }),
+      createElement: () => new HudElement()
+    }));
+    const browserWindow = new EventTarget();
+    vi.stubGlobal("window", browserWindow);
+    const slots = new Map(["world", "hud", "controls"].map(name => [name, document.createElement("div")]));
+    slots.get("controls")!.dataset.controlMode = "game-controller";
+    const dispatchInput = vi.fn();
+    const host: SkinHost = {
+      slots, selectedTarget: { accountId: "alice", username: "Alice" },
+      cameraAnchor: undefined, setCameraAnchor(anchor) { this.cameraAnchor = anchor; },
+      dispatchInput, navigate: () => {}
+    };
+    const skin = defaultSkinFactory.mount(host, {
+      image: async () => { throw new Error("No images used."); },
+      audio: async () => { throw new Error("No audio used."); }
+    });
+    const canvas = slots.get("world")!.children[0] as unknown as HudElement;
+    const controllerStatus = slots.get("controls")!.children[1]!;
+    const snapshot = view(500);
+    let time = 0;
+    const render = () => {
+      skin.render(time += 40, snapshot);
+      return DefaultCombatActionSchema.parse(dispatchInput.mock.lastCall![0]);
+    };
+    try {
+      skin.handleViewport(800, 600, 1);
+      skin.handleSnapshot(snapshot);
+      canvas.focus();
+      const input = render();
+      const analogSpeed = (0.5 - 0.15) / (1 - 0.15);
+      expect(input).toMatchObject({
+        controlMode: "game-controller", moveX: analogSpeed, moveY: 0, fire: true
+      });
+      expect(input.aimX).toBeCloseTo(500);
+      expect(input.aimY).toBeCloseTo(0);
+      expect(controllerStatus.textContent).toContain("Controller connected");
+      expect(controllerStatus.hidden).toBe(false);
+
+      const map = generateMap(42, "fixed").map;
+      const world = new SessionWorld<DefaultEntity>("gamepad-steering", map.definition.bounds, map.obstacles);
+      const simulator = new DefaultEntitySimulator({
+        clock: { nowMs: () => 0 },
+        random: { next: () => 0.5 },
+        entities: {
+          get: id => world.getEntity(id),
+          add: entity => world.addEntity(entity),
+          update: (id, update) => {
+            const entity = world.getEntity(id);
+            if (!entity) throw new Error(`Missing entity ${id}.`);
+            world.addEntity(update(entity));
+          },
+          remove: id => world.removeEntity(id),
+          values: () => world.entities(),
+          queryRadius: (center, radius, maxCells) => world.queryEntities(center, radius, maxCells)
+        },
+        geometry: {
+          isWalkable: (x, y, radius = 0) => world.geometry.isCircleWalkable({ x, y }, radius),
+          intersectsObstacle: (x, y, radius) => world.geometry.intersectsObstacle({ x, y }, radius),
+          moveCircle: (position, delta, radius) => world.geometry.moveCircle(position, delta, radius)
+        },
+        navigation: { requestPath: () => undefined, getPath: () => undefined },
+        emit: () => {},
+        requestCompletion: () => {},
+        metrics: { increment: () => {}, gauge: () => {} }
+      }, 0);
+      try {
+        simulator.initialize(map, [{ accountId: "alice", username: "Alice", joinedOrder: 0 }], 1);
+        const player = world.getEntity("player:alice")!;
+        world.addEntity({ ...player, position: { x: 500, y: 100 } });
+        simulator.applyInput("alice", input);
+        simulator.step(1 / 30, 1);
+        const moved = world.getEntity(player.id)!.position;
+        const distance = Math.hypot(moved.x - 500, moved.y - 100);
+        expect(Math.atan2(moved.y - 100, moved.x - 500) * 180 / Math.PI).toBeCloseTo(-36, 8);
+        expect(distance).toBeCloseTo(PLAYER_SPEED * analogSpeed / 30, 8);
+      } finally { simulator.dispose(); }
+
+      const sentBeforeDisconnect = dispatchInput.mock.calls.length;
+      gamepads = [];
+      browserWindow.dispatchEvent(new Event("gamepaddisconnected"));
+      expect(controllerStatus.textContent).toContain("Controller disconnected");
+      expect(dispatchInput.mock.lastCall![0]).toMatchObject({
+        type: "combat", moveX: 0, moveY: 0, fire: false
+      });
+      const sentAfterDisconnect = dispatchInput.mock.calls.length;
+      expect(sentAfterDisconnect).toBe(sentBeforeDisconnect + 1);
+      skin.render(time += 40, snapshot);
+      expect(dispatchInput.mock.calls.length).toBe(sentAfterDisconnect);
+      gamepads = [{ ...gamepad, mapping: "" } as Gamepad];
+      browserWindow.dispatchEvent(new Event("gamepadconnected"));
+      expect(controllerStatus.textContent).toContain("mapping is unsupported");
+      skin.render(time += 40, snapshot);
+      expect(dispatchInput.mock.calls.length).toBe(sentAfterDisconnect);
+    } finally {
+      skin.dispose();
+    }
+  });
+
   it("draws the generated snapshot's collision rectangles at their world positions", () => {
     const elements: HudElement[] = [];
     vi.stubGlobal("document", Object.assign(new EventTarget(), {

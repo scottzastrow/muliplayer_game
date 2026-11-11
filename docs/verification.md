@@ -49,6 +49,29 @@ the exact outgoing commits, including the existing Developer Kit commit if
 ahead. No push or deployment is authorized; original T042 remains unchecked.
 The committed-candidate suite result is not yet available at note-writing time.
 
+## Game Controller support (2026-11-11)
+
+Signup and lobby preferences include Game Controller. The default skin reads a
+standard-mapped browser Gamepad: left stick movement, right stick aim, and right
+trigger firing, with a radial deadzone and neutral input on disconnect. The
+SQLite migration adds the preference while preserving existing choices,
+including legacy `first-person` values and NULL.
+
+Executed locally on Windows:
+
+```powershell
+npm run build --workspace @multiplayer-game/default-theme
+npm run check --workspace @multiplayer-game/client
+npm run check --workspace @multiplayer-game/server
+npm test -- tests\lobby-settings.test.ts tests\integration\accounts-lobby.test.ts tests\database.test.ts tests\default-skin.test.ts
+```
+
+The default-theme build and client/server type-checks passed. Focused Vitest
+passed **4 files / 54 tests**, zero failures/skips. The gamepad behavior was
+tested with a simulated standard-mapped Gamepad; physical-controller
+verification remains pending. No browser session was run.
+Original T042 remains open; no push or deployment was performed.
+
 ## Frontend Dark/Light appearance (2026-11-10, T030)
 
 Shared frontend tokens now cover page/card/HUD surfaces, text, borders, form

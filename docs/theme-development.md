@@ -125,11 +125,15 @@ reasserting facing. In Keyboard + Mouse mode, hold Down Arrow, move the pointer
 left and click to keep the downward input while aiming/firing left. In Keyboard
 Only mode, hold S, rotate with Left/Right Arrow and press Space: the held input
 remains down while travel bends toward facing and firing follows the rotation.
-Signup and lobby preferences offer only Keyboard Only and Keyboard + Mouse.
-Legacy saved First-Person preferences read as Keyboard Only without changing
-storage on read; future preference updates store the canonical choice, including
-requests from old clients that still send `first-person`. Both choices apply the
-same facing-steered movement, including mouse aim while a movement key is held.
+Signup and lobby preferences offer Keyboard Only, Keyboard + Mouse, and Game
+Controller. Game Controller uses the standard browser Gamepad mapping: the left
+stick moves with variable analog speed, the right stick aims/turns, and the right
+trigger fires. A 0.15 radial stick deadzone filters drift; disconnecting or
+losing focus clears held input. Unsupported mappings are not used. Legacy saved
+First-Person preferences read as Keyboard Only without changing storage on read;
+future preference updates store the canonical choice, including requests from
+old clients that still send `first-person`. All three choices apply the same
+40% facing-steered movement, including controller aim or mouse aim while moving.
 
 Dots and Squares exports the theme tuning setting `PLAYER_FACING_MOVEMENT_BLEND`
 from `themes/default/src/module/tuning.ts`, set to `0.40`, and explicitly passes

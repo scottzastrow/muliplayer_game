@@ -19,6 +19,7 @@ const expectedMigrations = [
 "007-account-control-mode.sql",
 "008-match-completion-reason.sql",
 "009-first-person-controls.sql",
+"010-game-controller-controls.sql",
 ];
 
 let temporaryDirectory: string | undefined;
@@ -31,10 +32,10 @@ afterEach(() => {
 });
 
 describe("SQLite migrations and restart reconciliation", () => {
-  it("preserves existing control choices when adding First-Person", () => {
+  it("preserves existing control choices when adding Game Controller", () => {
     const database = openDatabase(":memory:");
     try {
-      for (const name of expectedMigrations.slice(0, -1)) {
+      for (const name of expectedMigrations.slice(0, -2)) {
         database.exec(readFileSync(join(DEFAULT_MIGRATIONS_DIRECTORY, name), "utf8"));
       }
       const modes = ["keyboard-only", "keyboard-mouse", null];
@@ -44,10 +45,14 @@ describe("SQLite migrations and restart reconciliation", () => {
          VALUES (?, ?, ?, 'test-hash', 'test-salt', 'player', 'now', ?)`
       );
       modes.forEach((mode, index) => insert.run(`p${index}`, `user${index}`, `user${index}`, mode));
+      database.exec(readFileSync(join(DEFAULT_MIGRATIONS_DIRECTORY, expectedMigrations.at(-2)!), "utf8"));
+      insert.run("p3", "user3", "user3", "first-person");
       database.exec(readFileSync(join(DEFAULT_MIGRATIONS_DIRECTORY, expectedMigrations.at(-1)!), "utf8"));
       expect(database.prepare("SELECT control_mode FROM accounts ORDER BY id").all())
-        .toEqual(modes.map(control_mode => ({ control_mode })));
+        .toEqual([...modes, "first-person"].map(control_mode => ({ control_mode })));
       expect(() => database.prepare("UPDATE accounts SET control_mode = 'first-person'").run())
+        .not.toThrow();
+      expect(() => database.prepare("UPDATE accounts SET control_mode = 'game-controller'").run())
         .not.toThrow();
       expect(() => database.prepare("UPDATE accounts SET control_mode = 'gamepad'").run()).toThrow();
       expect(database.pragma("foreign_key_check")).toEqual([]);
