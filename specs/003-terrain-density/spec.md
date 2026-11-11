@@ -1,5 +1,21 @@
 # Feature Specification: Per-Level Terrain Density
 
+## Frontend appearance follow-up (2026-11-10)
+
+Provide polished Dark and Light frontend appearances using shared design tokens
+for backgrounds, text, borders, forms, buttons, dialogs and standings in login,
+lobby, player and spectator views. A labelled keyboard-accessible switch uses
+system preference on first visit and remembers an explicit choice locally.
+Text must meet 4.5:1 contrast and focus/control boundaries 3:1 in both appearances.
+Keep appearance out of game/theme packages; preserve arena and entity colors,
+bright-blue health markers, radar animation, controls and gameplay. Run focused
+checks and actual visual verification of all four views in both appearances.
+Preserve unrelated edits, keep changes local/uncommitted and original T042 open.
+
+Subsequent review authorization permits committing and pushing only the
+appearance slice, related tests and verification notes after the full suite
+passes on the committed candidate and a sole-outgoing-commit check. Do not deploy.
+
 ## Health packs and radar follow-up (2026-11-10)
 
 Provide a developer-only `healthPacksPerPlayerPerWave` setting, default 3,

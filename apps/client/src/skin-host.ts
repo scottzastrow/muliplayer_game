@@ -1,6 +1,7 @@
 import type { JsonValue } from "@multiplayer-game/protocol";
 import type { AssetLoader, Point2, SkinFactory, SkinHost, SkinInstance } from "@multiplayer-game/theme-sdk";
 import type { ControlMode } from "./auth.js";
+import { getAppearanceControl } from "./appearance.js";
 
 export interface MountedSkinHost {
   readonly host: SkinHost;
@@ -30,6 +31,8 @@ export function mountSkinHost(
   controls.className = "game-controls";
   controls.dataset.controlMode = options.controlMode ?? "keyboard-mouse";
   root.replaceChildren(hud, world, controls);
+  const appearance = getAppearanceControl();
+  const appearanceParent = appearance?.parentElement;
   let cameraAnchor: Point2 | undefined;
   let disposed = false;
   let disposing = false;
@@ -73,6 +76,9 @@ export function mountSkinHost(
       window.removeEventListener("resize", onResize);
       cameraAnchor = undefined;
       snapshot = undefined;
+      if (appearance && appearanceParent && appearance.parentElement === hud) {
+        appearanceParent.append(appearance);
+      }
     }
   }
   function guarded(action: () => void): void {
@@ -94,6 +100,7 @@ export function mountSkinHost(
   try {
     skin = factory.mount(host, assets);
     hud.prepend(...(options.toolbar ?? []));
+    if (appearance) hud.append(appearance);
     resize();
     observer.observe(world);
     window.addEventListener("resize", onResize);

@@ -26,6 +26,18 @@ Open this checkout in IntelliJ with Copilot Agent mode. Follow `.github/copilot-
 
 The protocol and theme SDK are versioned public workspace packages (`@multiplayer-game/protocol` and `@multiplayer-game/theme-sdk`). The server foundation now validates configuration, applies SQLite migrations at startup, marks stale matches interrupted, and exposes liveness/readiness checks. `npm run db:migrate`, `npm run check`, `npm test`, and `npm run build` are available with Node 24 and a local `.env`.
 
+## Frontend appearance
+
+Use the labelled **Appearance** selector in the application header or match
+toolbar to choose Light or Dark. On first visit the frontend follows the system
+preference; an explicit choice is remembered locally on that browser, independently
+of accounts and Game Themes. If browser storage is unavailable, the choice still
+works for the current page and a status message explains that it cannot be saved.
+
+Frontend colors are shared CSS tokens in `apps/client/src/style.css`. Appearance
+does not recolor the arena, players, enemies, health radar or other game rendering.
+Native browser confirmation dialogs remain browser-managed.
+
 ## Confirmed scope
 
 - Public registration and login with username and password; authenticated players can rejoin their existing active session. Store password hashes, never plaintext passwords.

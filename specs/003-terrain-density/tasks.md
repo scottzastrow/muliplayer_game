@@ -2,6 +2,34 @@
 
 Scoped sequential feature; retains original engine and Theme Credits context.
 
+## Frontend appearance follow-up (2026-11-10)
+
+- [x] T030 Add frontend-only shared Dark/Light tokens and an accessible locally
+  remembered appearance selector with system first-visit preference. Preserve
+  arena/entity colors, bright-blue health radar animation, controls and gameplay.
+  Verify readable text, visible keyboard focus and both appearances in actual
+  login, lobby, player and spectator views; record focused checks and gaps.
+  Follows T029; preserve unrelated edits and leave original T042 open.
+  Changes remain local and uncommitted.
+
+T030 evidence: client type-check and production build passed; the final focused
+selection passed **5 files / 46 tests** in **11.64 seconds**, without failures
+or skips. Visible Chrome 157 verified Light/Dark login, full lobby, player,
+spectator roster/follow, running standings and saved results, with inspected
+screenshots and measured frontend text contrast at least **5.52:1**, enabled
+control boundaries **3.29:1** and selector focus **5.63:1**. Keyboard focus,
+system-first behavior, saved choice/reload, return-to-lobby restoration, real
+movement/firing and both-role clipped health pulses/static reduced-motion halos
+passed. Appearance and tokens live only in the frontend; no game/theme package
+or public contract was changed. Detailed commands, fixture corrections,
+artifact paths and browser coverage limits are in docs/verification.md.
+Original T042 and unrelated edits remain untouched; no commit/push/deployment
+or broad suite was performed. No extension hooks file exists.
+
+Subsequent owner authorization permits a scoped appearance commit and non-force
+push after the full suite passes on that commit and it is the sole outgoing
+commit. Preserve unrelated edits and leave original T042 open; do not deploy.
+
 ## Pulsing health radar and packs-per-player follow-up (2026-11-10)
 
 - [x] T029 Investigate why health pickups are not clearly blue on the radar in

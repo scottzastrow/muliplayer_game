@@ -1,5 +1,22 @@
 # Implementation Plan: Per-Level Terrain Density
 
+## Frontend appearance follow-up (2026-11-10)
+
+Keep tokens and preference handling in `apps/client`. Mount a persistent native
+labelled appearance selector outside the replaceable application root, initialize
+before authentication, and follow system changes only until an explicit choice.
+Style frontend surfaces and skin-host DOM slots with shared tokens, never Canvas
+or game/theme-package colors. Preserve compact viewport sizing and bounded
+standings. Cover preference lifecycle/storage failures with focused tests; use
+the existing CDP browser harness for both appearances in all four views,
+keyboard focus, contrast, persistence and unchanged arena/radar rendering.
+Record actual evidence, leave original T042 open and do not commit or deploy.
+
+For the scoped release review, isolate appearance changes and matching evidence
+from mixed files. Run the full suite on the committed candidate, fetch origin,
+and push without force only if that candidate is the sole outgoing commit.
+Preserve unrelated edits and leave T042 open; do not deploy.
+
 ## Health packs and radar follow-up (2026-11-10)
 
 Validate the developer setting in protocol and the theme manifest, retaining it

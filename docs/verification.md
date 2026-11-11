@@ -1,5 +1,100 @@
 # Local verification
 
+## Frontend Dark/Light appearance (2026-11-10, T030)
+
+Shared frontend tokens now cover page/card/HUD surfaces, text, borders, form
+controls, primary/secondary buttons, HTML dialogs, overlays and standings.
+The labelled native selector uses `frontend-appearance` local storage; absent
+a saved choice it follows `prefers-color-scheme`, including live changes until
+an explicit choice. Storage read/write failures produce console warnings and
+visible status messages without disabling the selector. The same control moves
+into the frontend skin-host HUD and returns to the application header on
+disposal, without a theme SDK change. The application-wide listener stays alive
+for the document lifetime, including back/forward-cache restores.
+
+Only frontend implementation files changed. Game/theme packages, arena colors,
+player/enemy palette, bright-blue health markers, radar animation, control
+bindings and authoritative gameplay are untouched. Canvas focus uses a separate
+light-blue frontend focus token suitable for the unchanged dark arena.
+
+Final executed checks on Windows / Node 24.11.0:
+
+```powershell
+npm run check --workspace @multiplayer-game/client
+npm run build --workspace @multiplayer-game/client
+npm test -- tests\appearance.test.ts tests\lobby-settings.test.ts tests\default-skin.test.ts tests\spectator-client.test.ts tests\results.test.ts
+node tests\browser\default-game.mjs --appearance
+git diff --check
+```
+
+Client type-check/build passed. Build reports the existing non-fatal Zod
+pure-annotation warnings. Final focused Vitest passed **5 files / 46 tests**,
+zero failures/skips, in **11.64 seconds**. New preference tests cover first
+visit under both system preferences, both saved choices, live system updates,
+explicit-choice precedence, invalid saved values, listener disposal and denied
+storage. Existing skin/control/lobby/results/spectator regressions passed.
+No broad/full suite was run.
+
+Actual visible Chrome **157.0.8103.40**, isolated profile/CDP on loopback 9223,
+Vite on 5174 and the existing `level-transitions-server.ts` fixture on 18083
+were used. The server used Node's ignored local `.env` startup loader plus
+process-local test overrides and a disposable SQLite database in the session
+folder; no persistent environment or server settings changed. Readiness,
+frontend response, auth proxy and CDP were responsive. Browser windows had
+approximately **1040 x 751 CSS-pixel** viewports at fractional device scaling.
+
+Light and Dark both passed with inspected screenshots of login, the full lobby,
+active player and followed spectator, spectator roster, running standings and
+saved results. The final run retained 18 application screenshots and two
+explicit HTML-dialog-fixture screenshots. Measured enabled frontend text was
+at least **5.528:1**, enabled control boundaries **3.293:1** and selector focus
+**5.635:1**. These are computed foreground/background contrast checks, not a
+claim of a complete WCAG audit. Native keyboard events changed the selector;
+login inputs/buttons, Canvas, navigation, controls disclosure and radar
+checkboxes had solid keyboard-visible outlines. Device-pixel rounding yields
+2.8px computed outlines for the authored 3px rule. Match HUD height was
+**45.6px** with the selector in the same bar; both roles retained a filling
+arena and no page scrolling. Standings remain bounded/scrollable.
+
+System Dark first visit, live change to Light without writing storage, explicit
+Dark surviving reload against a Light system preference, and selector
+restoration on return to lobby passed. Actual ArrowDown movement worked in both
+appearances; appearance changes sent no firing intent. Normal pointer firing
+killed the fixture's real 1-HP NPC, triggering real intermission standings;
+host API finalization then produced ordinary saved results for both roles.
+The existing fixture stages that NPC in a clear lane and uses zero NPC speed/
+detection, so this is not an ordinary default-NPC free-play or capacity claim.
+
+Before movement, both appearances had identical recorded arena palettes,
+terrain/boundaries and pickup IDs/positions in each role. Both-role health radar
+recordings had 39-40 frames per appearance, exactly three opaque blue r4
+centers per frame and clipped fading rings with 36 distinct radii spanning
+approximately 4-14px. Separate reduced-motion checks for each role retained
+only static r10 halos (0.3 fill / 0.8 stroke) plus centers. No radar code changed;
+the browser check reuses the existing recorder/analyser.
+
+Final report and screenshots persist locally at
+`C:\Users\Owner\.copilot\session-state\81c7ba3c-3db4-4200-bd7f-ea9df1887fa5\files\appearance-evidence-final`.
+Intermediate attempts are not counted as passing: the initial new test suite
+failed on the missing appearance module; the first focused selector command
+misspelled spectator/skin-host test filenames (only four existing files ran),
+then the actual spectator file and the correct final five-file selection passed.
+Browser fixture corrections were needed for selecting an already-selected
+system value (no native change event), device-pixel outline rounding, a misplaced
+helper export caught by syntax checking, and querying Canvas outline color
+after focus had moved elsewhere. Visual review also found the Light focus blue
+insufficiently contrasted against the dark arena; the dedicated Canvas token
+fix and added HUD padding were included in the final passing build/browser run.
+
+Coverage limits: Chrome desktop/Vite only; Safari/Firefox, mobile layouts,
+screen-reader output, throttled production first-paint and live deployment were
+not verified. HTML dialog tokens were inspected with an explicitly synthetic
+modal fixture; existing `window.confirm` prompts remain native/browser-managed,
+not replaced or claimed to follow the app palette. Unrelated pre-existing lobby
+help text (150-HP and 60-second defaults) was preserved. No public package/pin,
+commit, push, deployment or capacity change was made. Original T042 stays open.
+No `.specify/extensions.yml` exists, so no pre/post hooks are registered.
+
 ## Pulsing health radar and packs per player (2026-11-10, T029)
 
 Investigation on live release `709ebea`: health pickups reach both radars

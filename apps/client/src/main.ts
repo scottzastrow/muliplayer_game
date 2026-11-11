@@ -10,9 +10,12 @@ import { mountGame } from "./game.js";
 import "./style.css";
 import { mountResults, resultIdFromHash } from "./results.js";
 import { mountSpectate } from "./spectate.js";
+import { mountAppearance } from "./appearance.js";
 
 const root = document.querySelector<HTMLElement>("#app");
 const status = document.querySelector<HTMLElement>("#status");
+const header = document.querySelector<HTMLElement>(".app-header");
+if (header && status) mountAppearance(header, status);
 let disposeGame: (() => void) | undefined;
 let activeAccount: ClientAccount | undefined;
 

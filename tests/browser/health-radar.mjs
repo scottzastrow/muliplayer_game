@@ -106,6 +106,13 @@ function analyse(label, capture, expected, reduced) {
   };
 }
 
+export async function verifyHealthRadarMotion(page, { evaluate, delay }, reduced = false) {
+  const motion = await record(page, evaluate, delay, 1300);
+  const result = analyse(`${motion.role} appearance radar`, motion, motion.healthMarkers, reduced);
+  assert.ok(motion.healthMarkers > 0, "appearance fixture contains health markers");
+  return { role: motion.role, ...result };
+}
+
 export async function verifyHealthRadar({
   alice, bob, observer, creator, observerName, cdp, evaluate, waitFor, click,
   clickSessionButton, delay, browser, origin

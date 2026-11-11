@@ -719,7 +719,11 @@ async function fireWhileAiming(page, targetForView, duration, npcTrace) {
 }
 
 try {
-  if (process.argv.includes("--npc-pace-colors")) {
+  if (process.argv.includes("--appearance")) {
+    const { verifyAppearance } = await import("./appearance.mjs");
+    await verifyAppearance({ newWindow, signIn, evaluate, click, clickSessionButton,
+      waitFor, cdp, delay, state, browser: version.Browser, origin });
+  } else if (process.argv.includes("--npc-pace-colors")) {
     const alice = await newWindow();
     const bob = await newWindow();
     const observer = await newWindow();
