@@ -1,0 +1,222 @@
+import { showStatus } from "./ui.js";
+
+export type ControlMode = "keyboard-only" | "keyboard-mouse" | "game-controller";
+
+export interface ClientAccount {
+  id: string;
+  username: string;
+  role: "player" | "operator";
+  controlMode: ControlMode | null;
+}
+
+export async function mountAuth(
+  root: HTMLElement,
+  status: HTMLElement,
+  onAuthenticated: (account: ClientAccount) => void
+): Promise<void> {
+  const form = document.createElement("form");
+  form.className = "auth-form";
+  const title = document.createElement("h2");
+  const usernameField = makeInput("Username", "username", "text", "username");
+  usernameField.input.required = true;
+  usernameField.input.minLength = 3;
+  usernameField.input.maxLength = 24;
+  usernameField.input.pattern = "[A-Za-z0-9_]{3,24}";
+  const passwordField = makeInput("Password", "password", "password", "new-password");
+  passwordField.input.required = true;
+  passwordField.input.maxLength = 128;
+  const controlModes = createControlModeFieldset();
+  const submit = document.createElement("button");
+  submit.type = "submit";
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "link-button";
+
+  let registering = false;
+  const updateMode = (): void => {
+    title.textContent = registering ? "Create an account" : "Sign in";
+    submit.textContent = registering ? "Register" : "Sign in";
+    controlModes.hidden = !registering;
+    for (const input of controlModes.querySelectorAll<HTMLInputElement>("input")) {
+      input.disabled = !registering;
+    }
+    toggle.textContent = registering ? "Have an account? Sign in" : "Need an account? Register";
+    passwordField.input.autocomplete = registering ? "new-password" : "current-password";
+    passwordField.input.minLength = registering ? 9 : 0;
+  };
+  toggle.addEventListener("click", () => {
+    registering = !registering;
+    updateMode();
+    showStatus(status, "");
+  });
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    submit.disabled = true;
+    showStatus(status, "");
+    try {
+      const controlMode = registering ? selectedControlMode(controlModes) : undefined;
+      if (registering && !controlMode) {
+        showStatus(status, "Choose a control mode before creating your account.", true);
+        return;
+      }
+      const response = await fetch(`/api/v1/auth/${registering ? "register" : "login"}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          username: usernameField.input.value,
+          password: passwordField.input.value,
+          ...(controlMode ? { controlMode } : {})
+        })
+      });
+      const result = await readResponse<{ account: ClientAccount }>(response);
+      if (registering) {
+        registering = false;
+        updateMode();
+        passwordField.input.value = "";
+        showStatus(status, "Account created. Sign in with your new credentials.");
+        return;
+      }
+      onAuthenticated(result.account);
+    } catch (error) {
+      showStatus(status, error instanceof Error ? error.message : "The request failed.", true);
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  form.append(
+    title,
+    usernameField.label,
+    usernameField.input,
+    passwordField.label,
+    passwordField.input,
+    controlModes,
+    submit,
+    toggle
+  );
+  root.replaceChildren(form);
+  updateMode();
+}
+
+export function createControlModeFieldset(selected?: ControlMode): HTMLFieldSetElement {
+  const fieldset = document.createElement("fieldset");
+  fieldset.setAttribute("aria-label", "Control mode");
+  const legend = document.createElement("legend");
+  legend.textContent = "Choose your controls";
+  fieldset.append(legend);
+  for (const [value, labelText] of [
+    ["keyboard-only", "Keyboard Only — WASD to move, left/right arrows to turn, Space to fire"],
+    ["keyboard-mouse", "Keyboard + Mouse — all four arrow keys to move, mouse to aim, left click to fire"],
+    ["game-controller", "Game Controller — left stick to move, right stick to aim, right trigger to fire"]
+  ] as const) {
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "controlMode";
+    input.value = value;
+    input.required = true;
+    input.checked = value === selected;
+    label.append(input, document.createTextNode(labelText));
+    fieldset.append(label);
+  }
+  return fieldset;
+}
+
+export function selectedControlMode(fieldset: HTMLFieldSetElement): ControlMode | undefined {
+  const value = fieldset.querySelector<HTMLInputElement>('input[name="controlMode"]:checked')?.value;
+  return value === "keyboard-only" || value === "keyboard-mouse" || value === "game-controller"
+    ? value : undefined;
+}
+
+export async function saveControlMode(controlMode: ControlMode): Promise<ClientAccount> {
+  const response = await fetch("/api/v1/me/control-mode", {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ controlMode })
+  });
+  return (await readResponse<{ account: ClientAccount }>(response)).account;
+}
+
+export function mountControlModePrompt(
+  root: HTMLElement,
+  status: HTMLElement,
+  account: ClientAccount,
+  onSaved: (account: ClientAccount) => void
+): void {
+  const form = document.createElement("form");
+  form.className = "auth-form";
+  const title = document.createElement("h2");
+  title.textContent = "Choose your controls";
+  const explanation = document.createElement("p");
+  explanation.textContent = `${account.username}, choose a control mode to continue to the lobby.`;
+  const choices = createControlModeFieldset();
+  const submit = document.createElement("button");
+  submit.type = "submit";
+  submit.textContent = "Save controls";
+  form.append(title, explanation, choices, submit);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const controlMode = selectedControlMode(choices);
+    if (!controlMode) {
+      showStatus(status, "Choose a control mode to continue.", true);
+      return;
+    }
+    submit.disabled = true;
+    showStatus(status, "");
+    try {
+      onSaved(await saveControlMode(controlMode));
+    } catch (error) {
+      showStatus(status, error instanceof Error ? error.message : "The request failed.", true);
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  root.replaceChildren(form);
+}
+
+export async function loadCurrentAccount(): Promise<ClientAccount | undefined> {
+  const response = await fetch("/api/v1/me", { credentials: "same-origin" });
+  if (response.status === 401) {
+    return undefined;
+  }
+  return (await readResponse<{ account: ClientAccount }>(response)).account;
+}
+
+async function readResponse<T>(response: Response): Promise<T> {
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  const body: unknown = await response.json();
+  if (!response.ok) {
+    const message =
+      typeof body === "object" &&
+      body !== null &&
+      "error" in body &&
+      typeof body.error === "object" &&
+      body.error !== null &&
+      "message" in body.error &&
+      typeof body.error.message === "string"
+        ? body.error.message
+        : "The request failed.";
+    throw new Error(message);
+  }
+  return body as T;
+}
+
+function makeInput(
+  labelText: string,
+  name: string,
+  type: string,
+  autocomplete: HTMLInputElement["autocomplete"]
+): { label: HTMLLabelElement; input: HTMLInputElement } {
+  const label = document.createElement("label");
+  label.htmlFor = name;
+  label.textContent = labelText;
+  const input = document.createElement("input");
+  input.id = name;
+  input.name = name;
+  input.type = type;
+  input.autocomplete = autocomplete;
+  return { label, input };
+}

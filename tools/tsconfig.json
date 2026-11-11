@@ -1,0 +1,22 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "outDir": "../dist/tools",
+    "types": ["node"]
+  },
+  "include": [
+    "./**/*.ts",
+    "../tests/operator-tools.test.ts",
+    "../tests/theme-packages.test.ts",
+    "../tests/contract/themes.test.ts",
+    "../tests/integration/theme-install.test.ts",
+    "../tests/runtime-metrics.test.ts",
+    "../tests/integration/metrics.test.ts",
+    "../tests/admin-metrics.test.ts",
+    "../tests/load-harness.test.ts",
+    "../tests/integration/load-harness.test.ts",
+    "../tests/deployment.test.ts",
+    "../tests/integration/operations.test.ts"
+  ]
+}

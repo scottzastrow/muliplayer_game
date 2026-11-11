@@ -1,0 +1,35 @@
+{
+  "name": "@multiplayer-game/theme-sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package": {
+      "node": {
+        "types": "./dist/package.d.ts",
+        "import": "./dist/package.js"
+      }
+    }
+  },
+  "dependencies": {
+    "@multiplayer-game/protocol": "0.1.0"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "check": "tsc --project tsconfig.json --noEmit"
+  }
+}

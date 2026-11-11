@@ -1,0 +1,23 @@
+{
+  "name": "@multiplayer-game/default-theme",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "check": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@multiplayer-game/protocol": "0.1.0",
+    "@multiplayer-game/theme-sdk": "0.1.0",
+    "zod": "4.6.7"
+  }
+}
