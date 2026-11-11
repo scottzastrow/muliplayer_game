@@ -1,5 +1,14 @@
 # Feature Specification: Per-Level Terrain Density
 
+## Health packs and radar follow-up (2026-11-10)
+
+Provide a developer-only `healthPacksPerPlayerPerWave` setting, default 3,
+with a roster-scaled wave target. Keep uncollected packs, replenish consumed
+slots at wave start, and place additional packs in reachable, terrain-clear
+locations. Render health markers for players and spectators as bright-blue
+center dots with clipped fading pulses, or static halos under reduced motion.
+Keep other pickup behavior unchanged and leave T042 open.
+
 ## Health-pickup wave trace follow-up (2026-11-10)
 
 Trace health spawn/collection counts through the first three Dots and Squares

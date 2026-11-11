@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { Point2 } from "./index.js";
 
 const RadarCategorySchema = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/);
+const DEFAULT_HIGHLIGHT_CENTER_RADIUS = 4;
+const DEFAULT_HIGHLIGHT_PULSE_RADIUS = 14;
 const RadarPointSchema = z.object({
   x: z.number().finite(),
   y: z.number().finite()
@@ -53,6 +55,17 @@ export const RadarViewSchema = z.object({
 export type RadarMarker = z.infer<typeof RadarMarkerSchema>;
 export type RadarView = z.infer<typeof RadarViewSchema>;
 
+/**
+ * Emphasises one marker with a center dot and a ring. With a phase (0-1) the ring expands
+ * from the dot and fades; without a phase a static halo is drawn (for reduced motion).
+ */
+export interface RadarMarkerHighlight {
+  readonly color: string;
+  readonly centerRadius?: number;
+  readonly pulseRadius?: number;
+  readonly phase?: number;
+}
+
 export interface RadarRenderOptions {
   readonly x: number;
   readonly y: number;
@@ -63,6 +76,7 @@ export interface RadarRenderOptions {
   readonly markerColors: Readonly<Record<string, string>>;
   readonly markerColorOverrides?: Readonly<Record<string, string>>;
   readonly markerShapes?: Readonly<Record<string, "dot" | "diamond" | "footprint">>;
+  readonly markerHighlights?: Readonly<Record<string, RadarMarkerHighlight>>;
   readonly enabledCategories?: readonly string[];
   readonly anchorColor?: string;
   readonly backgroundColor?: string;
@@ -93,6 +107,18 @@ export function drawRadar(
       throw new TypeError(`Radar marker ${marker.id} must have a positive finite footprint.`);
     }
   }
+  for (const [id, highlight] of Object.entries(options.markerHighlights ?? {})) {
+    const centerRadius = highlight.centerRadius ?? DEFAULT_HIGHLIGHT_CENTER_RADIUS;
+    const pulseRadius = highlight.pulseRadius ?? DEFAULT_HIGHLIGHT_PULSE_RADIUS;
+    if (!highlight.color || !Number.isFinite(centerRadius) || centerRadius <= 0 ||
+        !Number.isFinite(pulseRadius) || pulseRadius <= centerRadius ||
+        (highlight.phase !== undefined &&
+          (!Number.isFinite(highlight.phase) || highlight.phase < 0 || highlight.phase > 1))) {
+      throw new RangeError(
+        `Radar highlight ${id} needs a color, positive center radius, larger pulse radius and phase 0-1.`
+      );
+    }
+  }
 
   const markerRadius = 3;
   const edge = Math.max(0, options.radius - markerRadius - 2);
@@ -120,6 +146,7 @@ export function drawRadar(
   const enabled = options.enabledCategories ? new Set(options.enabledCategories) : undefined;
   // Footprints are drawn first so they cannot obscure point markers.
   const markers = view.markers.filter(marker => !enabled || enabled.has(marker.category));
+  const highlighted: { readonly x: number; readonly y: number; readonly highlight: RadarMarkerHighlight }[] = [];
   for (const marker of [...markers.filter(item => options.markerShapes?.[item.category] === "footprint"),
     ...markers.filter(item => options.markerShapes?.[item.category] !== "footprint")]) {
     const dx = marker.position.x - options.center.x;
@@ -145,6 +172,11 @@ export function drawRadar(
     context.beginPath();
     const x = options.x + dx * scale;
     const y = options.y + dy * scale;
+    const highlight = options.markerHighlights?.[marker.id];
+    if (highlight) {
+      highlighted.push({ x, y, highlight });
+      continue;
+    }
     if (shape === "diamond") {
       context.moveTo(x, y - markerRadius);
       context.lineTo(x + markerRadius, y);
@@ -155,6 +187,39 @@ export function drawRadar(
       context.arc(x, y, markerRadius, 0, Math.PI * 2);
     }
     context.fill();
+  }
+  // Highlights draw above ordinary markers but inside the radar clip, center dot last.
+  for (const { x, y, highlight } of highlighted) {
+    const centerRadius = highlight.centerRadius ?? DEFAULT_HIGHLIGHT_CENTER_RADIUS;
+    const pulseRadius = highlight.pulseRadius ?? DEFAULT_HIGHLIGHT_PULSE_RADIUS;
+    context.save();
+    context.strokeStyle = highlight.color;
+    context.fillStyle = highlight.color;
+    context.lineWidth = 2;
+    if (highlight.phase === undefined) {
+      const haloRadius = centerRadius + (pulseRadius - centerRadius) * 0.6;
+      context.globalAlpha = 0.3;
+      context.beginPath();
+      context.arc(x, y, haloRadius, 0, Math.PI * 2);
+      context.fill();
+      context.globalAlpha = 0.8;
+      context.beginPath();
+      context.arc(x, y, haloRadius, 0, Math.PI * 2);
+      context.stroke();
+    } else {
+      context.globalAlpha = 1 - highlight.phase;
+      context.beginPath();
+      context.arc(x, y, centerRadius + (pulseRadius - centerRadius) * highlight.phase, 0, Math.PI * 2);
+      context.stroke();
+    }
+    context.globalAlpha = 1;
+    context.beginPath();
+    context.arc(x, y, centerRadius, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = "#04101f";
+    context.lineWidth = 1;
+    context.stroke();
+    context.restore();
   }
 
   if (options.anchorColor) {

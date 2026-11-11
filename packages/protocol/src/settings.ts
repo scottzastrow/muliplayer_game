@@ -2,6 +2,10 @@ import { z } from "zod";
 
 export const PlayerMaxHealthSchema = z.number().int().min(1).max(100_000);
 
+export const HealthPacksPerPlayerPerWaveSchema = z.number().int().min(0).max(10);
+/** Leaves room for authored power-ups within the default 100-pickup session ceiling. */
+export const MAX_HEALTH_PACKS_PER_WAVE = 96;
+
 export const TerrainDensitySchema = z.number().int().min(0).max(10);
 export const TerrainDensityScheduleSchema = z.discriminatedUnion("mode", [
   z.object({
@@ -43,6 +47,7 @@ export const GameSettingsSchema = z
     baseNpcHealth: z.number().int().min(1).max(100_000),
     npcHealthGrowthPercent: z.number().finite().min(0).max(100),
     playerMaxHealth: PlayerMaxHealthSchema.default(200),
+    healthPacksPerPlayerPerWave: HealthPacksPerPlayerPerWaveSchema.default(3),
     npcMovementSpeed: z.number().finite().min(0).max(180).default(67.5),
     npcDetectionRange: z.number().finite().min(0).max(700).default(512),
     respawnDelaySeconds: z.number().finite().min(0).max(60),
@@ -59,6 +64,10 @@ export const GameSettingsSchema = z
       context.addIssue({ code: "custom", path: ["terrainDensity", "densities"],
         message: "Per Level terrain density requires one density per configured level." });
     }
+    if (settings.healthPacksPerPlayerPerWave * settings.maxPlayers > MAX_HEALTH_PACKS_PER_WAVE) {
+      context.addIssue({ code: "custom", path: ["healthPacksPerPlayerPerWave"],
+        message: `Health packs per player per wave multiplied by max players must not exceed ${MAX_HEALTH_PACKS_PER_WAVE}.` });
+    }
   });
 
 export type GameSettings = z.infer<typeof GameSettingsSchema>;
@@ -71,6 +80,7 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = Object.freeze({
   baseNpcHealth: 50,
   npcHealthGrowthPercent: 10,
   playerMaxHealth: 200,
+  healthPacksPerPlayerPerWave: 3,
   npcMovementSpeed: 67.5,
   npcDetectionRange: 512,
   respawnDelaySeconds: 5,

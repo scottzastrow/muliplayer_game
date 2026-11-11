@@ -39,8 +39,11 @@ their current respawn map. Retire projectiles, reset stale NPC goals, retain
 pickup state at safe authored positions. Full NPC wave placement remains bounded
 and explicit on insufficient space; no truncation.
 
-Dots and Squares replenishes missing health pickups at the new map's authored
-health sites when the next wave starts (not during intermission). Retained
-health packs are relocated without duplication; rapid-fire/spread consumption
-state is unchanged. This is theme-owned lifecycle behavior, not a new public
-map-transition service or host pickup-count setting.
+Dots and Squares targets `healthPacksPerPlayerPerWave` (integer 0-10, default 3)
+times roster size, subject to a 96-pack maximum based on `maxPlayers`. An
+authored health site fills the first slot and additional packs use reachable,
+terrain-clear locations. At wave start, consumed slots are replenished and
+retained packs are not duplicated; generated-map transitions relocate them.
+Insufficient space records a metric and can produce fewer packs than the target.
+Rapid-fire/spread consumption state is unchanged. This remains theme-owned
+lifecycle behavior, not a new map-transition service or host pickup-count field.

@@ -292,7 +292,7 @@ describe("default combat", () => {
       ...Array.from({ length: MAX_PICKUPS_PER_SESSION + 1 }, (_, index) => ({
         id: `pickup-cap-${index}`,
         kind: "pickup" as const,
-        pickupType: "health" as const,
+        pickupType: "rapid-fire" as const,
         position: { x: 784, y: 1_008 },
         radius: 12
       }))

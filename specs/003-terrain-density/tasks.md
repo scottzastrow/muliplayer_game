@@ -2,6 +2,27 @@
 
 Scoped sequential feature; retains original engine and Theme Credits context.
 
+## Pulsing health radar and packs-per-player follow-up (2026-11-10)
+
+- [x] T029 Investigate why health pickups are not clearly blue on the radar in
+  `709ebea` across both player and spectator paths. Replace the marker with a
+  bright-blue center dot and a repeating, fading, radar-clipped pulse ring, using
+  a static halo when reduced motion is enabled. Add the validated developer
+  setting `healthPacksPerPlayerPerWave` (default 3) and scatter packs across
+  reachable, terrain-clear cells, refilling only consumed slots at wave start.
+  Verify 3/6 packs, healing limits, retained packs and a real browser match.
+  Keep changes local and original T042 open. Follows T028.
+
+T029 evidence: no data or filter bug was found. The marker was a low-contrast
+`#0088ff` diamond that looked the same as other pickups. `npm run check`
+passed. Focused Vitest passed 207 of 208 tests. The external contract-pin drift
+gate is blocked pending a reviewed commit and pin update. Chrome 157 passed
+`--health-radar`: 3 packs for one player, 6 for two, and an animated clipped
+ring with a constant center in player and spectator views. Reduced motion showed
+a static halo. Details are in docs/verification.md. Changes are
+local/uncommitted. No hooks file exists, and no deployment or capacity result
+is claimed.
+
 ## Health-pickup wave trace follow-up (2026-11-10)
 
 - [x] T027 Trace health spawns, collections and next-wave arena/radar counts

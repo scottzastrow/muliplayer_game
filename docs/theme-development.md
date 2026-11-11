@@ -18,18 +18,35 @@ Ordinary enemies still deal 10 damage per shot on a 30-tick cooldown. Without
 healing a 100-HP player survives nine landed shots and dies on the tenth;
 200 HP survives nineteen and dies on the twentieth. NPC counts are unchanged.
 
-Health pickups use bright blue (`#0088ff`) diamond markers on the HUD radar in
-both player and spectator views. Other pickups retain orange diamonds; player
-markers retain their roster colors and circular shape. Arena pickup styling is
-unchanged.
+Health pickups use a bright-blue (`#4db8ff`) radar marker in both player and
+spectator views: an opaque 4px center dot with a dark outline, plus a 2px blue
+ring that repeatedly expands from 4px to 14px over 1.2 seconds while fading to
+transparent. The center stays visible throughout, and the pulse is clipped to
+the radar circle. With `prefers-reduced-motion: reduce`, the ring is replaced by
+a static 10px blue halo (30% fill, 80% outline). Themes use the same treatment
+through the SDK `drawRadar` `markerHighlights` option (`RadarMarkerHighlight`:
+`color`, optional `centerRadius`, `pulseRadius` and `phase` 0-1; omit `phase`
+for the static halo). Other pickups keep orange diamonds, players keep roster
+colors and circles, and arena pickup styling is unchanged.
 
-There is no per-wave health-pickup count/frequency setting. Both Fixed and
-Simple Generated author one health spawn (heals 25 HP, capped by
-`playerMaxHealth`). On each wave start, Dots and Squares replenishes a consumed
-health pack at that map's authored site. An uncollected pack is retained, not
-duplicated; generated-map transitions relocate it safely. No refill occurs
-during intermission. Rapid-fire/spread pickups retain their existing one-time
-match lifecycle. Radar markers come from the authoritative surviving entities.
+`healthPacksPerPlayerPerWave` is a validated developer setting (integer 0-10,
+default 3), defined in `GameSettingsSchema` and the default theme manifest.
+Packs × `maxPlayers` must not exceed 96, leaving room under the 100-pickup
+session cap for other pickups. The lobby
+keeps the setting for developers but does not show a host field. The wave
+target is packs per player × roster size (3 for one player, 6 for two). The
+map's authored health spawn fills the first slot; the remaining packs are
+scattered across reachable, terrain-clear cells at least 96px from living
+players, spread across arena quadrants and separated from other pickups.
+Placement is seeded and deterministic. Each pack heals 25 HP up to
+`playerMaxHealth` and is not consumed by a full-health player. At each wave
+start, only consumed slots are refilled; uncollected packs are retained, so
+extras never accumulate. Generated-map transitions relocate retained packs
+safely. If there is insufficient reachable space, placement records the
+`default.health_pack.insufficient_space` metric and may fall short of the target.
+No refill happens during intermission. Rapid-fire/spread pickups keep
+their existing one-time match lifecycle. Radar markers come from the
+authoritative surviving entities.
 
 ## Default-theme wave status and transitions
 

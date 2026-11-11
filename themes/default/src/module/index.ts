@@ -1,4 +1,5 @@
 import {
+  HealthPacksPerPlayerPerWaveSchema,
   PlayerMaxHealthSchema,
   type GameModuleFactory,
   type GameModuleInstance,
@@ -10,7 +11,7 @@ import { JsonValueSchema, resolveTerrainDensity, type JsonValue } from "@multipl
 import { z } from "zod";
 import { DefaultPlayerActionSchema, type DefaultPlayerAction } from "./actions.js";
 import type { DefaultEntity, DefaultPlayerState } from "./types.js";
-import { DefaultEntitySimulator } from "./entities.js";
+import { DefaultEntitySimulator, isScatteredHealthPackId } from "./entities.js";
 import { DefaultCombatSimulator } from "./combat.js";
 import { generateMap, generateDensityMap, loadMap, type DensityMap } from "./maps.js";
 import { DefaultRespawnSimulator } from "./respawn.js";
@@ -21,7 +22,10 @@ import {
 } from "./progression.js";
 
 const DefaultSettingsSchema = z.record(z.string(), JsonValueSchema)
-  .and(z.object({ playerMaxHealth: PlayerMaxHealthSchema.optional() }));
+  .and(z.object({
+    playerMaxHealth: PlayerMaxHealthSchema.optional(),
+    healthPacksPerPlayerPerWave: HealthPacksPerPlayerPerWaveSchema.optional()
+  }));
 
 export interface DefaultModuleState extends Record<string, JsonValue> {
   readonly acceptedInputs: number;
@@ -101,7 +105,7 @@ export const defaultModuleFactory: GameModuleFactory<
     DefaultModuleResults
   > {
     if (!this.validateSettings(settings)) {
-      throw new TypeError("Default theme settings must be a JSON object with valid playerMaxHealth (integer 1-100000).");
+      throw new TypeError("Default theme settings must be a JSON object with valid playerMaxHealth (integer 1-100000) and healthPacksPerPlayerPerWave (integer 0-10).");
     }
     if (!Number.isSafeInteger(seed)) {
       throw new RangeError("Default theme seed must be a safe integer.");
@@ -121,7 +125,8 @@ export const defaultModuleFactory: GameModuleFactory<
       gameSettings.npcMovementSpeed,
       gameSettings.npcDetectionRange,
       seed,
-      gameSettings.playerMaxHealth
+      gameSettings.playerMaxHealth,
+      gameSettings.healthPacksPerPlayerPerWave
     );
     const usesDensity = gameSettings.mapMode === "simple-generated";
     if (usesDensity && !_context.maps) {
@@ -312,6 +317,8 @@ export const defaultModuleFactory: GameModuleFactory<
         }
         if (entity.state.kind === "pickup") {
           const spawn = nextMap.definition.spawns.find(spawn => `pickup:${spawn.id}` === entity.id);
+          // Scattered packs are re-placed on the new terrain by startLevel under the same slot id.
+          if (!spawn && isScatteredHealthPackId(entity.id)) return [];
           if (!spawn) throw new Error("New map has no retained pickup spawn.");
           return [{ ...entity, position: spawn.position }];
         }

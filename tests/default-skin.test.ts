@@ -44,6 +44,9 @@ class HudElement extends EventTarget {
   readonly drawnRotations: number[] = [];
   readonly drawnRects: { x: number; y: number; width: number; height: number; color: string }[] = [];
   readonly drawnPaths: { points: number[][]; color: string }[] = [];
+  readonly drawnCircles: { mode: "fill" | "stroke"; x: number; y: number; radius: number;
+    color: string; alpha: number }[] = [];
+  readonly clipArcs: { x: number; y: number; radius: number }[] = [];
   name = "";
   type = "";
   checked = false;
@@ -60,18 +63,30 @@ class HudElement extends EventTarget {
   getBoundingClientRect() { return { left: 0, top: 0, width: 800, height: 600 }; }
   getContext() {
     let color = "";
+    let stroke = "";
+    let alpha = 1;
     let path: number[][] = [];
+    let arc: { x: number; y: number; radius: number } | undefined;
+    const circle = (mode: "fill" | "stroke") => {
+      if (arc) this.drawnCircles.push({ mode, ...arc, color: mode === "fill" ? color : stroke, alpha });
+    };
     return {
       setTransform() {},
       fillRect: (x: number, y: number, width: number, height: number) =>
         this.drawnRects.push({ x, y, width, height, color }),
-      beginPath() { path = []; }, closePath() {},
-      arc: (x: number, y: number, radius: number) => this.drawnArcs.push({ x, y, radius }),
+      beginPath() { path = []; arc = undefined; }, closePath() {},
+      arc: (x: number, y: number, radius: number) => {
+        this.drawnArcs.push({ x, y, radius });
+        arc = { x, y, radius };
+      },
       fill: () => {
         this.drawnColors.push(color);
         this.drawnPaths.push({ points: [...path], color });
+        circle("fill");
       }, strokeRect() {},
-      save() {}, restore() {}, clip() {}, stroke() {},
+      save() {}, restore() {},
+      clip: () => { if (arc) this.clipArcs.push(arc); },
+      stroke: () => circle("stroke"),
       moveTo(x: number, y: number) { path.push([x, y]); },
       lineTo(x: number, y: number) { path.push([x, y]); },
       translate() {},
@@ -82,10 +97,29 @@ class HudElement extends EventTarget {
       },
       get fillStyle() { return color; },
       set fillStyle(value: string) { color = value; },
-      strokeStyle: "", lineWidth: 0, font: "",
+      get strokeStyle() { return stroke; },
+      set strokeStyle(value: string) { stroke = value; },
+      get globalAlpha() { return alpha; },
+      set globalAlpha(value: number) { alpha = value; },
+      lineWidth: 0, font: "",
       textAlign: "left", textBaseline: "top"
     };
   }
+}
+
+const HEALTH_RADAR_BLUE = "#4db8ff";
+
+function stubDocument(reducedMotion?: boolean): void {
+  vi.stubGlobal("document", Object.assign(new EventTarget(), {
+    createTextNode: (text: string) => Object.assign(new HudElement(), { textContent: text }),
+    createElement: () => new HudElement(),
+    ...(reducedMotion === undefined ? {} : {
+      defaultView: { matchMedia: (query: string) => ({
+        matches: query === "(prefers-reduced-motion: reduce)" && reducedMotion
+      }) }
+    })
+  }));
+  vi.stubGlobal("window", new EventTarget());
 }
 
 describe("Dots and Squares presentation", () => {
@@ -180,21 +214,35 @@ describe("Dots and Squares presentation", () => {
         skin.handleSnapshot(snapshot);
         const canvas = (host.slots.get("world") as unknown as HudElement).children[0]!;
         canvas.drawnPaths.length = 0;
+        canvas.drawnCircles.length = 0;
         skin.render(snapshot.tick * 1000 / 30, snapshot);
-        expect(canvas.drawnPaths.filter(path => path.color === "#66df8a")).toHaveLength(packs.length);
-        expect(canvas.drawnPaths.filter(path => path.color === "#0088ff")).toHaveLength(packs.length);
+        // The arena keeps its green health-pack styling for every pack inside the rendered view.
+        const view = host.cameraAnchor!;
+        const visible = packs.filter(pack => Math.abs(pack.position.x - view.x) <= 400 + pack.radius &&
+          Math.abs(pack.position.y - view.y) <= 300 + pack.radius);
+        expect(canvas.drawnPaths.filter(path => path.color === "#66df8a")).toHaveLength(visible.length);
+        // Each radar health pack gets one bright-blue center dot and one pulse ring.
+        expect(canvas.drawnCircles.filter(circle => circle.mode === "fill" &&
+          circle.color === HEALTH_RADAR_BLUE && circle.radius === 4)).toHaveLength(packs.length);
+        expect(canvas.drawnCircles.filter(circle => circle.mode === "stroke" &&
+          circle.color === HEALTH_RADAR_BLUE)).toHaveLength(packs.length);
+        expect(canvas.drawnPaths.filter(path => path.color === "#0088ff")).toHaveLength(0);
       }
-      return { arena: packs.length, radar: ids.length };
+      return { arena: packs.length, radar: ids.length,
+        positions: Object.fromEntries(packs.map(pack => [pack.id, pack.position])) };
     };
     const rows = [];
     let tick = 0;
     let previousSpawned = 0;
+    let retainedIds: string[] = [];
     try {
       module.initialize();
       for (let level = 1; level <= 3; level++) {
         expect(module.state).toMatchObject({ level, phase: "active" });
         const start = observe();
-        const waveSpawned = spawned - previousSpawned;
+        // New slot fills; generated maps also re-place retained scattered packs (same ids).
+        const waveSpawned = Object.keys(start.positions).filter(id => !retainedIds.includes(id)).length;
+        if (mapMode === "fixed") expect(spawned - previousSpawned).toBe(waveSpawned);
         previousSpawned = spawned;
         const before = healthPacks().length;
         context.entities.update("player:alice", player => ({
@@ -228,14 +276,23 @@ describe("Dots and Squares presentation", () => {
         expect(world.entities().filter(entity => entity.state.kind === "pickup" &&
           entity.state.pickupType !== "health").map(entity => entity.id).sort())
           .toEqual(otherPickups.map(entity => entity.id).sort());
-        rows.push({ level, spawned: waveSpawned, collected, start, remaining, next });
+        if (mapMode === "fixed") {
+          // Unclaimed packs stay where they were; only consumed slots are refilled.
+          for (const [id, position] of Object.entries(remaining.positions)) {
+            expect(next.positions[id]).toEqual(position);
+          }
+        }
+        const summarize = ({ arena, radar }: { arena: number; radar: number }) => ({ arena, radar });
+        retainedIds = Object.keys(remaining.positions);
+        rows.push({ level, spawned: waveSpawned, collected,
+          start: summarize(start), remaining: summarize(remaining), next: summarize(next) });
       }
       console.info(JSON.stringify({ mapMode, seed: 42, collect, healthPickupTrace: rows }));
       expect(rows).toEqual([1, 2, 3].map(level => ({
-        level, spawned: collect || level === 1 ? 1 : 0, collected: collect ? 1 : 0,
-        start: { arena: 1, radar: 1 },
-        remaining: { arena: collect ? 0 : 1, radar: collect ? 0 : 1 },
-        next: { arena: 1, radar: 1 }
+        level, spawned: level === 1 ? 3 : collect ? 1 : 0, collected: collect ? 1 : 0,
+        start: { arena: 3, radar: 3 },
+        remaining: { arena: collect ? 2 : 3, radar: collect ? 2 : 3 },
+        next: { arena: 3, radar: 3 }
       })));
     } finally {
       for (const { skin } of skins) skin.dispose();
@@ -244,18 +301,22 @@ describe("Dots and Squares presentation", () => {
     }
   });
 
-  it.each(["player", "spectator"] as const)(
-    "renders health radar pickups as bright blue diamonds without changing other markers (%s)", role => {
-      vi.stubGlobal("document", Object.assign(new EventTarget(), {
-        createTextNode: (text: string) => Object.assign(new HudElement(), { textContent: text }),
-        createElement: () => new HudElement()
-      }));
-      vi.stubGlobal("window", new EventTarget());
+  it.each([
+    ["player", false], ["spectator", false], ["player", true], ["spectator", true]
+  ] as const)(
+    "renders health radar pickups as a bright-blue dot with a clipped pulse (%s, reduced motion=%s)",
+    (role, reducedMotion) => {
+      stubDocument(reducedMotion);
       const base = view(100);
-      const pickups = (["health", "rapid-fire", "spread"] as const).map((pickupType, index) => ({
-        id: `pickup:${pickupType}`, radius: 12, position: { x: 200 + index * 100, y: 100 },
-        state: { kind: "pickup" as const, pickupType }
-      }));
+      const pickups = [
+        ...(["health", "rapid-fire", "spread"] as const).map((pickupType, index) => ({
+          id: `pickup:${pickupType}`, radius: 12, position: { x: 200 + index * 100, y: 100 },
+          state: { kind: "pickup" as const, pickupType }
+        })),
+        // Beyond radar range: clamped to the rim so its pulse must be clipped.
+        { id: "pickup:health-pack-2", radius: 12, position: { x: 100, y: 1_500 },
+          state: { kind: "pickup" as const, pickupType: "health" as const } }
+      ];
       const snapshot: DefaultView = {
         ...base, viewerRole: role,
         ...(role === "spectator" ? { spectatorView: {
@@ -282,22 +343,59 @@ describe("Dots and Squares presentation", () => {
       try {
         skin.handleViewport(800, 600, 1);
         skin.handleSnapshot(snapshot);
-        skin.render(0, snapshot);
         const canvas = (host.slots.get("world") as unknown as HudElement).children[0]!;
-        for (const [index, color] of ["#0088ff", "#ffa64d", "#ffa64d"].entries()) {
-          const x = 716 + (100 + index * 100) * 67 / 512;
-          expect(canvas.drawnPaths).toContainEqual({
-            color, points: [[x, 81], [x + 3, 84], [x, 87], [x - 3, 84]]
-          });
+        const centers = [{ x: 716 + 100 * 67 / 512, y: 84 }, { x: 716, y: 84 + 67 }];
+        const rings: number[] = [];
+        for (const time of [0, 300, 600, 900, 1_150, 1_200]) {
+          canvas.drawnCircles.length = 0;
+          canvas.drawnPaths.length = 0;
+          canvas.clipArcs.length = 0;
+          skin.render(time, snapshot);
+          expect(canvas.clipArcs).toContainEqual({ x: 716, y: 84, radius: 72 });
+          const border = canvas.drawnCircles.findIndex(circle => circle.mode === "stroke" &&
+            circle.color === "#dbe7f2" && circle.radius === 72);
+          expect(border).toBeGreaterThan(-1);
+          for (const center of centers) {
+            const blue = canvas.drawnCircles.map((circle, index) => ({ ...circle, index }))
+              .filter(circle => circle.color === HEALTH_RADAR_BLUE &&
+                circle.x === center.x && circle.y === center.y);
+            // The center dot stays fully opaque at every animation phase.
+            expect(blue.filter(circle => circle.mode === "fill" && circle.radius === 4 &&
+              circle.alpha === 1)).toHaveLength(1);
+            const strokes = blue.filter(circle => circle.mode === "stroke");
+            expect(strokes).toHaveLength(1);
+            // Drawn inside the clipped radar (before the unclipped border stroke).
+            expect(strokes[0]!.index).toBeLessThan(border);
+            if (reducedMotion) {
+              expect(strokes[0]).toMatchObject({ radius: 10, alpha: 0.8 });
+              expect(blue.filter(circle => circle.mode === "fill" && circle.radius === 10 &&
+                circle.alpha === 0.3)).toHaveLength(1);
+            } else {
+              const phase = (time % 1_200) / 1_200;
+              expect(strokes[0]!.radius).toBeCloseTo(4 + 10 * phase);
+              expect(strokes[0]!.alpha).toBeCloseTo(1 - phase);
+              rings.push(strokes[0]!.radius);
+            }
+          }
+          // Health no longer uses a diamond; power-ups keep orange diamonds.
+          for (const [index, color] of ["#ffa64d", "#ffa64d"].entries()) {
+            const x = 716 + (200 + index * 100) * 67 / 512;
+            expect(canvas.drawnPaths).toContainEqual({
+              color, points: [[x, 81], [x + 3, 84], [x, 87], [x - 3, 84]]
+            });
+          }
+          expect(canvas.drawnPaths.filter(path => path.points.length === 4 &&
+            path.points.every(([x, y]) => Math.hypot(x! - 716, y! - 84) <= 72) &&
+            path.color !== "#ffa64d")).toEqual([]);
         }
+        if (!reducedMotion) expect(new Set(rings).size).toBeGreaterThan(3);
         // Player and enemy radar markers remain circular and retain their colors.
         expect(canvas.drawnArcs).toContainEqual({ x: 716, y: 84 + 100 * 67 / 512, radius: 3 });
         expect(canvas.drawnArcs).toContainEqual({ x: 716 + 100 * 67 / 512, y: 84, radius: 3 });
         expect(canvas.drawnColors).toContain(PLAYER_COLORS[0]);
         expect(canvas.drawnColors).toContain(NPC_COLOR);
-        // Only the radar uses blue; the arena health pickup keeps its existing styling.
-        expect(canvas.drawnColors.filter(color => color === "#0088ff")).toHaveLength(1);
-        expect(canvas.drawnRects.some(rect => rect.color === "#0088ff")).toBe(false);
+        // The arena health pickup keeps its existing styling.
+        expect(canvas.drawnRects.some(rect => rect.color === HEALTH_RADAR_BLUE)).toBe(false);
       } finally { skin.dispose(); }
     }
   );

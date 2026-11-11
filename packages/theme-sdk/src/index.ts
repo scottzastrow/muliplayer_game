@@ -5,7 +5,7 @@ import {
   type JsonValue
 } from "@multiplayer-game/protocol";
 import type { MapDefinition } from "./maps.js";
-export { PlayerMaxHealthSchema } from "@multiplayer-game/protocol";
+export { HealthPacksPerPlayerPerWaveSchema, PlayerMaxHealthSchema } from "@multiplayer-game/protocol";
 export { Countdown } from "./countdown.js";
 export { MovementController, type MovementControllerOptions } from "./movement-controller.js";
 export {
@@ -13,6 +13,7 @@ export {
   RadarViewSchema,
   drawRadar,
   type RadarMarker,
+  type RadarMarkerHighlight,
   type RadarRenderOptions,
   type RadarView
 } from "./radar.js";

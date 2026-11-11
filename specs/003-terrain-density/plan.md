@@ -1,5 +1,15 @@
 # Implementation Plan: Per-Level Terrain Density
 
+## Health packs and radar follow-up (2026-11-10)
+
+Validate the developer setting in protocol and the theme manifest, retaining it
+through lobby edits. Reuse seeded reachable-cell placement for scattered pack
+slots, replenish missing slots at wave starts and re-place them on generated
+terrain transitions. Expose radar marker highlights through the SDK; the
+default skin supplies animation or a reduced-motion halo for health entities.
+Cover placement, healing, transitions and both radar roles, and record actual
+verification. Keep T042 open.
+
 ## Health-pickup wave trace follow-up (2026-11-10)
 
 Use seeded real module/SessionWorld progression and both skins' Canvas draws to

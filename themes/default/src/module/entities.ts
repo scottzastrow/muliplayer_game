@@ -6,8 +6,10 @@ import type {
 } from "@multiplayer-game/theme-sdk";
 import { MAP_CELL_SIZE, MovementController } from "@multiplayer-game/theme-sdk";
 import {
+  DEFAULT_GAME_SETTINGS,
   DEFAULT_RUNTIME_LIMITS,
   GameSettingsSchema,
+  HealthPacksPerPlayerPerWaveSchema,
   type JsonValue
 } from "@multiplayer-game/protocol";
 import {
@@ -25,6 +27,7 @@ import {
   NPC_SPEED,
   PLAYER_HEALTH,
   MAX_PICKUPS_PER_SESSION,
+  PICKUP_RADIUS,
   PLAYER_RADIUS,
   PLAYER_SPEED,
   PLAYER_FACING_MOVEMENT_BLEND,
@@ -46,7 +49,7 @@ import type {
   DefaultPlayerState
 } from "./types.js";
 import type { LoadedMap } from "./maps.js";
-import { selectNpcSpawns } from "./npc-spawns.js";
+import { selectHealthPackSpawns, selectNpcSpawns } from "./npc-spawns.js";
 import { hasNpcShot } from "./npc-shot.js";
 import { PLAYER_COLORS } from "../colors.js";
 
@@ -92,6 +95,11 @@ function newNavigation(home: Point2): NpcNavigationState {
 
 const EMPTY_MOVEMENT = Object.freeze({ x: 0, y: 0 });
 const DEFAULT_FACING: DefaultFacing = Object.freeze({ x: 1, y: 0 });
+const SCATTERED_HEALTH_PACK_PREFIX = "pickup:health-pack-";
+
+export function isScatteredHealthPackId(id: string): boolean {
+  return id.startsWith(SCATTERED_HEALTH_PACK_PREFIX);
+}
 
 export class DefaultEntitySimulator {
   readonly #movementController = new MovementController({
@@ -112,11 +120,13 @@ export class DefaultEntitySimulator {
     readonly npcMovementSpeed = NPC_SPEED,
     readonly npcDetectionRange = NPC_ATTRACTION_RADIUS,
     readonly seed = 0,
-    readonly playerMaxHealth = PLAYER_HEALTH
+    readonly playerMaxHealth = PLAYER_HEALTH,
+    readonly healthPacksPerPlayerPerWave = DEFAULT_GAME_SETTINGS.healthPacksPerPlayerPerWave
   ) {
     GameSettingsSchema.shape.npcMovementSpeed.parse(npcMovementSpeed);
     GameSettingsSchema.shape.npcDetectionRange.parse(npcDetectionRange);
     GameSettingsSchema.shape.playerMaxHealth.parse(playerMaxHealth);
+    HealthPacksPerPlayerPerWaveSchema.parse(healthPacksPerPlayerPerWave);
     if (!Number.isSafeInteger(seed)) {
       throw new RangeError("NPC placement seed must be a safe integer.");
     }
@@ -173,7 +183,9 @@ export class DefaultEntitySimulator {
       1,
       npcSpawns
     );
-    this.#spawnPickups(map.definition.spawns.filter(spawn => spawn.kind === "pickup"));
+    this.#spawnPickups(map.definition.spawns.filter(spawn =>
+      spawn.kind === "pickup" && spawn.pickupType !== "health"));
+    this.#replenishHealthPacks(1);
     this.#initialized = true;
   }
 
@@ -200,9 +212,7 @@ export class DefaultEntitySimulator {
       }
     }
     this.#spawnNpcs(npcCount, npcHealth, level, []);
-    this.#spawnPickups(map.definition.spawns.filter(spawn =>
-      spawn.kind === "pickup" && spawn.pickupType === "health" &&
-      !this.context.entities.get(`pickup:${spawn.id}`)));
+    this.#replenishHealthPacks(level);
   }
 
   applyInput(accountId: string, action: Readonly<DefaultPlayerAction>): void {
@@ -270,6 +280,60 @@ export class DefaultEntitySimulator {
     this.#map = undefined;
     this.#roster = [];
     this.#disposed = true;
+  }
+
+  /**
+   * Tops each wave up to healthPacksPerPlayerPerWave × roster size. Authored health spawns fill
+   * the first slots; remaining slots are scattered. Unclaimed packs keep their slot, so packs
+   * never accumulate beyond the target.
+   */
+  #replenishHealthPacks(wave: number): void {
+    const map = this.#map;
+    if (!map) throw new Error("Default entity simulator has no loaded map.");
+    const target = this.healthPacksPerPlayerPerWave * this.#roster.length;
+    const authored = map.definition.spawns.filter(spawn =>
+      spawn.kind === "pickup" && spawn.pickupType === "health");
+    const authoredSlots = authored.slice(0, target);
+    const missingAuthored = authoredSlots.filter(spawn =>
+      !this.context.entities.get(`pickup:${spawn.id}`));
+    const missingScattered: string[] = [];
+    for (let slot = authoredSlots.length + 1; slot <= target; slot += 1) {
+      const id = `${SCATTERED_HEALTH_PACK_PREFIX}${slot}`;
+      if (!this.context.entities.get(id)) missingScattered.push(id);
+    }
+    const existingPickups = this.context.entities.values().filter(entity =>
+      entity.state.kind === "pickup").length;
+    if (existingPickups + missingAuthored.length + missingScattered.length > MAX_PICKUPS_PER_SESSION) {
+      this.context.metrics.increment("default.pickup.rejected_cap");
+      throw new RangeError("Health packs exceed the supported pickup limit.");
+    }
+    this.#spawnPickups(missingAuthored);
+    if (missingScattered.length === 0) return;
+    const livingPlayers = this.#roster.flatMap(member => {
+      const player = this.context.entities.get(this.#playerIds.get(member.accountId)!);
+      return player?.state.kind === "player" && player.state.health > 0 ? [player.position] : [];
+    });
+    const occupied = this.context.entities.values()
+      .filter(entity => entity.state.kind === "pickup")
+      .map(entity => entity.position);
+    const positions = selectHealthPackSpawns(
+      this.context, map, livingPlayers, occupied,
+      this.context.entities.values().filter(entity => entity.state.kind === "pickup" &&
+        entity.state.pickupType === "health").map(entity => entity.position),
+      this.seed, wave, missingScattered.length
+    );
+    const radius = authored[0]?.radius ?? PICKUP_RADIUS;
+    for (const [index, position] of positions.entries()) {
+      const id = missingScattered[index]!;
+      this.context.entities.add({
+        id,
+        typeId: "pickup.health",
+        position,
+        radius,
+        state: { kind: "pickup", pickupType: "health" }
+      });
+      this.#pickupIds.add(id);
+    }
   }
 
   #spawnPickups(pickupSpawns: readonly MapSpawn[]): void {

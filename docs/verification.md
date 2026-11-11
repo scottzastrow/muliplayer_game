@@ -1,5 +1,54 @@
 # Local verification
 
+## Pulsing health radar and packs per player (2026-11-10, T029)
+
+Investigation on live release `709ebea`: health pickups reach both radars
+correctly. `serializeRadar` emits every surviving `pickup` entity with
+category `pickup`; spectators receive the followed player's radar through
+`createSpectatorView`; both roles render through the same skin `drawRadar`
+call with the `#0088ff` color override for health; no filter or data path drops
+them. The problem was visual: a 6px `#0088ff` diamond (about 2.6:1 contrast
+against `#344a60` radar terrain) used the same shape and size as orange
+pickups, and blue roster hues produced similar-sized dots.
+
+Changes: `drawRadar` gains `markerHighlights` (`RadarMarkerHighlight`). The
+default skin draws health packs as a `#4db8ff` 4px center dot with a 1.2s
+expanding (4→14px), fading ring clipped to the radar. With reduced motion it
+draws a static 10px halo instead. The new `healthPacksPerPlayerPerWave` setting
+is an integer 0-10 with default 3, capped by packs × `maxPlayers` ≤ 96. Packs
+are seeded and scattered across reachable, terrain-clear cells, and only
+consumed slots are refilled at wave start.
+
+Checks run locally (Node 24.11.0, Windows):
+
+- `npm run check` passed.
+- Focused Vitest: `tests/default-skin.test.ts tests/health-packs.test.ts
+  tests/default-combat.test.ts tests/npc-spawns.test.ts tests/terrain-density.test.ts
+  tests/default-respawn.test.ts tests/protocol.test.ts tests/lobby-settings.test.ts
+  tests/player-max-health.test.ts tests/radar.test.ts tests/theme-sdk.test.ts
+  tests/spectator-view.test.ts tests/integration tests/generated-map-integration.test.ts
+  tests/contract`: **28 of 29 files and 207 of 208 tests passed** in 30.21s. The one
+  failure is the external-theme contract drift gate: uncommitted protocol/SDK
+  changes differ from `engine-contract.lock.json`. **Blocked** until a reviewed
+  commit is made and the pin is updated. The gate was not weakened.
+- `tests/health-packs.test.ts` covers the following. It checks the default, validation, cap and module errors. On Fixed and Simple Generated (seed 42), it checks for 3 packs with one player and 6 with two. Packs must be walkable and obstacle-free, have a `BoundedNavigation` path from the player, be ≥32px apart, span at least 3 quadrants and place deterministically. It checks consumed-only replenishment without accumulation and healing of +25 capped at 200 HP. Full-health players leave packs in place. It also covers custom counts 0 and 5.
+- A shared flood-fill cache was added after profiling showed the health-pack pass doubled wave-start placement cost. Fixed-map initialization had gone from 701ms to 1415ms in Vitest.
+
+Real browser (Chrome 157.0.8103.40, disposable profile, isolated server on
+127.0.0.1:18083 with a temporary SQLite DB, Vite on 5174):
+`node tests/browser/default-game.mjs --health-radar` passed. Default settings
+reported `healthPacksPerPlayerPerWave: 3`. One-player Fixed match: 3 packs.
+Two-player match: 6 packs (`pickup:pickup-health`, `pickup:health-pack-2..6`).
+For the player-1p, player-2p and spectator-2p views, 45-46 recorded frames each
+showed one opaque r4 center per pack in every frame and one ring per pack. Ring
+radius covered 4-14 (36 distinct values), and alpha matched `1-(r-4)/10`. Every
+blue draw was clipped to the radar circle and no `#0088ff` draws remained.
+With emulated `prefers-reduced-motion: reduce`, 24 frames per view showed only
+the static r10 halo (0.3 fill, 0.8 stroke) plus the center. Screenshots and the
+JSON report were written to a temporary artifact directory (not committed).
+No deployment, capacity or full-suite result is claimed. Changes are local and
+uncommitted; original T042 remains open.
+
 ## Living-player wave refill (2026-11-10, T028)
 
 The subsequent-wave `DefaultEntitySimulator.startLevel` now restores present

@@ -859,6 +859,12 @@ try {
     await verifyReconnect({ alice, bob, observer, creator, bobName: `ViewB_${suffix}`,
       cdp, evaluate, waitFor, click, clickSessionButton, state, own, move, shootUntil, delay,
       browser: version.Browser });
+  } else if (process.argv.includes("--health-radar")) {
+    const { verifyHealthRadar } = await import("./health-radar.mjs");
+    await verifyHealthRadar({
+      alice, bob, observer, creator, observerName: `Watch_${suffix}`, cdp, evaluate, waitFor,
+      click, clickSessionButton, delay, browser: version.Browser, origin
+    });
   } else if (process.argv.includes("--npc-spawns")) {
     const { verifyNpcSpawns } = await import("./npc-spawns.mjs");
     await verifyNpcSpawns({

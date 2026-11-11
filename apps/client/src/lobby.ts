@@ -432,6 +432,8 @@ function buildSettingsForm(settings: GameSettings, newSession = false): HTMLFiel
   update();
   // Saved non-generated schedules are retained when editing unrelated settings.
   fieldset.dataset.terrainDensity = JSON.stringify(settings.terrainDensity ?? null);
+  // Developer-only setting: not a host field, but retained when editing other settings.
+  fieldset.dataset.healthPacksPerPlayerPerWave = JSON.stringify(settings.healthPacksPerPlayerPerWave ?? null);
   return fieldset;
 }
 
@@ -461,6 +463,7 @@ function readSettings(fieldset: HTMLFieldSetElement): GameSettings {
       : { mode: "incremental", startingDensity: requiredNumber("startingDensity"),
         increasePerLevel: requiredNumber("increasePerLevel") }
     : savedDensity;
+  const savedHealthPacks: unknown = JSON.parse(fieldset.dataset.healthPacksPerPlayerPerWave ?? "null");
   return GameSettingsSchema.parse({
     maxPlayers: Number(value("maxPlayers")),
     maxSpectators: Number(value("maxSpectators")),
@@ -476,7 +479,8 @@ function readSettings(fieldset: HTMLFieldSetElement): GameSettings {
     maxLevels: Number(value("maxLevels")),
     themeRevision: value("themeRevision"),
     ...(mapMode === "legacy" ? {} : { mapMode }),
-    ...(terrainDensity === null ? {} : { terrainDensity })
+    ...(terrainDensity === null ? {} : { terrainDensity }),
+    ...(savedHealthPacks === null ? {} : { healthPacksPerPlayerPerWave: savedHealthPacks })
   });
 
   function requiredNumber(key: keyof GameSettings | "startingDensity" | "increasePerLevel"): number {

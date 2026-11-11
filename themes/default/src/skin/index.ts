@@ -29,6 +29,9 @@ const RADAR_MARGIN = 12;
 const RADAR_Y = 84;
 const RADAR_RADIUS = 72;
 const RADAR_RANGE = 512;
+/** Bright blue health-pack radar highlight (about 4:1 against terrain footprints). */
+const HEALTH_RADAR_BLUE = "#4db8ff";
+const HEALTH_RADAR_PULSE_MS = 1200;
 const RADAR_FILTERS = Object.freeze([
   { category: "player", label: "Fellow players" },
   { category: "enemy", label: "NPCs" },
@@ -57,6 +60,7 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     canvas.style.height = "100%";
     const context = canvas.getContext("2d");
     if (!context) throw new Error("This browser does not support Canvas 2D.");
+    const reducedMotion = document.defaultView?.matchMedia?.("(prefers-reduced-motion: reduce)");
     const points = document.createElement("div");
     points.className = "default-points";
     points.style.fontWeight = "bold";
@@ -439,13 +443,13 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
             markerColors: {
               player: PLAYER_COLORS[0]!, enemy: NPC_COLOR, pickup: "#ffa64d", terrain: "#344a60"
             },
-            markerColorOverrides: Object.fromEntries([
-              ...current.players.map(item =>
-                [`player:${item.accountId}`, playerColors.get(item.accountId)!]),
-              ...current.entities.filter(entity =>
-                entity.state.kind === "pickup" && entity.state.pickupType === "health")
-                .map(entity => [entity.id, "#0088ff"])
-            ]),
+            markerColorOverrides: Object.fromEntries(current.players.map(item =>
+              [`player:${item.accountId}`, playerColors.get(item.accountId)!])),
+            markerHighlights: Object.fromEntries(current.entities.filter(entity =>
+              entity.state.kind === "pickup" && entity.state.pickupType === "health")
+              .map(entity => [entity.id, reducedMotion?.matches || !Number.isFinite(time)
+                ? { color: HEALTH_RADAR_BLUE }
+                : { color: HEALTH_RADAR_BLUE, phase: healthPulsePhase(time) }])),
             markerShapes: { pickup: "diamond", terrain: "footprint" },
             enabledCategories: [...enabledCategories],
             anchorColor: playerColors.get(player.accountId)!
@@ -524,6 +528,11 @@ export const defaultSkinFactory: SkinFactory = Object.freeze({
     };
   }
 });
+
+function healthPulsePhase(time: number): number {
+  return ((time % HEALTH_RADAR_PULSE_MS) + HEALTH_RADAR_PULSE_MS) % HEALTH_RADAR_PULSE_MS /
+    HEALTH_RADAR_PULSE_MS;
+}
 
 function drawTerrain(
   context: CanvasRenderingContext2D,
