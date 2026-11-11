@@ -161,6 +161,47 @@ manifest only; executable code is never accepted from an uploaded archive.
 
 ## Local workspace
 
+### Standalone local preview milestone (2026-11-10)
+
+The publishable (not published) local preview runtime and one sample are
+implemented; the complete Game Developer Kit remains deferred. The package is
+`@multiplayer-game/local-preview` and uses the existing module, simulation and
+skin contracts:
+
+| Surface | Local-preview behavior and limitation |
+| --- | --- |
+| `packages/local-preview` | Public `createLocalGame` and `mountLocalPreview` exports; bundles the existing engine simulation and depends at runtime only on public protocol and Theme SDK packages. |
+| `examples/local-preview` | Editable module, skin, map, settings and browser entry; no client or server source imports. |
+| `tools/theme-preview.ts`, `apps/client/theme-preview.vite.config.ts` | The older presentation fixture remains checkout-local; it is not the standalone game preview. |
+
+`npm run theme:preview:verify` packs the public packages and installs them in a
+temporary sample folder outside the engine checkout. That sample can run and
+render without an engine workspace, accounts, production storage, deployment
+configuration or multiplayer server. `npm run verify` edits the example module
+and checks that its one-step movement changes from 4 to 8. The local sample's
+`browser:smoke` script checks rendered movement, input and HUD output in a
+Chrome DevTools session. This is a runtime/sample milestone, not the complete
+versioned Game Developer Kit or visual editor.
+
+The existing export/import boundary remains asset-only: export includes
+`theme.json` and declared assets; the real importer
+(`apps/server/src/themes/packages.ts`, `validateCodeReferences`) requires exact
+owner-registered module/renderer versions. Exporting a ZIP does not distribute,
+register or install edited executable game code. Keep the executable developer
+project distinct from that ZIP; retain the reviewed-code handoff rather than
+weakening the importer to accept executable uploads.
+
+The remaining T031 work is separate: package the complete kit and exact-revision
+dependency/checksum set, then verify its export through the real importer with
+disposable SQLite/assets and matching registered code. No kit ZIP, export/import
+or companion-repository integration was attempted in the local-preview
+milestone.
+
+Built JavaScript remains inspectable, even without TypeScript sources or source
+maps. Packaging is dependency/access separation, **not DLL-style source
+protection**. Never include accounts, production storage, deployment files,
+credentials or `.env` in the kit.
+
 The engine checkout uses npm workspaces:
 
 ```text

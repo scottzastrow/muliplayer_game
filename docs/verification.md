@@ -3017,3 +3017,45 @@ T048 is complete. The pre-existing Wave HUD maximum countdown note above is
 unchanged, the Theme Credits feature pointer and `.idea` are untouched, and
 **T042 remains open**. Changes remain local and uncommitted; no push, deployment
 or capacity run was performed.
+
+## Public local preview runtime and sample, T032 (2026-11-10)
+
+The publishable (not published) `@multiplayer-game/local-preview` package
+composes existing SDK module/skin contracts with the bundled engine simulation.
+Its only runtime dependencies are `@multiplayer-game/protocol` and
+`@multiplayer-game/theme-sdk`.
+The editable sample separates `src/game.js`, `src/skin.js`, `src/map.js` and
+`src/settings.js`; the existing manifest/assets ZIP remains executable-code-free.
+
+Actual local checks:
+
+```powershell
+npm run build --workspace @multiplayer-game/local-preview
+npm run check --workspace @multiplayer-game/local-preview
+npm test -- tests\local-preview.test.ts
+npm run theme:preview:verify
+```
+
+The package build and type-check passed; the focused test passed **1 file / 2
+tests**. The clean-install verifier packed protocol, Theme SDK and local-preview
+artifacts, installed them into a temporary project outside the engine checkout,
+ran `npm run verify` and built the browser sample. The external package contained
+no engine workspace package or client/server source imports. The module-edit
+smoke changed one-step movement from **4 to 8**. The sample Vite build succeeded;
+Rollup reported two upstream Zod pure-annotation comments it removed.
+
+On the same clean-installed sample, headless Chrome **157.0.8103.40** and
+`npm run browser:smoke` verified rendered player movement **x=48 → x=60**, Stop
+input, and visible HUD output, served from loopback only. No account, network
+service, production storage, export/import, full developer-kit ZIP, visual
+editor, deployment or capacity result is claimed.
+
+The first map draft was rejected because player spawns were not centered on
+navigation cells; the sample was corrected to valid cell centers. The first
+pack-verifier draft passed relative package paths that npm treated as Git URLs;
+it now packs absolute workspace paths. Moving the edited source next to its
+relative import exposed a missing `fileURLToPath` import, fixed before the final
+passing clean install. All were corrected before the passing browser
+verification. T031 remains open and T042 remains unchecked. The preview slice
+and its pin are committed locally for review; no push, publish or deployment has
+occurred.

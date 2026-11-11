@@ -13,8 +13,8 @@
     "themes/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace @multiplayer-game/protocol && npm run build --workspace @multiplayer-game/theme-sdk && npm run build --workspace @multiplayer-game/engine && npm run build --workspace @multiplayer-game/default-theme && npm run build --workspace @multiplayer-game/fixture-theme && npm run build --workspace @multiplayer-game/server && npm run build --workspace @multiplayer-game/client",
-    "check": "npm run build --workspace @multiplayer-game/protocol && npm run check --workspace @multiplayer-game/protocol && npm run check --workspace @multiplayer-game/theme-sdk && npm run build --workspace @multiplayer-game/theme-sdk && npm run check --workspace @multiplayer-game/engine && npm run build --workspace @multiplayer-game/default-theme && npm run build --workspace @multiplayer-game/fixture-theme && npm run check --workspace @multiplayer-game/fixture-theme && npm run check --workspace @multiplayer-game/server && npm run check --workspace @multiplayer-game/client && npm run check:tools",
+    "build": "npm run build --workspace @multiplayer-game/protocol && npm run build --workspace @multiplayer-game/theme-sdk && npm run build --workspace @multiplayer-game/engine && npm run build --workspace @multiplayer-game/local-preview && npm run build --workspace @multiplayer-game/default-theme && npm run build --workspace @multiplayer-game/fixture-theme && npm run build --workspace @multiplayer-game/server && npm run build --workspace @multiplayer-game/client",
+    "check": "npm run build --workspace @multiplayer-game/protocol && npm run check --workspace @multiplayer-game/protocol && npm run check --workspace @multiplayer-game/theme-sdk && npm run build --workspace @multiplayer-game/theme-sdk && npm run check --workspace @multiplayer-game/engine && npm run build --workspace @multiplayer-game/engine && npm run check --workspace @multiplayer-game/local-preview && npm run build --workspace @multiplayer-game/default-theme && npm run build --workspace @multiplayer-game/fixture-theme && npm run check --workspace @multiplayer-game/fixture-theme && npm run check --workspace @multiplayer-game/server && npm run check --workspace @multiplayer-game/client && npm run check:tools",
     "check:tools": "tsc --project tools/tsconfig.json --noEmit",
     "test": "vitest run",
     "test:browser": "node tests/browser/default-game.mjs",
@@ -26,8 +26,9 @@
     "operator": "node --env-file=.env --import tsx tools/operator.ts",
     "theme:code": "node --import tsx tools/install-theme-code.ts",
     "theme:validate": "node --env-file=.env --import tsx tools/validate-theme.ts",
-    "theme:build": "npm run build --workspace @multiplayer-game/protocol && npm run build --workspace @multiplayer-game/theme-sdk && npm run build --workspace @multiplayer-game/engine && npm run build --workspace @multiplayer-game/default-theme && npm run build --workspace @multiplayer-game/fixture-theme",
+    "theme:build": "npm run build --workspace @multiplayer-game/protocol && npm run build --workspace @multiplayer-game/theme-sdk && npm run build --workspace @multiplayer-game/engine && npm run build --workspace @multiplayer-game/local-preview && npm run build --workspace @multiplayer-game/default-theme && npm run build --workspace @multiplayer-game/fixture-theme",
     "theme:preview": "npm run theme:build && npm run preview:themes --workspace @multiplayer-game/client",
+    "theme:preview:verify": "node tools/verify-local-preview.mjs",
     "start": "node --env-file=.env apps/server/dist/main.js"
   },
   "devDependencies": {
